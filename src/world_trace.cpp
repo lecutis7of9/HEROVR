@@ -59,7 +59,7 @@ uintptr_t promptHeroRecord{};
 std::chrono::steady_clock::time_point promptWhen{}, promptMoved{};
 PromptStats promptCounts{};
 // HERO VR 0.0.77 WAYPOINT (story077g.hpp): the mode asked for, and the mark picked (record re-read at 10 Hz).
-std::atomic<uint32_t> waypointMode{story077g::waypointsScan};
+std::atomic<uint32_t> waypointMode{story077g::waypointsOff}; // CUT5: off by default
 story077g::Mark waypointPub{};
 uintptr_t waypointPubRecord{};
 std::atomic<float> lookX{}, lookY{}, lookZ{-1};
@@ -928,6 +928,14 @@ void run() {
                         if (l.before || seenNow.age > 15.f)
                             continue;
                         score = seenNow.age - 1000.f; // ahead of every object
+                    } else if (k->where == story077d::cine) {
+                        // CUT5: a scene's Y offer, old or new, within its reach (+2 m), ahead of the objects.
+                        if (!seenNow.placed || !heroKnown)
+                            continue;
+                        score = length(at - heroAt);
+                        if (!std::isfinite(score) || score > k->reach + 2.f)
+                            continue;
+                        score -= 500.f;
                     } else {
                         if (!seenNow.placed || !heroKnown)
                             continue;

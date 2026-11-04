@@ -104,12 +104,12 @@ class SuitProbe(unittest.TestCase):
         none = lambda p: None
         send, line = live_settings.suit_probe_start(root, {}, False, prof, none)
         self.assertIsNone(send)  # a release: the DLL's own default (OFF), nothing sent
-        self.assertTrue(line.startswith('SUIT PROBE: off (set suit_probe = on in C:\\HERO VR\\live.txt)'))
+        self.assertTrue(line.startswith('SUIT PROBE: off (set suit_probe = on in C:\\HERO VR\\live.txt;'))
         self.assertIn('sm2scan.json NOT found (looked in: C:\\HERO VR\\sm2scan.json;', line)
         self.assertIn('C:\\Users\\p\\Downloads\\sm2scan.json', line)
         send, line = live_settings.suit_probe_start(root, {}, True, prof, none)
-        self.assertEqual(send, 'on')  # a TEST build: on when live.txt does not say
-        self.assertTrue(line.startswith('SUIT PROBE: on, read-only (the TEST build default;'))
+        self.assertIsNone(send)  # 0.0.77 cut5: a TEST build is off too when live.txt does not say (frame time)
+        self.assertTrue(line.startswith('SUIT PROBE: off (set suit_probe = on in'))
         send, line = live_settings.suit_probe_start(root, {KEY: 'off'}, True, prof, none)
         self.assertIsNone(send)  # live.txt's off is kept, even on a test build
         self.assertTrue(line.startswith('SUIT PROBE: off'))

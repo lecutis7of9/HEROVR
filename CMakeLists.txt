@@ -196,6 +196,10 @@ add_test(NAME story077d COMMAND spidy_story077d_tests)
 add_executable(spidy_story077g_tests tests/story077g_tests.cpp src/waypoint_mark.cpp src/overlay_text.cpp)
 target_include_directories(spidy_story077g_tests PRIVATE include)
 add_test(NAME story077g COMMAND spidy_story077g_tests)
+# HERO VR 0.0.77 WRIST MAP (include/spidy/story077h.hpp): the gesture, the HUD crop, the wrist panel.
+add_executable(spidy_story077h_tests tests/story077h_tests.cpp)
+target_include_directories(spidy_story077h_tests PRIVATE include)
+add_test(NAME story077h COMMAND spidy_story077h_tests)
 # HERO VR 0.0.77 X IS THE GAME'S X (include/spidy/story077e.hpp): the X tap and the menu hold.
 add_executable(spidy_story077e_tests tests/story077e_tests.cpp)
 target_include_directories(spidy_story077e_tests PRIVATE include)

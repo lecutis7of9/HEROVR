@@ -29,7 +29,7 @@ class Settings(unittest.TestCase):
         self.assertEqual(L.CHOICE_NAMES['waypoints'], ('scan', 'always', 'off'))
         self.assertEqual([L.CHOICES['waypoints'][n] for n in ('scan', 'always', 'off')], [0, 1, 2])
         self.assertIn('waypoints', L.START_ONLY)
-        self.assertIn('0 scan, the default', text)
+        self.assertIn('2 off, the default', text)  # CUT5: off by default
         self.assertIn('live, no restart needed', text)
 
 
@@ -41,7 +41,7 @@ class Wiring(unittest.TestCase):
         g = self.game
         self.assertRegex(g, r'SpidyWaypoints\(void\* v\) \{ return setLive\(v, 0, 2, 5580, waypointsNow, asU32\); \}')
         self.assertEqual(len(re.findall(r'\b5580\b', g)), 1)
-        self.assertIn('std::atomic<uint32_t> waypointsNow{story077g::waypointsScan};', g)
+        self.assertIn('std::atomic<uint32_t> waypointsNow{story077g::waypointsOff};', g)
 
     def test_waypoint_draw_is_ours(self):
         g = self.game

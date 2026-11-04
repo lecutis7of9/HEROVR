@@ -3050,6 +3050,16 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   sm2::hudNotPorted), so game_hud / the holo map are not built: the only capture is the whole presented frame.
   cut4 FRAME TIME (include/spidy/perf077.hpp): perf077::Frames ticks in game_xr's prompt block and logs once a second;
   perf077::Scope times cards, cameraSample (stereo_probe renderOffscreen) and poiDrain.
+- cut5 WRIST MAP (include/spidy/story077h.hpp, tests/story077h_tests.cpp, tests/hero077_cut5_tests.py): Gesture
+  (the left hand within 9 cm of rightWrist - the holo's emitter - when the left trigger starts its pull, slow and not
+  busy with the holo, a gun or a web: the pull is claimed through hudTriggers from its first touch, toggles past
+  0.6), hudCrop (the bottom-left HUD corner of the presented frame, by height x wrist_map_hud), panelRect (projects
+  panelCentre per eye, cuts rect and crop alike) into D3D12Renderer's one inset slot ahead of prompt_window
+  debug_full; native_gpu::wantScreen also while shown. Missing (hudHidden from !hero / !gameplay / screen, noFrame,
+  noCrop) draws missingText instead. wrist_map (on (default), off; SpidyWristMap 5581), wrist_map_size 5582,
+  wrist_map_at 5583, wrist_map_hud 5584. cut5 also: story_sprint off by default with swingState.grounded, StuckWatch
+  replaced by cutscene077::MenuScreen (a menu to the normal VR screen), story077d cine kinds (cineCardSeconds),
+  waypoints off by default.
 - HERO VR 0.0.77 X IS THE GAME'S X (include/spidy/story077e.hpp, tests/story077e_tests.cpp): XPulse (a VR X tap
   is the game's X for the spiders; game_pad::Walk::xIsGameX makes X held the game's X, not Back) and MenuHold (the
   menu button in VR play: a tap Start on release, held 0.5 s the 0.1 s Back with a buzz); x_button (game (default),

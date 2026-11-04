@@ -405,7 +405,8 @@ class InputWatch {
 // StorySprint (story_sprint, CANDIDATE): the game runs (its parkour sprint, "Hold R2" in the run-for-your-life
 // and up-the-roof sections) while RT is held; VR sent RT on the ground only crawling. With the left stick
 // pushed past `push` on the ground (not swung, not on a wall, no ability being sent) for `after` seconds, RT
-// goes out held until the stick drops under `release`.
+// goes out held until the stick drops under `release`. CUT5: off by default (story_sprint = off, as 0.0.76), and
+// `grounded` is the real grounded flag (the hero's own on-the-ground state), never a stand-in.
 class StorySprint {
   public:
     static constexpr float push = .85f, release = .6f, after = .15f;

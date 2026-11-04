@@ -21,7 +21,9 @@
 namespace spidy::story077d {
 // marker (HERO VR 0.0.77 INTERACT CARDS AND WAYPOINT, story077g.hpp): never a card - a candidate place of the
 // current objective for the yellow waypoint, and logged.
-enum Where : uint32_t { screen = 0, object = 1, watchOnly = 2, marker = 3 };
+// cine (CUT5, CANDIDATE): a scene's own "press Y" offer (CineApproachPrompt / CineQTEBeginAction - cut4's stuck
+// save sat 66-94 s by one): within its reach of the hero, on him too, a screen card and the game's Y routed.
+enum Where : uint32_t { screen = 0, object = 1, watchOnly = 2, marker = 3, cine = 4 };
 struct Kind {
     const char* cls;  // decorated RTTI name (exact)
     const char* game; // the game's button(s), as its prompt shows them
@@ -70,12 +72,12 @@ inline constexpr Kind kinds[] = {
     {".?AVJobEntryCombatQTE@@", "QTE", "PRESS IT NOW: X = PUNCH, Y, B, A", screen, 4, 0},
     {".?AVQTEPromptAction@@", "QTE", "PRESS IT NOW: X = PUNCH, Y, B, A", screen, 4, 0},
     // Watched only (diagnostics: what a prompt of theirs asks is not known).
-    {".?AVCineQTEBeginAction@@", "", "", watchOnly, 0, 0},
+    {".?AVCineQTEBeginAction@@", "Y", "PRESS Y (THE SCENE ASKS)", cine, 0, 4},
     {".?AVCineQTEButtonPromptLocation@@", "", "", watchOnly, 0, 0},
     {".?AVSimplePrompt@@", "", "", watchOnly, 0, 0},
     {".?AVTutorialContextualPrompt@@", "", "", watchOnly, 0, 0},
     {".?AVStateContextPromptAction@@", "", "", watchOnly, 0, 0},
-    {".?AVCineApproachPrompt@@", "", "", watchOnly, 0, 0},
+    {".?AVCineApproachPrompt@@", "Y", "PRESS Y (THE SCENE ASKS)", cine, 0, 4},
     {".?AVSandFragmentOffer@@", "", "", watchOnly, 0, 0},
     {".?AVSandFragment@@", "", "", watchOnly, 0, 0},
     // HERO VR 0.0.77 INTERACT CARDS (CANDIDATE kinds; the class names and their bases are CONFIRMED in
@@ -161,14 +163,20 @@ struct Card {
     Vec3 world{};
     uint64_t id{};
 };
+// CUT5: a cine kind (Where cine) within its reach.
+inline bool cineKind(uint32_t i) {
+    const Kind* k = kind(i);
+    return k && k->where == cine;
+}
+inline constexpr float cineCardSeconds = 12.f; // the cine card's time on screen after it came within reach
 inline constexpr float nearHeroMetres = 2.f; // an object prompt on the hero himself: a screen card instead
 inline constexpr float cardLift = .6f;       // over the object, metres
 // The cards for this frame: at most two object cards (the nearest within reach) and one screen card (the newest
 // QTE / mash object that appeared since the scan began, within its seconds). Nothing when nothing qualifies.
 inline uint32_t choose(const Seen* seen, uint32_t n, Vec3 hero, bool heroKnown, Card (&out)[maxCards]) {
     uint32_t count = 0;
-    int bestScreen = -1;
-    float bestScreenAge = 1e9f;
+    int bestScreen = -1, bestCine = -1;
+    float bestScreenAge = 1e9f, bestCineMetres = 1e9f;
     int objects[2] = {-1, -1};
     float objectMetres[2] = {1e9f, 1e9f};
     for (uint32_t i = 0; i < n; ++i) {
@@ -177,6 +185,17 @@ inline uint32_t choose(const Seen* seen, uint32_t n, Vec3 hero, bool heroKnown, 
         if (!k || k->where == watchOnly || k->where == marker || !std::isfinite(s.age) || s.age < 0)
             continue;
         bool asScreen = k->where == screen;
+        if (k->where == cine) {
+            // CUT5: new or old (it is live from the save's load), on the hero himself too: within its reach.
+            if (!s.placed || !heroKnown || !finite(s.world))
+                continue;
+            const float m = length(s.world - hero);
+            if (std::isfinite(m) && m <= k->reach && m < bestCineMetres) {
+                bestCineMetres = m;
+                bestCine = static_cast<int>(i);
+            }
+            continue;
+        }
         if (k->where == object) {
             if (!s.placed || !heroKnown || !finite(s.world))
                 continue;
@@ -218,8 +237,11 @@ inline uint32_t choose(const Seen* seen, uint32_t n, Vec3 hero, bool heroKnown, 
             const Seen& s = seen[o];
             out[count++] = Card{s.kind, true, s.world + Vec3{0, cardLift, 0}, s.id};
         }
+    // One screen card: a QTE / mash first, else the scene's Y (CUT5).
     if (bestScreen >= 0 && count < maxCards)
         out[count++] = Card{seen[bestScreen].kind, false, {}, seen[bestScreen].id};
+    else if (bestCine >= 0 && count < maxCards)
+        out[count++] = Card{seen[bestCine].kind, false, seen[bestCine].world, seen[bestCine].id};
     return count;
 }
 // The card's two lines: the game's button, and the VR control.

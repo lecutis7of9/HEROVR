@@ -17,7 +17,8 @@
 //   (the waypoint he sets on the game's map). Every class name is CONFIRMED in Spider-Man2.exe's RTTI; that the
 //   components are in the scan's registry and point at their type is CANDIDATE (the diagnostics count both).
 // Nothing found: nothing shown (never a guess). And only after a scan (pt1803u: "it should ONLY appear when the
-// player does the scan"): waypoints = scan (the default) shows it about 8 s after each scan, fading out.
+// player does the scan"): waypoints = scan shows it about 8 s after each scan, fading out. CUT5: off by default -
+// the POI source is not proven yet (the POI DUMP diagnostics stay), so no diamond unless waypoints = scan or always.
 // Pure and allocation-free.
 #include "math.hpp"
 #include "story077d.hpp"
@@ -27,7 +28,7 @@
 #include <cstring>
 
 namespace spidy::story077g {
-// live.txt waypoints: 0 scan (the default: shown for showSeconds after each scan), 1 always, 2 off.
+// live.txt waypoints: 0 scan (shown for showSeconds after each scan), 1 always, 2 off (the default since CUT5).
 enum Waypoints : uint32_t { waypointsScan = 0, waypointsAlways = 1, waypointsOff = 2 };
 // The game's own POI types that are the objective, best first.
 enum Source : uint32_t { none = 0, objective = 1, quest = 2, zipToObjective = 3, customWaypoint = 4, sources = 5 };

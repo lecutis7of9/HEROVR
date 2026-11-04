@@ -68,6 +68,7 @@
 #include "spidy/story077f.hpp" // HERO VR 0.0.77 HEAL ANYWHERE
 #include "spidy/prompt_cards.hpp" // HERO VR 0.0.77 PROMPT CARDS (drawing)
 #include "spidy/story077g.hpp" // HERO VR 0.0.77 WAYPOINT
+#include "spidy/story077h.hpp" // HERO VR 0.0.77 WRIST MAP
 #include "spidy/waypoint_mark.hpp" // HERO VR 0.0.77 WAYPOINT (drawing)
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
@@ -1377,14 +1378,21 @@ std::atomic<uint32_t> storyAbilitiesNow{0};
 std::atomic<uint32_t> storyAimNow{story077b::aimLook};
 std::atomic<uint32_t> storyDodgeNow{0};
 std::atomic<uint32_t> headDodgeNow{story077b::headFight};
-std::atomic<uint32_t> storySprintNow{0}; // HERO VR 0.0.77 story_sprint: 0 on, 1 off
+std::atomic<uint32_t> storySprintNow{1}; // HERO VR 0.0.77 story_sprint: 0 on, 1 off (CUT5: off by default, as 0.0.76)
 // HERO VR 0.0.77 PROMPT CARDS: prompt_window is a debug view now - 0 off (the default), 1 debug_full (the whole
 // game frame in a window, b8b33ce's view); the button prompts are prompt_cards (0 on, the default; 1 off).
 std::atomic<uint32_t> promptWindowNow{story077d::windowOff};
 std::atomic<uint32_t> promptCardsNow{story077d::cardsOn};
 // HERO VR 0.0.77 WAYPOINT (story077g.hpp): live.txt waypoints - 0 scan (the default: the game's own objective, about
 // 8 s after each scan), 1 always, 2 off.
-std::atomic<uint32_t> waypointsNow{story077g::waypointsScan};
+std::atomic<uint32_t> waypointsNow{story077g::waypointsOff}; // CUT5: off by default, no POI source proven
+// HERO VR 0.0.77 WRIST MAP (story077h.hpp, CANDIDATE): live.txt wrist_map (0 on: left hand to the right wrist + left
+// trigger shows or hides the game's own minimap there; 1 off), wrist_map_size (the panel's width, cm), wrist_map_at
+// (its centre over the wrist, cm) and wrist_map_hud (the game's HUD scale, percent, for the crop).
+std::atomic<uint32_t> wristMapNow{story077h::mapOn};
+std::atomic<uint32_t> wristMapSizeCm{story077h::sizeDefault};
+std::atomic<uint32_t> wristMapAtCm{story077h::atDefault};
+std::atomic<uint32_t> wristMapHudPercent{story077h::hudDefault};
 // HERO VR 0.0.77 X IS THE GAME'S X (story077e.hpp): live.txt x_button - 0 game (the default: VR X tap is the
 // game's X, the menu button held 0.5 s is the View X sent), 1 view (05e70a2: X tap View, menu pauses on press).
 std::atomic<uint32_t> xButtonNow{story077e::xGame};
@@ -2927,6 +2935,9 @@ DWORD WINAPI run(void*) {
         game_pad::TemplePress templePress;
         // The wrist hologram's toggle: the other wrist to it and that hand's trigger.
         wrist_hud::Toggle wristToggle;
+        // HERO VR 0.0.77 WRIST MAP (story077h.hpp): the left hand to the right wrist and the left trigger.
+        story077h::Gesture wristMap;
+        uint64_t wristMapLogMs{};
         holo_guard076::Guard holoGuard; // 0.0.76: the PUNISHER's guns keep the hands-close gesture shut
         bool holoGuardSaid{};
         // 0.0.76 fix 2: CAPTAIN AMERICA's chest grapple draws / misses, noted (the e808401 test logged none)
@@ -3074,12 +3085,13 @@ DWORD WINAPI run(void*) {
         char cutNoteText[160]{};
         uint64_t cutSamplesSeen{};
         bool cutImmersiveFault{}, cutPanelFault{}, cutStripFault{};
-        // HERO VR 0.0.77 CUTFIX3: the panel's mode (subtitles, prompts, menu) and the last one logged, the stuck
-        // watch after a scene, and the neutral pad it sends when it lets go.
+        // HERO VR 0.0.77 CUTFIX3: the panel's mode (subtitles, prompts, menu) and the last one logged; the scene
+        // ends counted. CUT5: a menu sends the stretch to the VR screen (cutMenuScreen) and the scene ends there.
         cutscene077::MenuPanel cutMenu;
-        cutscene077::StuckWatch cutStuck;
         uint32_t cutPanelMode{}, cutPanelLogged{99};
-        uint64_t cutNeutralUntil{}, cutSceneEnds{};
+        uint64_t cutSceneEnds{}, cutSceneEndMs{}, moveDiagMs{};
+        Vec3 moveDiagAt{};
+        cutscene077::MenuScreen cutMenuScreen;
         bool flatScreen{};
         Pose screenPose{};
         const auto dimensions = runtime.eyeDimensions();
@@ -3233,6 +3245,12 @@ DWORD WINAPI run(void*) {
         uint64_t pullCardFrames{}, pullCardClickFrames{}, pullCardSentFrames{}, pullCardGateFrames{};
         uint64_t pullCardBlockedFly{}, pullCardBlockedNamed{}, pullCardBlockedX{}, pullCardBlockedChord{};
         uint64_t yCardFrames{}, yCardHeldFrames{}, yCardSentFrames{}, yCardGateFrames{};
+        // CUT5 CINE PROMPT (story077d cine kinds): the scene's Y offer within reach (last frame), its card's clock,
+        // and the counts (CINE PROMPT lines).
+        bool cineNear{}, cineYWas{};
+        uint64_t cineId{}, cineEntered{}, cineFrames{}, cineYPresses{}, cineYSent{};
+        double cineSince{};
+        float cineMetres{};
         // HERO VR 0.0.77 WAYPOINT (story077g.hpp): this frame's mark, tracking space, and what the report counts.
         struct WaypointNow {
             bool shown{};
@@ -4848,6 +4866,40 @@ DWORD WINAPI run(void*) {
                                               "hud = 1, in live.txt to try them again); everything else carries on");
                             }
                         }
+                        // HERO VR 0.0.77 WRIST MAP (story077h.hpp, CANDIDATE): the left hand to the right wrist and the
+                        // left trigger shows or hides the game's minimap there. A pull begun there is the map's alone
+                        // to its release (as the hologram's: no web, reel, scan or anything of the game's). Never while
+                        // that left trigger is the hologram's (its menu or zone, hud_hand = right), a gun's (dual-wield)
+                        // or holds a web; no other hand or button is touched.
+                        try {
+                            story077h::Gesture::Input mapIn;
+                            mapIn.play = wristMapNow.load() == story077h::mapOn && gesturesPlay && !padLayer.latched() &&
+                                         !phone.open() && !gadgetWheel.open();
+                            mapIn.tracked[0] = gripsTracked[0];
+                            mapIn.tracked[1] = gripsTracked[1];
+                            mapIn.left = grips[0].position;
+                            mapIn.wrist = story077h::rightWrist(grips[1]);
+                            mapIn.trigger = frame.hands[0].trigger;
+                            mapIn.busy = (hudTriggers & 1u) != 0 || (hudZone & 1u) != 0 || (wristToggle.on() && hudHand == 1) ||
+                                         hero007Play.guns.heldIn(0) >= 0 || swingState.webs[0].attached != 0;
+                            if (wristMapNow.load() != story077h::mapOn)
+                                wristMap.hide();
+                            if (wristMap.update(frame.seconds, mapIn)) {
+                                runtime.haptic(0, .25f);
+                                runtime.haptic(1, .15f);
+                                const auto& md = wristMap.diagnostics();
+                                char line[240];
+                                sprintf_s(line, "HERO VR 0.0.77 WRIST MAP %s #%u: left hand %.0f cm from the right wrist, "
+                                                "left trigger the map's to its release",
+                                          wristMap.shown() ? "ON" : "OFF", md.toggles, md.distance * 100.f);
+                                game_prompts::note(line);
+                                consoleLine(line);
+                            }
+                            if (wristMap.claims())
+                                hudTriggers |= 1u;
+                        } catch (...) {
+                            wristMap.hide();
+                        }
                         for (unsigned i = 0; i < 2; ++i) {
                             if (hudTriggers & (1u << i))
                                 controller.hands[i].trigger = 0;
@@ -5451,8 +5503,24 @@ DWORD WINAPI run(void*) {
                     // clock (a QTE) holds it unless the menu button went with it (a pause: the screen).
                     // HERO VR 0.0.77 CUTFIX2: a player, or a scene already shown riding a short gap in its record.
                     const bool cutHeroOk = cutHero.present(player.hero != 0, cutWasShown, cutNowMs);
+                    // HERO VR 0.0.77 CUT5 MENU SCREEN: a menu goes to the normal VR screen (never the game's whole
+                    // frame pasted over the immersive world).
+                    const bool cutSteering = std::isfinite(frame.hands[0].stickX) &&
+                                             std::isfinite(frame.hands[0].stickY) &&
+                                             std::hypot(frame.hands[0].stickX, frame.hands[0].stickY) > .5f;
+                    const uint64_t menuScreensBefore = cutMenuScreen.count();
+                    const bool menuScreen = cutMenuScreen.update(screen && cutMode == cutscene077::immersive,
+                                                                 player.record, cutSteering, immersiveHold.frozen());
+                    if (cutMenuScreen.count() != menuScreensBefore) {
+                        char line[200];
+                        sprintf_s(line, "HERO VR 0.0.77 CUT5 MENU SCREEN #%llu: %s; the menu is on the VR screen until "
+                                        "gameplay or another player record",
+                                  static_cast<unsigned long long>(cutMenuScreen.count()),
+                                  player.record ? "the left stick steering it" : "no player record");
+                        consoleLine(line);
+                    }
                     const bool immersiveScene = immersiveHold.update(
-                        cutMode == cutscene077::immersive && !cutImmersiveFault && screen && cutHeroOk &&
+                        cutMode == cutscene077::immersive && !cutImmersiveFault && screen && cutHeroOk && !menuScreen &&
                             bridgeRunning && !gameplay && !flatScreen && validTrackedPose(frame.head) &&
                             !(gpuStarted && native_gpu::eyesLost()),
                         timeRuns, (frame.buttons & buttonMenu) != 0, cutNowMs);
@@ -5462,23 +5530,22 @@ DWORD WINAPI run(void*) {
                     }
                     cutCounts.immersiveFrames += immersiveScene;
                     // HERO VR 0.0.77 CUTFIX3: the panel's mode this frame (menu: the game's whole frame as it is).
-                    cutPanelMode = cutMenu.update(
-                        immersiveScene, player.record == 0, immersiveHold.frozen(),
-                        std::isfinite(frame.hands[0].stickX) && std::isfinite(frame.hands[0].stickY) &&
-                            std::hypot(frame.hands[0].stickX, frame.hands[0].stickY) > .5f);
+                    // CUT5: never the menu panel (the whole frame); subtitles, or the keyed prompts in a QTE.
+                    cutPanelMode = cutMenu.update(immersiveScene, false, immersiveHold.frozen(), false);
                     if (immersiveScene && cutPanelMode != cutPanelLogged) {
                         cutPanelLogged = cutPanelMode;
                         char line[200];
                         sprintf_s(line, "HERO VR 0.0.77 CUTFIX3 PANEL: %s (player record %s, QTE hold %s)",
                                   cutscene077::panelModeName(cutPanelMode), player.record ? "yes" : "none",
                                   immersiveHold.frozen() ? "yes" : "no");
-                        message(3, 0, line);
+                        consoleLine(line);
                     }
                     // HERO VR 0.0.77 CUTFIX3 SCENE END: whatever ended it (gameplay back, a menu, a fault, a timeout,
                     // the player gone, the head lost), everything the scene held is let go: its hold, freeze and
                     // menu press, the menu panel, the strip clock (the eyes' lease lapses on its own, 250 ms).
                     if (cutWasShown && !immersiveScene) {
                         const char* reason = gameplay                         ? "gameplay"
+                                             : menuScreen                     ? "menu (VR screen)"
                                              : immersiveHold.menu()           ? "menu or timeout"
                                              : cutImmersiveFault              ? "fault"
                                              : !screen                        ? "screen gone"
@@ -5491,8 +5558,8 @@ DWORD WINAPI run(void*) {
                         cutMenu.release();
                         stripClock.reset();
                         cutPanelLogged = 99;
-                        cutStuck.sceneEnded(cutNowMs);
                         ++cutSceneEnds;
+                        cutSceneEndMs = cutNowMs;
                         char line[320];
                         sprintf_s(line,
                                   "HERO VR 0.0.77 CUTFIX3 SCENE END #%llu: %s; gameplay %d, screen %d, VR play %d, "
@@ -5500,7 +5567,7 @@ DWORD WINAPI run(void*) {
                                   static_cast<unsigned long long>(cutSceneEnds), reason, gameplay ? 1 : 0,
                                   screen ? 1 : 0, vrPlay ? 1 : 0, motion.active ? 1 : 0, padLayer.latched() ? 1 : 0,
                                   swingState.owned ? 1 : 0);
-                        message(3, 0, line);
+                        consoleLine(line);
                     }
                     cutWasShown = immersiveScene;
                     cutCounts.promptFrames += immersiveScene && immersiveHold.frozen();
@@ -5549,14 +5616,14 @@ DWORD WINAPI run(void*) {
                                       cutscene077::modeName(cutMode), cutStretchShown ? "shown" : "NOT shown",
                                       static_cast<unsigned long long>(cutStretch.frames()),
                                       static_cast<unsigned long long>(cutStretch.refused()), reasons);
-                            message(3, 0, line);
+                            consoleLine(line);
                         }
                         if (!cutVideoNoted) {
                             cutVideoNoted = true;
                             const std::string text = std::string("HERO VR 0.0.77 CUTFIX: scene clock ") +
                                                      cutscene077::clockName(cutMotion.source()) + "; " +
                                                      cutscene077::videoNote;
-                            message(3, 0, text.c_str());
+                            consoleLine(text);
                         }
                     }
                     cutWasScreen = screen && cutMode != cutscene077::flat;
@@ -5592,7 +5659,7 @@ DWORD WINAPI run(void*) {
                                   static_cast<unsigned long long>(immersiveHold.menus()),
                                   cutImmersiveFault ? ", IMMERSIVE OFF (fault)" : "",
                                   cutPanelFault ? ", PANEL OFF (fault)" : "", cutStripFault ? ", STRIP OFF (fault)" : "");
-                        message(3, 0, line);
+                        consoleLine(line);
                         // HERO VR 0.0.77 CUTFIX: the scene clock, and why the last 10 s of screen frames were refused.
                         char reasons[400];
                         cutRefusals.reasons(reasons, sizeof(reasons));
@@ -5607,7 +5674,7 @@ DWORD WINAPI run(void*) {
                                   static_cast<unsigned long long>(cutscene077::cameraSamples.load() - cutSamplesSeen),
                                   static_cast<unsigned long long>(cutRefusals.frames()),
                                   static_cast<unsigned long long>(cutRefusals.refused()), reasons);
-                        message(3, 0, why);
+                        consoleLine(why);
                         cutMovesSeen = cameraMovesNow;
                         cutSamplesSeen = cutscene077::cameraSamples.load();
                         cutRefusals.reset();
@@ -7722,6 +7789,23 @@ DWORD WINAPI run(void*) {
                         // hero takes to turn to what they look at.
                         walk.interact = interactStep.pressed();
                         yCardSentFrames += yCardNear && walk.interact;
+                        { // CUT5 CINE PROMPT: each Y press near the scene's offer, and whether the game's Y went out.
+                            const bool yDown = (origins.play() & buttonY) != 0;
+                            if (cineNear && yDown && !cineYWas) {
+                                ++cineYPresses;
+                                if (cineYPresses <= 100) {
+                                    char note[220];
+                                    sprintf_s(note, "HERO VR 0.0.77 CUT5 CINE PROMPT Y #%llu: %.1f m, game Y %d, steering %d, "
+                                                    "swing owned %d, wall %u",
+                                              static_cast<unsigned long long>(cineYPresses), cineMetres,
+                                              walk.interact ? 1 : 0, steering ? 1 : 0, swingState.owned ? 1 : 0,
+                                              swingState.wall);
+                                    game_prompts::note(note);
+                                }
+                            }
+                            cineYSent += cineNear && walk.interact;
+                            cineYWas = yDown;
+                        }
                         // What the game names now, for a pull (below). Not in the pad
                         // layer: there the player presses the game's own buttons.
                         const auto asked = layerOn ? prompt_buttons::Demand{} : game_prompts::demand();
@@ -8366,6 +8450,8 @@ DWORD WINAPI run(void*) {
                         // Read-only; any fault turns only the cards off for the frame.
                         promptCardCount = 0;
                         pullCardNear = yCardNear = false;
+                        const bool cineWasNear = cineNear;
+                        cineNear = false;
                         waypointHere = {};
                         try {
                             perf077::Scope cardsTimed(perf077::cards); // cut4 FRAME TIME
@@ -8462,8 +8548,33 @@ DWORD WINAPI run(void*) {
                                 bool objectShown{}, screenShown{};
                                 for (uint32_t c = 0; c < chosen && promptCardCount < story077d::maxCards; ++c) {
                                     PromptCardNow card{cards[c].kind, cards[c].onObject, {}};
+                                    // CUT5 CINE PROMPT: the scene's Y offer within reach (on the hero too): Y routed
+                                    // the whole time, its screen card for cineCardSeconds after it came in reach.
+                                    if (story077d::cineKind(cards[c].kind)) {
+                                        cineNear = yCardNear = true;
+                                        ++cineFrames;
+                                        cineMetres = length(cards[c].world - heroHere);
+                                        if (!cineWasNear || cards[c].id != cineId) {
+                                            cineId = cards[c].id;
+                                            cineSince = frame.seconds;
+                                            ++cineEntered;
+                                            if (cineEntered <= 200) {
+                                                char note[240];
+                                                sprintf_s(note, "HERO VR 0.0.77 CUT5 CINE PROMPT #%llu: %s %.1f m (%s), Y "
+                                                                "card %.0f s, Y routed",
+                                                          static_cast<unsigned long long>(cineEntered),
+                                                          story077d::kind(cards[c].kind)->cls + 4, cineMetres,
+                                                          cineMetres < story077d::nearHeroMetres ? "on the hero" : "near",
+                                                          story077d::cineCardSeconds);
+                                                game_prompts::note(note);
+                                                consoleLine(note);
+                                            }
+                                        }
+                                        if (frame.seconds - cineSince > story077d::cineCardSeconds)
+                                            continue; // the card's time is up; Y stays routed
+                                    }
                                     // HERO VR 0.0.77 INTERACT CARDS: the pull / Y gates (next frame's input).
-                                    if (story077d::interactKind(cards[c].kind)) {
+                                    if (story077d::interactKind(cards[c].kind) && !story077d::cineKind(cards[c].kind)) {
                                         if (story077d::pullKind(cards[c].kind))
                                             pullCardNear = true;
                                         else
@@ -8489,6 +8600,16 @@ DWORD WINAPI run(void*) {
                                 }
                                 promptCardObjectFrames += objectShown;
                                 promptCardScreenFrames += screenShown;
+                                if (cineWasNear && !cineNear && cineEntered <= 200) {
+                                    char note[200];
+                                    sprintf_s(note, "HERO VR 0.0.77 CUT5 CINE PROMPT #%llu gone: %.1f s in reach, Y presses %llu, "
+                                                    "Y sent %llu",
+                                              static_cast<unsigned long long>(cineEntered), frame.seconds - cineSince,
+                                              static_cast<unsigned long long>(cineYPresses),
+                                              static_cast<unsigned long long>(cineYSent));
+                                    game_prompts::note(note);
+                                    consoleLine(note);
+                                }
                             }
                             const uint64_t cardNowMs = GetTickCount64();
                             if (cardsWanted || waypointWanted || promptCardFrames || waypointFrames) {
@@ -8601,7 +8722,7 @@ DWORD WINAPI run(void*) {
                             }
                         } catch (...) {
                             promptCardCount = 0;
-                            pullCardNear = yCardNear = false;
+                            pullCardNear = yCardNear = cineNear = false;
                             waypointHere = {};
                         }
                         // Update 37: the web shooter and the gadgets by gesture, and hand
@@ -11509,13 +11630,32 @@ DWORD WINAPI run(void*) {
                             }
                             // HERO VR 0.0.77 STORY SPRINT (story077b::StorySprint, CANDIDATE): the stick pushed all the
                             // way on the ground holds the game's RT (its run, "Hold R2" in the story's chases).
+                            // CUT5 (CONFIRMED blind ground, cut4's VID2): "grounded" was only "the grip swing does not own
+                            // him", true in the air too - the RT it held on into a fall was the game's own R2 web swing
+                            // (right-hand webs, the game steering). Now the game mover's own ground flag as well, off the
+                            // first frame he leaves it, and no wall, crawl or perch (Surface none).
                             const bool grounded = mapping == game_pad::Mapping::gameplay && !swingState.owned &&
-                                                  swingState.wall == 0 && !storyAbility.sending() &&
-                                                  hero_modes::webPaths(heroNow()).ropeGrab;
-                            if (storySprint.update(frame.seconds, storySprintNow.load() == 0, grounded,
-                                                   frame.hands[0].stickX, frame.hands[0].stickY) &&
-                                pad.leftTrigger < 100)
+                                                  swingState.wall == 0 && swingState.grounded != 0 &&
+                                                  !storyAbility.sending() && hero_modes::webPaths(heroNow()).ropeGrab;
+                            const bool sprinting = storySprint.update(frame.seconds, storySprintNow.load() == 0, grounded,
+                                                                      frame.hands[0].stickX, frame.hands[0].stickY) &&
+                                                   pad.leftTrigger < 100;
+                            if (sprinting)
                                 pad.rightTrigger = 255;
+                            { // CUT5 STORY SPRINT diagnostic: each run held and let go, with the ground it saw.
+                                static bool sprintWas = false;
+                                static uint32_t sprintRuns = 0;
+                                if (sprinting != sprintWas && sprintRuns < 400) {
+                                    sprintRuns += sprinting ? 1 : 0;
+                                    char line[200];
+                                    sprintf_s(line, "HERO VR 0.0.77 CUT5 STORY SPRINT %s #%u: game ground %u, wall %u, swing "
+                                                    "owned %d",
+                                              sprinting ? "RT ON" : "RT OFF", sprintRuns, swingState.grounded,
+                                              swingState.wall, swingState.owned ? 1 : 0);
+                                    game_prompts::note(line);
+                                }
+                                sprintWas = sprinting;
+                            }
                         }
                         // HERO VR 0.0.77 X IS THE GAME'S X: the X tap's press, and the counts (diagnostics).
                         if (xPulseDown)
@@ -11690,32 +11830,38 @@ DWORD WINAPI run(void*) {
                             d.sequence = inputsSequence + 1;
                             SpidyStoryInputsData = d;
                         }
-                        // HERO VR 0.0.77 CUTFIX3 STUCK WATCH: gameplay after a scene, the stick pushed, the player
-                        // still: every cutscene hold is let go, and the game gets a neutral pad for 250 ms (a press
-                        // or hold it kept from the scene's menus is released).
-                        if (cutStuck.update(mapping == game_pad::Mapping::gameplay && gameplay,
-                                            std::abs(pad.thumbLX) > 16000 || std::abs(pad.thumbLY) > 16000, body[12],
-                                            body[13], body[14], GetTickCount64())) {
-                            immersiveHold.release();
-                            cutMenu.release();
-                            stripClock.reset();
-                            gameScreen.reset();
-                            cutPanelLogged = 99;
-                            cutNeutralUntil = GetTickCount64() + 250;
-                            char line[300];
-                            sprintf_s(line,
-                                      "HERO VR 0.0.77 CUTFIX3 STUCK WATCH #%llu: stick pushed %.1f s after a scene, the "
-                                      "player still; all cutscene holds released, neutral pad 250 ms (pad layer %d, "
-                                      "swing owned %d, motion %d)",
-                                      static_cast<unsigned long long>(cutStuck.fired()),
-                                      static_cast<double>(cutscene077::stuckMs) / 1000.0, padLayer.latched() ? 1 : 0,
-                                      swingState.owned ? 1 : 0, motion.active ? 1 : 0);
-                            message(3, 0, line);
+                        // HERO VR 0.0.77 CUT5: the CUTFIX3 STUCK WATCH is gone (it reset the game screen and sent a
+                        // neutral pad for 250 ms in gameplay, up to every 4 s for 2 minutes after any scene): VR play's
+                        // pad goes to the game exactly as before the cutscene work (5ec540e).
+                        // CUT5 MOVE DIAG (read-only): once a second in VR play, the left stick as held, what the game is
+                        // sent, and how the hero moved, with the time since the last scene ended (cut4's report had no
+                        // stick values at all).
+                        if (mapping == game_pad::Mapping::gameplay && gameplay) {
+                            const uint64_t nowMove = GetTickCount64();
+                            if (!moveDiagMs || nowMove < moveDiagMs) {
+                                moveDiagMs = nowMove;
+                                moveDiagAt = {body[12], body[13], body[14]};
+                            } else if (nowMove - moveDiagMs >= 1000) {
+                                const Vec3 at{body[12], body[13], body[14]};
+                                const float metres = length(at - moveDiagAt);
+                                char line[300];
+                                sprintf_s(line,
+                                          "HERO VR 0.0.77 CUT5 MOVE: left stick %.2f %.2f -> game %d %d, buttons 0x%04x "
+                                          "LT %u RT %u; moved %.2f m in %.1f s, swing owned %d, pad layer %d; %s %.0f s "
+                                          "after scene end #%llu",
+                                          frame.hands[0].stickX, frame.hands[0].stickY, pad.thumbLX, pad.thumbLY,
+                                          pad.buttons, pad.leftTrigger, pad.rightTrigger, metres,
+                                          static_cast<double>(nowMove - moveDiagMs) / 1000.0, swingState.owned ? 1 : 0,
+                                          padLayer.latched() ? 1 : 0, cutSceneEndMs ? "" : "no scene yet,",
+                                          cutSceneEndMs ? static_cast<double>(nowMove - cutSceneEndMs) / 1000.0 : 0.0,
+                                          static_cast<unsigned long long>(cutSceneEnds));
+                                game_prompts::note(line);
+                                moveDiagMs = nowMove;
+                                moveDiagAt = at;
+                            }
+                        } else {
+                            moveDiagMs = 0;
                         }
-                        if (cutNeutralUntil && GetTickCount64() < cutNeutralUntil)
-                            pad = {};
-                        else
-                            cutNeutralUntil = 0;
                         game_pad::submit(pad, 200);
                         // Update 38.5 Y IN THE AIR: read-only counts (no glide state is read; air_watch.hpp).
                         {
@@ -12192,8 +12338,10 @@ DWORD WINAPI run(void*) {
                     if (gpuStarted) {
                         native_gpu::screenForInset(viewing && vrPlay && !native_gpu::eyesLost()); // 0.0.77
                         // HERO VR 0.0.77 PROMPT CARDS: in VR play the game's frame is copied only for debug_full.
+                        // HERO VR 0.0.77 WRIST MAP: and while the wrist map is shown (a GPU copy of the frame, no readback).
                         native_gpu::wantScreen(viewing && (!vrPlay || native_gpu::eyesLost() ||
-                                                           promptWindowNow.load() == story077d::windowDebugFull));
+                                                           promptWindowNow.load() == story077d::windowDebugFull ||
+                                                           (wristMap.shown() && wristMapNow.load() == story077h::mapOn)));
                     }
                     showScreen = screen;
                     if (!viewing)
@@ -12689,6 +12837,10 @@ DWORD WINAPI run(void*) {
                         }
                         perfEnemyMetres.store(world_trace::nearestEnemyMetres(), std::memory_order_relaxed);
                     }
+                    // HERO VR 0.0.77 WRIST MAP (story077h.hpp): shown, and whether the game's HUD is hidden (no hero, a
+                    // menu, a hint card, a cutscene or loading: the game's screen up) - the crop's minimap is not there.
+                    saved.wristMap = wristMap.shown() && wristMapNow.load() == story077h::mapOn && !flatScreen ? 1u : 0u;
+                    saved.wristMapHidden = !player.hero || !gameplay || screen ? 1u : 0u;
                     for (unsigned g = 0; g < 2; ++g) { // Update 38.3 GADGET HINT, 14 cm over the wrist
                         saved.hintFade[g] = gadgetHints[g].fade();
                         saved.hintLabel[g] = gadgetHints[g].label;
@@ -16459,7 +16611,96 @@ DWORD WINAPI run(void*) {
                             static uint64_t promptLogMs{}, promptFrames{}, promptImages{};
                             const uint32_t promptMode = promptWindowNow.load();
                             bool promptSet = false;
-                            if (promptMode == story077d::windowDebugFull && !saved->flatScreen && !saved->stereoScreen &&
+                            // HERO VR 0.0.77 WRIST MAP (story077h.hpp, CANDIDATE): the game's own HUD minimap, cropped
+                            // on the GPU from its presented 2D frame (the screen copy; never read back), in a panel over
+                            // the right wrist in both eyes. Where the game's HUD is hidden (a menu, a cutscene, no hero)
+                            // or no frame came, the panel says so instead. Before the debug window; any fault: off.
+                            static uint64_t mapLogMs{}, mapFrames{}, mapImages{}, mapSet{}, mapMissingFrames{};
+                            static uint32_t mapMissingWas = 99;
+                            if (saved->wristMap && !saved->flatScreen && !saved->stereoScreen && !showScreen &&
+                                !overlayFault && validTrackedPose(rendered.grips[1])) {
+                                ++mapFrames;
+                                uint32_t missing = story077h::haveMap;
+                                story077h::Crop crop;
+                                native_gpu::Screen mapImage;
+                                Pose rightGrip = rendered.grips[1];
+                                rightGrip.position += travel;
+                                const Vec3 centre = story077h::panelCentre(rightGrip, wristMapAtCm.load());
+                                const float panelWidth = static_cast<float>(std::clamp(wristMapSizeCm.load(), story077h::sizeLow,
+                                                                                       story077h::sizeHigh)) * .01f;
+                                if (saved->wristMapHidden)
+                                    missing = story077h::hudHidden;
+                                else if (!native_gpu::latestScreen(mapImage, 250) || !mapImage.texture || !mapImage.width ||
+                                         !mapImage.height)
+                                    missing = story077h::noFrame;
+                                else if (!story077h::hudCrop(mapImage.width, mapImage.height, wristMapHudPercent.load(), crop))
+                                    missing = story077h::noCrop;
+                                if (missing == story077h::haveMap) {
+                                    ++mapImages;
+                                    D3D12Renderer::Inset inset;
+                                    inset.source = mapImage.texture;
+                                    inset.view = mapImage.view;
+                                    inset.linear = mapImage.linear;
+                                    const float aspect = story077h::cropAspect(crop, mapImage.width, mapImage.height);
+                                    bool both = true;
+                                    for (unsigned eye = 0; eye < 2 && both; ++eye) {
+                                        story077h::Crop eyeCrop = crop;
+                                        both = story077h::panelRect(overlayViews[eye].viewProjection, centre, panelWidth, aspect,
+                                                                    grade.tangents[eye][0], grade.tangents[eye][1],
+                                                                    grade.tangents[eye][2], grade.tangents[eye][3],
+                                                                    targets[eye].width, targets[eye].height, eyeCrop,
+                                                                    inset.rect[eye]);
+                                        if (eye == 0) { // one crop for both: the left eye's (a cut edge differs little)
+                                            inset.crop[0] = eyeCrop.u0;
+                                            inset.crop[1] = eyeCrop.v0;
+                                            inset.crop[2] = eyeCrop.u1;
+                                            inset.crop[3] = eyeCrop.v1;
+                                        }
+                                    }
+                                    if (both) {
+                                        overlay.setInset(std::move(inset));
+                                        promptSet = true;
+                                        ++mapSet;
+                                    }
+                                } else {
+                                    ++mapMissingFrames;
+                                    // The note on the panel's place, facing the viewer, upright.
+                                    Vec3 toViewer = viewer - centre;
+                                    toViewer.y = 0;
+                                    if (finite(centre) && length(toViewer) > .05f) {
+                                        toViewer = normalized(toViewer);
+                                        const Vec3 up{0, 1, 0};
+                                        const Vec3 right = normalized(cross(up, toViewer));
+                                        PixelTextStyle style;
+                                        style.height = .012f;
+                                        style.top = {1.f, .92f, .35f};
+                                        style.bottom = {1.f, .55f, .12f};
+                                        const char* text = story077h::missingText(missing);
+                                        const float width = pixelTextWidth(text, style);
+                                        appendPixelText(vertices, text, centre - right * (width * .5f), right, up, style);
+                                    }
+                                }
+                                const uint64_t mapNowMs = GetTickCount64();
+                                if (missing != mapMissingWas || !mapLogMs || mapNowMs - mapLogMs >= 10000) {
+                                    mapMissingWas = missing;
+                                    mapLogMs = mapNowMs;
+                                    char line[400];
+                                    sprintf_s(line, "HERO VR 0.0.77 WRIST MAP: %s; frames %llu, game frames %llu, set %llu, "
+                                                    "drawn %llu, not on screen %llu; frame %ux%u, crop %.3f,%.3f-%.3f,%.3f "
+                                                    "(HUD %u%%), panel %u cm at %u cm%s%s",
+                                              story077h::missingName(missing), static_cast<unsigned long long>(mapFrames),
+                                              static_cast<unsigned long long>(mapImages),
+                                              static_cast<unsigned long long>(mapSet),
+                                              static_cast<unsigned long long>(overlay.insetsDrawn()),
+                                              static_cast<unsigned long long>(mapMissingFrames), mapImage.width,
+                                              mapImage.height, crop.u0, crop.v0, crop.u1, crop.v1,
+                                              wristMapHudPercent.load(), wristMapSizeCm.load(), wristMapAtCm.load(),
+                                              overlay.insetFault().empty() ? "" : ", ", overlay.insetFault().c_str());
+                                    game_prompts::note(line);
+                                    consoleLine(line);
+                                }
+                            }
+                            if (!promptSet && promptMode == story077d::windowDebugFull && !saved->flatScreen && !saved->stereoScreen &&
                                 !showScreen && !overlayFault) {
                                 ++promptFrames;
                                 native_gpu::Screen promptImage;
@@ -17117,8 +17358,20 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeadDodge(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStorySprint(void* v) { return setLive(v, 0, 1, 5565, storySprintNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptWindow(void* v) { return setLive(v, 0, 1, 5566, promptWindowNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptCards(void* v) { return setLive(v, 0, 1, 5568, promptCardsNow, asU32); }
-// HERO VR 0.0.77 WAYPOINT (story077g.hpp): live.txt waypoints (0 scan - the default, 1 always, 2 off).
+// HERO VR 0.0.77 WAYPOINT (story077g.hpp): live.txt waypoints (0 scan, 1 always, 2 off - the default since CUT5).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWaypoints(void* v) { return setLive(v, 0, 2, 5580, waypointsNow, asU32); }
+// HERO VR 0.0.77 WRIST MAP (story077h.hpp): live.txt wrist_map (0 on, 1 off), wrist_map_size (cm), wrist_map_at (cm)
+// and wrist_map_hud (the game's HUD scale, percent).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMap(void* v) { return setLive(v, 0, 1, 5581, wristMapNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
+    return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
+}
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapAt(void* v) {
+    return setLive(v, story077h::atLow, story077h::atHigh, 5583, wristMapAtCm, asU32);
+}
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapHud(void* v) {
+    return setLive(v, story077h::hudLow, story077h::hudHigh, 5584, wristMapHudPercent, asU32);
+}
 // HERO VR 0.0.77 X IS THE GAME'S X: x_button 0 game (the default), 1 view (05e70a2's X = View).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXButton(void* v) { return setLive(v, 0, 1, 5569, xButtonNow, asU32); }
 // HERO VR 0.0.77 HEAL ANYWHERE (story077f.hpp): live.txt screen_heal.

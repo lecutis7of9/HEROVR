@@ -72,6 +72,9 @@ struct NativeEyeFrame {
     std::array<Vec3, 2> hintAt{};
     std::array<float, 2> hintFade{};
     std::array<uint32_t, 2> hintLabel{};
+    // HERO VR 0.0.77 WRIST MAP (story077h.hpp): the game's minimap over the right wrist shown (1), and the game's HUD
+    // hidden (1: no hero, a menu or hint card, a cutscene - the crop holds no minimap; the panel says so).
+    uint32_t wristMap{}, wristMapHidden{};
     // Version 0.0.3 WALL STICK: the web nets on walls and floors (this frame's world, fade 0: none);
     // AUTO PERFORMANCE's SHOW STATUS place (over the left wrist, world; ok 0: not shown).
     std::array<Vec3, 6> netAt{}, netNormal{};

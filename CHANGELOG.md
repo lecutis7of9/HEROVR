@@ -2,6 +2,29 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-cutscene (5) - free movement after scenes, cine prompts, the wrist minimap (TEST build, 0.0.77 RC)
+
+From the player's report on cut4: after the new-game scene he could not steer his walk or his swing (zips, veers),
+the ledge save stood him still, the menu fix showed the whole flat game in the immersive scene, and he wants the
+map / objective.
+- **Story sprint (CONFIRMED blind ground):** its "grounded" was only "the grip swing does not own him", true in the
+  air - the RT it held on was the game's own R2 web swing (camera-steered webs, the zips and veers). Off by default
+  again (as 0.0.76; live.txt story_sprint = on to try it) and, when on, the game mover's own ground flag. The other
+  synthetic holds were audited: none is blind. CUT5 STORY SPRINT and CUT5 MOVE lines log what the game got.
+- **Stuck watch gone:** cutfix3's watch reset the game's screen while he stood still; gameplay after a scene is the
+  same path as gameplay without one.
+- **Cine prompts:** the scene's own Y offers (Where cine kinds) get a Y card for 12 s once in reach and Y routed to
+  the game the whole time; CUT5 CINE PROMPT lines count each offer and press. The stuck ledge save: CANDIDATE.
+- **Menu:** a menu over a scene goes to the normal VR screen (as cutscenes = flat), never the whole flat frame in the
+  immersive world (CUT5 MENU SCREEN lines).
+- **Waypoint diamond off** by default: the game's objective POI source is still not found (POI DUMP lines stay).
+- **Right-wrist minimap (CANDIDATE, new):** left hand to the right wrist plus the left trigger shows or hides the
+  game's own HUD minimap on a panel over the right wrist. It is cropped on the GPU from the game's presented 2D frame
+  (bottom-left HUD corner, by the frame's height and live.txt wrist_map_hud) - not from the eye views, never read
+  back. In a menu, a cutscene or without the hero the game hides it and the wrist says MINIMAP NOT ON SCREEN. live.txt
+  wrist_map (on, off), wrist_map_size, wrist_map_at, wrist_map_hud; WRIST MAP lines. Costs one screen copy a frame
+  only while shown.
+
 ## hero-0.0.77-cutscene (4) - waypoint findings, POI dump, HUD panel answer (TEST build)
 
 From the player's report on cut3: immersive mode worked; the waypoint never appeared; he asks for the game's HUD,

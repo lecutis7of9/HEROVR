@@ -205,8 +205,8 @@ void movesScreen(std::vector<Vertex>& v, const Plane& p) {
         {"HEAD STEP", "DODGE THAT WAY"},
         {"BUZZ", "SPIDER SENSE NOW"},
         {"PUNCH FAST", "MASH X"},
-        {"STICK ALL THE WAY", "SPRINT RT"},
-        {"SCAN: YELLOW DIAMOND", "OBJECTIVE 8 S, WAYPOINTS"},
+        {"STICK ALL THE WAY", "RUN IF SPRINT ON"},
+        {"L HAND R WRIST + LT", "MINIMAP ON / OFF"},
     };
     int i = 0;
     for (const auto& line : lines) {

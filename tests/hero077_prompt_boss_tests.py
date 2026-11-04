@@ -56,19 +56,20 @@ class Wiring(unittest.TestCase):
     def test_prompt_window(self):
         g = self.game
         # The whole game frame only with prompt_window = debug_full (b8b33ce showed it by default).
-        self.assertIn('promptWindowNow.load() == story077d::windowDebugFull));', g)
+        self.assertIn('promptWindowNow.load() == story077d::windowDebugFull ||', g)
         self.assertNotIn('promptWindowNow.load() != 2', g)
         at = g.index('HERO VR 0.0.77 PROMPT WINDOW (live.txt prompt_window; story077c.hpp), now DEBUG ONLY')
         self.assertLess(at, g.index('overlay.renderViews(overlayViews, vertices, true, false, translucent', at))
         body = g[at:g.index('overlay.renderViews(overlayViews', at)]
-        self.assertIn('if (promptMode == story077d::windowDebugFull && !saved->flatScreen', body)
-        self.assertEqual(body.count('overlay.setInset('), 1)
+        self.assertIn('if (!promptSet && promptMode == story077d::windowDebugFull && !saved->flatScreen', body)
+        self.assertEqual(body.count('overlay.setInset('), 2)  # CUT5: the wrist map's, then the debug window's
+        self.assertLess(body.index('HERO VR 0.0.77 WRIST MAP'), body.index('if (!promptSet && promptMode'))
         self.assertIn('overlay.clearInset();', body)
         self.assertIn('catch (...)', body)
         self.assertIn('!saved->stereoScreen', body)
         # Elsewhere only HERO VR 0.0.77 CUTSCENES' two (the scene's words, on the screen or the scene's panel),
         # both in the screen's own branches (showScreen), never in play.
-        self.assertEqual(g.count('overlay.setInset('), 3)
+        self.assertEqual(g.count('overlay.setInset('), 4)
         for at in (g.index('if (showScreen && cutImmersive'), g.index('if (strip3d && !overlayFault)')):
             self.assertLess(at, g.index('overlay.setInset(', at))
         r = src('src/d3d12_renderer.cpp')

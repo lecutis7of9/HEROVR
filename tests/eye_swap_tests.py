@@ -29,9 +29,11 @@ class EyeSwapTests(unittest.TestCase):
     def test_lost_eyes_show_game_screen_with_notice(self):
         s = read('src/game_xr.cpp')
         self.assertIn('if (viewing && gpuStarted && native_gpu::eyesLost())\n                        screen = true;', s)
-        # HERO VR 0.0.77 PROMPT CARDS: in VR play the copies are wanted only for prompt_window = debug_full.
+        # HERO VR 0.0.77 PROMPT CARDS: in VR play the copies are wanted only for prompt_window = debug_full, and
+        # (CUT5 WRIST MAP) while the wrist minimap is shown.
         self.assertIn('native_gpu::wantScreen(viewing && (!vrPlay || native_gpu::eyesLost() ||\n'
-                      '                                                           promptWindowNow.load() == story077d::windowDebugFull));', s)
+                      '                                                           promptWindowNow.load() == story077d::windowDebugFull ||\n'
+                      '                                                           (wristMap.shown() && wristMapNow.load() == story077h::mapOn)));', s)
         self.assertIn('eye_swap::appendLostNotice(notice, aspect);', s)
         self.assertIn('message(3, 0, eye_swap::lostMessage);', s)
         self.assertIn('message(3, 0, eye_swap::swappedMessage);', s)

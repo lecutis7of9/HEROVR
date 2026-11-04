@@ -541,9 +541,9 @@ SETTINGS = {
     'story_dodge': ((0, 1), 'SpidyStoryDodge', "STORY DODGE {} (0 on: B dodges at once anywhere, in the air and on "
                     "walls too, and both controllers buzz hard at spider-sense's moment to press it; 1 off: 0.0.76's "
                     "ground-only B) - live, no restart needed"),
-    'story_sprint': ((0, 1), 'SpidyStorySprint', "STORY SPRINT {} (0 on: the left stick pushed all the way on the "
-                     "ground holds the game's RT, its run, for the story's run-for-your-life parts; 1 off) - live, "
-                     "no restart needed"),
+    'story_sprint': ((0, 1), 'SpidyStorySprint', "STORY SPRINT {} (0 on: the left stick pushed all the way holds the "
+                     "game's RT, its run, only while the game has your feet on the ground - never in the air, on a "
+                     "wall, a ledge or a perch; 1 off, the default as in 0.0.76) - live, no restart needed"),
     # HERO VR 0.0.77 PROMPT WINDOW and BOSS DAMAGE (include/spidy/story077c.hpp, both CANDIDATE): live.
     # HERO VR 0.0.77 PROMPT CARDS (include/spidy/story077d.hpp, CANDIDATE): the PROMPT WINDOW of b8b33ce copied the
     # whole game screen into VR; it is a debug view now, off by default, and the old on / large / 0 / 2 lines are off.
@@ -557,8 +557,19 @@ SETTINGS = {
                      "picture of the game; 0 on; 1 off) - live, no restart needed"),
     # HERO VR 0.0.77 WAYPOINT (include/spidy/story077g.hpp)
     'waypoints': ((0, 2), 'SpidyWaypoints', "WAYPOINTS {} (a yellow diamond in VR over the game's own objective "
-                  "marker, with its distance, for about 8 seconds after you scan - hand to temple + trigger; 0 scan, "
-                  "the default; 1 always; 2 off) - live, no restart needed"),
+                  "marker, with its distance, for about 8 seconds after you scan - hand to temple + trigger; 0 scan; "
+                  "1 always; 2 off, the default until the game's objective source is found, the scan still logs "
+                  "POI DUMP lines) - live, no restart needed"),
+    # HERO VR 0.0.77 WRIST MAP (include/spidy/story077h.hpp, CANDIDATE)
+    'wrist_map': ((0, 1), 'SpidyWristMap', "WRIST MAP {} (the left hand to the right wrist and the left trigger "
+                  "shows or hides the game's own minimap, cropped from its screen, over your right wrist; 0 on, the "
+                  "default; 1 off: the gesture is never taken) - live, no restart needed"),
+    'wrist_map_size': ((5, 25), 'SpidyWristMapSize', "WRIST MAP SIZE {} (the wrist minimap's width in cm, 5-25, "
+                       "default 10) - live, no restart needed"),
+    'wrist_map_at': ((0, 20), 'SpidyWristMapAt', "WRIST MAP AT {} (how far over the right wrist the minimap's centre "
+                     "sits, cm 0-20, default 6) - live, no restart needed"),
+    'wrist_map_hud': ((50, 150), 'SpidyWristMapHud', "WRIST MAP HUD {} (set it to the game's own HUD scale, percent "
+                      "50-150, default 100, so the crop lands on its minimap) - live, no restart needed"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
                     "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
@@ -745,6 +756,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'prompt_window': ('off', 'debug_full'),  # HERO VR 0.0.77 PROMPT WINDOW (debug only now)
                 'prompt_cards': ('on', 'off'),  # HERO VR 0.0.77 PROMPT CARDS
                 'waypoints': ('scan', 'always', 'off'),  # HERO VR 0.0.77 WAYPOINT
+                'wrist_map': ('on', 'off'),  # HERO VR 0.0.77 WRIST MAP
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
                 'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
                 'fly_classic': ('off', 'on'),  # HERO VR 0.0.76 FLIGHT (off: the reworked flight)
@@ -1018,6 +1030,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'prompt_window': {'off': 0, 'debug_full': 1, 'on': 0, 'large': 0, '0': 0, '1': 1, '2': 0},
            'prompt_cards': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 PROMPT CARDS
            'waypoints': {'scan': 0, 'always': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 WAYPOINT
+           'wrist_map': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 WRIST MAP
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
            'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
            'fly_classic': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.76 FLIGHT
@@ -1362,6 +1375,7 @@ START_ONLY = START_ONLY + ('x_button',)  # HERO VR 0.0.77 X IS THE GAME'S X: kep
 START_ONLY = START_ONLY + ('screen_heal',)  # HERO VR 0.0.77 HEAL ANYWHERE: kept between sessions
 START_ONLY = START_ONLY + ('cutscenes',)  # HERO VR 0.0.77 CUTSCENES: kept between sessions
 START_ONLY = START_ONLY + ('waypoints',)  # HERO VR 0.0.77 WAYPOINT
+START_ONLY = START_ONLY + ('wrist_map', 'wrist_map_size', 'wrist_map_at', 'wrist_map_hud')  # HERO VR 0.0.77 WRIST MAP
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',
@@ -1516,19 +1530,19 @@ def find_sm2scan(root, profile=None, exists=None):
 def suit_probe_start(root, kept, test_build, profile=None, exists=None):
     """(the value to send at the start or None, the one start-up line). kept: live.txt's kept settings."""
     said = kept.get('suit_probe')
+    # HERO VR 0.0.77 CUT5: off by default on TEST builds too (cut4's report: it cost 35-50 ms of the game's time a
+    # second, peaks 25-56 ms); live.txt's suit_probe = on still turns it on.
     send = None
-    if said is None and test_build:
-        send = 'on'
-    on = (said if said is not None else ('on' if test_build else 'off')) in ('on', 1, '1')
+    on = (said if said is not None else 'off') in ('on', 1, '1')
     live = pathlib.PureWindowsPath(str(root)) / 'live.txt' if root else 'live.txt'
     found = find_sm2scan(root, profile, exists)
     scan = (f'sm2scan.json found: {found}' if found else
             'sm2scan.json NOT found (looked in: ' + '; '.join(str(p) for p in sm2scan_places(root, profile)) + ')')
     if on:
-        why = 'the TEST build default' if said is None else 'live.txt says on'
+        why = 'live.txt says on'
         line = f'SUIT PROBE: on, read-only ({why}; set suit_probe = off in {live} to stop it) - {scan}'
     else:
-        line = f'SUIT PROBE: off (set suit_probe = on in {live}) - {scan}'
+        line = f'SUIT PROBE: off (set suit_probe = on in {live}; off by default, it costs frame time) - {scan}'
     return send, line
 
 

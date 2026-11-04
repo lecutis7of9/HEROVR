@@ -228,46 +228,39 @@ class MenuPanel {
   private:
     bool steered_{};
 };
-// HERO VR 0.0.77 CUTFIX3 STUCK WATCH: after a scene, gameplay up and the stick pushed, yet the player has not moved
-// for stuckMs: every cutscene hold is let go (once per stuckMs). Within afterSceneMs of a scene's end only.
-constexpr uint64_t stuckMs = 4000, afterSceneMs = 120000;
-constexpr float stuckMetres = .3f;
-class StuckWatch {
+// HERO VR 0.0.77 CUT5 MENU SCREEN (the owner on cut4: "the main menu fix just put a 2d flatscreen in the immersive
+// not just the option boxes"). A menu over a scene is no longer copied whole onto the immersive world: the stretch
+// goes to the normal VR screen, as cutscenes = flat shows it, until the screen is gone (gameplay) or another player
+// record is up (a new game or a save loaded). Signals (CANDIDATE): the session's first screen (the title screen and
+// its menus: no gameplay yet, the first player record seen there is the title's), no player record, or the left
+// stick pushed past half while the scene's clock is not frozen (a QTE's stick is no menu). Pure; the record is
+// only compared.
+class MenuScreen {
   public:
-    void sceneEnded(uint64_t nowMs) {
-        endMs_ = nowMs ? nowMs : 1;
-        sinceMs_ = 0;
+    // True while the stretch stays on the VR screen.
+    bool update(bool screen, uint64_t record, bool steering, bool frozen) {
+        if (!screen) {
+            on_ = initial_ = false;
+            return false;
+        }
+        if (on_ && initial_ && record_ == 0 && record != 0)
+            record_ = record; // the title's own record
+        else if (on_ && record != 0 && record != record_)
+            on_ = initial_ = false;
+        if (!on_ && (record == 0 || (steering && !frozen))) {
+            on_ = true;
+            record_ = record;
+            ++count_;
+        }
+        return on_;
     }
-    // True when the hold must be let go now.
-    bool update(bool gameplay, bool pushed, float x, float y, float z, uint64_t nowMs) {
-        if (!endMs_ || nowMs < endMs_ || nowMs - endMs_ > afterSceneMs || !gameplay || !pushed ||
-            !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
-            sinceMs_ = 0;
-            return false;
-        }
-        if (!sinceMs_) {
-            sinceMs_ = nowMs ? nowMs : 1;
-            x_ = x, y_ = y, z_ = z;
-            return false;
-        }
-        const float dx = x - x_, dy = y - y_, dz = z - z_;
-        if (std::sqrt(dx * dx + dy * dy + dz * dz) > stuckMetres) {
-            sinceMs_ = 0;
-            return false;
-        }
-        if (nowMs - sinceMs_ < stuckMs)
-            return false;
-        sinceMs_ = 0;
-        ++fired_;
-        return true;
-    }
-    uint64_t fired() const {
-        return fired_;
+    uint64_t count() const {
+        return count_;
     }
 
   private:
-    uint64_t endMs_{}, sinceMs_{}, fired_{};
-    float x_{}, y_{}, z_{};
+    uint64_t record_{}, count_{};
+    bool on_{true}, initial_{true};
 };
 // The panel's rectangle in one eye's pixels (y down) from that eye's tangents (left and down negative). eye 0 is
 // the left eye; eyeDist the two eyes' distance (metres); aspect the copied part's own width over height.

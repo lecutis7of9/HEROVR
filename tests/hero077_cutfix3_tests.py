@@ -15,15 +15,7 @@ class Cutfix3(unittest.TestCase):
         g = src('src/game_xr.cpp')
         at = g.index('if (cutWasShown && !immersiveScene) {')
         body = g[at:g.index('cutWasShown = immersiveScene;', at)]
-        for s in ('immersiveHold.release();', 'cutMenu.release();', 'stripClock.reset();',
-                  'cutStuck.sceneEnded(cutNowMs);', 'CUTFIX3 SCENE END'):
-            self.assertIn(s, body)
-
-    def test_stuck_watch(self):
-        g = src('src/game_xr.cpp')
-        at = g.index('if (cutStuck.update(')
-        body = g[at:g.index('game_pad::submit(pad, 200);', at)]
-        for s in ('gameScreen.reset();', 'immersiveHold.release();', 'pad = {};', 'CUTFIX3 STUCK WATCH'):
+        for s in ('immersiveHold.release();', 'cutMenu.release();', 'stripClock.reset();', 'CUTFIX3 SCENE END'):
             self.assertIn(s, body)
 
     def test_menu_panel_faithful(self):

@@ -211,16 +211,18 @@ int main() {
         check(h.frozen(), "frozen");
         h.release();
         check(!h.frozen() && !h.menu() && !h.update(true, false, false, 30), "release lets go");
-        StuckWatch w;
-        check(!w.update(true, true, 0, 0, 0, 1000) && !w.update(true, true, 0, 0, 0, 9000), "no scene: never");
-        w.sceneEnded(10000);
-        check(!w.update(true, true, 0, 0, 0, 10001), "starts timing");
-        check(!w.update(true, true, .1f, 0, 0, 13000), "not yet");
-        check(w.update(true, true, .1f, 0, 0, 14002) && w.fired() == 1, "fires after 4 s still");
-        check(!w.update(true, true, 0, 0, 0, 14100), "restarts");
-        check(!w.update(true, true, 1, 0, 0, 19000), "moved: no");
-        check(!w.update(true, false, 1, 0, 0, 25000) && !w.update(false, true, 1, 0, 0, 30000), "idle or menus: no");
-        check(!w.update(true, true, 1, 0, 0, 10000 + afterSceneMs + 1), "long after: no");
+        // CUT5 MENU SCREEN.
+        MenuScreen ms;
+        check(ms.update(true, 0, false, false), "session start: the title is on the screen");
+        check(ms.update(true, 0x100, false, false) && ms.update(true, 0x100, false, false), "title record adopted");
+        check(ms.update(true, 0, false, false), "load: still the screen");
+        check(!ms.update(true, 0x200, false, false), "a new game's record: immersive again");
+        check(!ms.update(true, 0x200, true, true), "QTE stick: no menu");
+        check(ms.update(true, 0x200, true, false) && ms.count() == 1, "steered: the screen");
+        check(ms.update(true, 0x200, false, false), "held to the stretch's end");
+        check(!ms.update(false, 0x200, false, false) && !ms.update(true, 0x200, false, false), "gameplay ends it");
+        check(ms.update(true, 0, false, false) && !ms.update(true, 0x300, false, false),
+              "a load's no-record: the screen, then the next record's scene immersive");
     }
 
     if (failures) {

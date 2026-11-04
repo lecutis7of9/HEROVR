@@ -11,6 +11,7 @@
 #include "spidy/eye_cover.hpp" // 0.0.74 test 10 WINDOW EDGES
 #include "spidy/eye_queries.hpp"
 #include "spidy/far_shadows.hpp"
+#include "spidy/world_light.hpp"
 #include "spidy/shadow_stable.hpp"
 #include "spidy/mirror_probe.hpp"
 #include "spidy/mirror_view.hpp"
@@ -178,6 +179,8 @@ __declspec(dllexport) native_view::EyeLodData SpidyEyeLodData;
 __declspec(dllexport) spidy::shadow_camera::Data SpidyShadowCameraData;
 // Update 35: FAR SHADOWS' mode and what the cascade fits made (tools/run_game_vr.py).
 __declspec(dllexport) spidy::far_shadows::Data SpidyFarShadowsData;
+// HERO VR 0.0.78 WORLD LIGHT (world_light.hpp): the game's frame light as its g_World fill wrote it.
+__declspec(dllexport) spidy::world_light::Data SpidyWorldLightData;
 // 0.0.76 SHADOW STABLE (shadow_stable.hpp): the switch and what it held (tools/far_shadows.py).
 __declspec(dllexport) spidy::shadow_stable::Data SpidyShadowStableData;
 // Update 36: EYE BLOOM's and SHARED LOD's modes and what they saw (eye_bloom.hpp, shared_lod.hpp).
@@ -893,6 +896,41 @@ uint64_t setupModels(void* context, void* job, void* third, uint64_t fourth, uin
     ReleaseSRWLockExclusive(&telemetry);
     asked = wanted;
     return result;
+}
+// HERO VR 0.0.78 WORLD LIGHT (world_light.hpp). CONFIRMED: 0x2c67f40 fills g_World (rcx the buffer, rdx the
+// frame job); neither caller uses its rax. After the game's own fill, two spans of what it wrote are copied
+// (SEH reads) and kept per caller. The CPU copy (cached memory) is preferred; the GPU buffer (an upload heap,
+// write-combined: slow to read) is only read when the CPU copy has not been seen for a second.
+using WorldFill = void* (*)(void*, void*);
+WorldFill originalWorldFill{};
+void* worldFillHook{};
+SRWLOCK worldLightLock = SRWLOCK_INIT;
+std::atomic<uint64_t> worldCpuSeenMs{};
+void* worldFill(void* cb, void* job) {
+    void* const r = originalWorldFill(cb, job);
+    namespace wl = spidy::world_light;
+    const auto caller = reinterpret_cast<uintptr_t>(_ReturnAddress()) - base;
+    const uint32_t slot = caller == wl::gpuCallerReturn ? 0u : caller == wl::cpuCallerReturn ? 1u : 2u;
+    const uint64_t now = GetTickCount64();
+    if (slot == 1)
+        worldCpuSeenMs.store(now, std::memory_order_relaxed);
+    else if (slot == 0 && now - worldCpuSeenMs.load(std::memory_order_relaxed) < 1000)
+        return r; // the CPU copy is fresh: no read of write-combined memory
+    unsigned char a[wl::spanA], b[wl::spanBBytes];
+    const auto at = reinterpret_cast<uintptr_t>(cb);
+    const bool ok = read(at, a, sizeof a) && read(at + wl::spanBFrom, b, sizeof b);
+    AcquireSRWLockExclusive(&worldLightLock);
+    auto& d = SpidyWorldLightData;
+    if (ok) {
+        d.last[slot] = wl::fromSpans(a, b, slot);
+        d.stampMs[slot] = now;
+        ++d.calls[slot];
+        ++d.sequence;
+    } else {
+        ++d.readFaults;
+    }
+    ReleaseSRWLockExclusive(&worldLightLock);
+    return r;
 }
 // Update 35: FAR SHADOWS (far_shadows.hpp). The fit 2a8dc80 gives a view far
 // cascades only when IsActiveView says yes at 2a8e145; the eyes never were.
@@ -4206,6 +4244,21 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
                     sm1FallBack(spidy::sm1style::hookFailed);
                 }
             }
+            // HERO VR 0.0.78 WORLD LIGHT: its own hook, never a reason to start no VR (STUDIO light without it).
+            {
+                namespace wl = spidy::world_light;
+                SpidyWorldLightData.bytes = sizeof(wl::Data);
+                if (!entry(wl::fillRva, wl::fillBytes, sizeof(wl::fillBytes))) {
+                    SpidyWorldLightData.hooked = 2;
+                } else {
+                    worldFillHook = reinterpret_cast<void*>(base + wl::fillRva);
+                    if (MH_CreateHook(worldFillHook, reinterpret_cast<void*>(worldFill),
+                                      reinterpret_cast<void**>(&originalWorldFill)) != MH_OK) {
+                        worldFillHook = nullptr;
+                        SpidyWorldLightData.hooked = 3;
+                    }
+                }
+            }
         }
         attempted = false;
         stopRequested = false;
@@ -4236,6 +4289,15 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
             removeHook(temporalAaHook);
             temporalAaHook = nullptr;
             sm1FallBack(spidy::sm1style::hookFailed);
+        }
+        if (worldFillHook) { // HERO VR 0.0.78 WORLD LIGHT (non-fatal)
+            if (enableHook(worldFillHook) != MH_OK) {
+                removeHook(worldFillHook);
+                worldFillHook = nullptr;
+                SpidyWorldLightData.hooked = 3;
+            } else {
+                SpidyWorldLightData.hooked = 1;
+            }
         }
         native_hud::panelHooked(hudPlaceHook != nullptr); // 0.0.70: never in SM2 (SM2_STEREO_HUD 0)
         SpidyShadowCameraData.fitHook = fitCascadesHook ? 1 : 0; // Update 31
@@ -4311,7 +4373,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStop(void*) {
         for (auto hook : {maintainHook, updateHook, copyFinalHook, toneHook, copyJobHook, beginJobHook,
                           endJobHook, initBuffersHook, sizeBuffersHook, renderActorHook, setupModelsHook,
                           isActiveViewHook, impostorQueriesHook, setupDisplayHook, submitHook, renderOffscreenHook,
-                          hudPlaceHook, submitSceneHook, fitCascadesHook, csmFitHook, viewScaleHook, temporalAaHook}) {
+                          hudPlaceHook, submitSceneHook, fitCascadesHook, csmFitHook, viewScaleHook, temporalAaHook,
+                          worldFillHook}) {
             auto s = disableHook(hook);
             if (s != MH_OK && s != MH_ERROR_DISABLED)
                 result = 1500 + s;
@@ -4856,3 +4919,32 @@ extern "C" void SpidyMirrorViewRead(spidy::mirror_view::Stats* out) {
     ReleaseSRWLockShared(&mirrorLock);
     out->wanted = mirrorWanted.load();
 }
+// HERO VR 0.0.78 WORLD LIGHT (world_light.hpp): the newest frame light kept by worldFill (the CPU copy first).
+namespace spidy::world_light {
+bool newest(Sample& out, uint64_t maxAgeMs) {
+    const uint64_t now = GetTickCount64();
+    bool got = false;
+    AcquireSRWLockShared(&worldLightLock);
+    const auto& d = SpidyWorldLightData;
+    for (uint32_t slot : {1u, 0u, 2u}) // the CPU copy, the GPU's buffer, another caller
+        if (d.calls[slot] && now - d.stampMs[slot] <= maxAgeMs) {
+            out = d.last[slot];
+            got = true;
+            break;
+        }
+    ReleaseSRWLockShared(&worldLightLock);
+    return got;
+}
+std::string hookLine() {
+    AcquireSRWLockShared(&worldLightLock);
+    const Data d = SpidyWorldLightData;
+    ReleaseSRWLockShared(&worldLightLock);
+    static constexpr const char* states[] = {"not tried", "hooked", "exe bytes differ (not hooked)", "hook failed"};
+    char line[200];
+    std::snprintf(line, sizeof line, "WORLD LIGHT hook: %s, fills gpu %llu cpu %llu other %llu, read faults %llu",
+                  states[d.hooked < 4 ? d.hooked : 0], static_cast<unsigned long long>(d.calls[0]),
+                  static_cast<unsigned long long>(d.calls[1]), static_cast<unsigned long long>(d.calls[2]),
+                  static_cast<unsigned long long>(d.readFaults));
+    return line;
+}
+} // namespace spidy::world_light

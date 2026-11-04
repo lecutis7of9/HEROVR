@@ -15,6 +15,7 @@
 // painted too, the satin colour (its tint the base) multiplying its texture; still not FOREVER 2 or the cockpit.
 // CAR PAINT OFF: every triangle the 0.0.74 test 1 diffuse light.
 #include "spidy/math.hpp"
+#include "spidy/world_light.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -46,9 +47,13 @@ inline float unpack(uint8_t b) { return static_cast<float>(b) / 255.f; }
 // One corner's colour: `base` (linear), unit normal n (either winding), unit light l, unit toward-eye v and
 // unit world up `up`, all in one frame (the model's or the world's). Non-finite input: the diffuse-only colour.
 // Cheap enough for 300,000 corners a frame: no pow but the lobe's, and that only where it is seen.
-inline Vec3 shade(Vec3 base, Vec3 n, Vec3 l, Vec3 v, Vec3 up, float metal, float rough) {
+// HERO VR 0.0.78 WORLD LIGHT: `w` the frame's light (world_light.hpp); its default (STUDIO) is the 0.0.77 colour
+// to the bit. In world light the diffuse is the game's sun and sky, the highlight the sun's colour, the
+// street / sky reflection the game's sky; n.l one-sided on the side he sees.
+inline Vec3 shade(Vec3 base, Vec3 n, Vec3 l, Vec3 v, Vec3 up, float metal, float rough,
+                  const world_light::Light& w = world_light::Light{}) {
     const float d = std::abs(dot(n, l));
-    const Vec3 diffuseOnly = base * (.32f + .68f * d);
+    const Vec3 diffuseOnly = w.world ? world_light::mul(base, world_light::diffuse(w, d, dot(n, up))) : base * (.32f + .68f * d);
     if (!(std::isfinite(metal) && std::isfinite(rough) && std::isfinite(v.x + v.y + v.z) && std::isfinite(up.x + up.y + up.z)))
         return diffuseOnly;
     metal = std::clamp(metal, 0.f, 1.f);
@@ -57,7 +62,8 @@ inline Vec3 shade(Vec3 base, Vec3 n, Vec3 l, Vec3 v, Vec3 up, float metal, float
         n = n * -1.f;
     const float nv = std::clamp(dot(n, v), 0.f, 1.f), nl = std::max(dot(n, l), 0.f);
     const Vec3 f0 = Vec3{.04f, .04f, .04f} * (1 - metal) + base * metal;
-    Vec3 c = base * (.32f + .68f * d) * (1 - .6f * metal);
+    Vec3 c = w.world ? world_light::mul(base, world_light::diffuse(w, nl, dot(n, up))) * (1 - .6f * metal)
+                     : base * (.32f + .68f * d) * (1 - .6f * metal);
     const Vec3 hv = l + v;
     const float hl = spidy::length(hv);
     if (nl > 0 && hl > 1e-4f) {
@@ -69,12 +75,12 @@ inline Vec3 shade(Vec3 base, Vec3 n, Vec3 l, Vec3 v, Vec3 up, float metal, float
             const float vh = std::clamp(dot(v, h), 0.f, 1.f), q = 1 - vh, q2 = q * q, fr = q2 * q2 * q;
             const Vec3 F = f0 + (Vec3{1, 1, 1} - f0) * fr;
             const float lobe = std::exp(e * std::log(nh)) * (e + 8.f) * (1.f / 25.1327f) * nl;
-            c = c + F * (1.6f * lobe);
+            c = c + world_light::mul(F, w.specular) * (1.6f * lobe);
         }
     }
     const Vec3 rv = n * (2 * dot(n, v)) - v; // reflect(-v, n)
     const float sky = std::clamp((dot(rv, up) + .1f) * 2.f, 0.f, 1.f), s = sky * sky * (3 - 2 * sky);
-    const Vec3 env = groundEnv * (1 - s) + skyEnv * s;
+    const Vec3 env = world_light::mul(groundEnv * (1 - s) + skyEnv * s, w.env);
     const float g = 1 - nv, g2 = g * g, grazing = g2 * g2 * g;
     const Vec3 Fe = f0 + (Vec3{1, 1, 1} * edgeOf(rough) - f0) * grazing;
     c = c + Vec3{env.x * Fe.x, env.y * Fe.y, env.z * Fe.z} * (1 - .5f * rough);
@@ -134,10 +140,11 @@ inline Facing facing(const Material& m, Vec3 l, Vec3 v, Vec3 up) {
 }
 // Branch free (a car's corners come in any order): the lobe nh^e as (1 - e (1 - nh) / 16)^16, within 1 % of
 // the peak's height of the true power.
-inline Vec3 corner(const Material& m, const Facing& f, Vec3 n, Vec3 l, Vec3 up) {
+inline Vec3 corner(const Material& m, const Facing& f, Vec3 n, Vec3 l, Vec3 up,
+                   const world_light::Light& w = world_light::Light{}) {
     const float d = std::abs(dot(n, l));
     if (!f.ok)
-        return m.base * (.32f + .68f * d);
+        return w.world ? world_light::mul(m.base, world_light::diffuse(w, d, dot(n, up))) : m.base * (.32f + .68f * d);
     const float raw = dot(n, f.v), side = raw < 0 ? -1.f : 1.f;
     const float nv = std::min(std::abs(raw), 1.f);
     const float nl = std::max(side * dot(n, l), 0.f), nh = std::clamp(side * dot(n, f.h), 0.f, 1.f);
@@ -145,10 +152,12 @@ inline Vec3 corner(const Material& m, const Facing& f, Vec3 n, Vec3 l, Vec3 up) 
     p = p > .1f ? p : 0.f; // under 1e-16 after: no denormals
     p *= p, p *= p, p *= p, p *= p;
     const float lobe = f.lit ? p * m.norm * nl : 0.f;
-    Vec3 c = m.diffuse * (.32f + .68f * d) + f.F * lobe;
+    Vec3 c = w.world ? world_light::mul(m.diffuse, world_light::diffuse(w, nl, side * dot(n, up))) +
+                           world_light::mul(f.F, w.specular) * lobe
+                     : m.diffuse * (.32f + .68f * d) + f.F * lobe;
     const float ry = 2 * nv * side * dot(n, up) - f.vUp; // reflect(-v, n) . up
     const float sky = std::clamp((ry + .1f) * 2.f, 0.f, 1.f), s = sky * sky * (3 - 2 * sky);
-    const Vec3 env = groundEnv * (1 - s) + skyEnv * s;
+    const Vec3 env = world_light::mul(groundEnv * (1 - s) + skyEnv * s, w.env);
     const float g = 1 - nv, g2 = g * g, grazing = g2 * g2 * g;
     const Vec3 Fe = m.f0 + (Vec3{m.edge, m.edge, m.edge} - m.f0) * grazing;
     c = c + Vec3{env.x * Fe.x, env.y * Fe.y, env.z * Fe.z} * m.roughKeep;

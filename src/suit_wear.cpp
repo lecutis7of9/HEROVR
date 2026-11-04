@@ -3,6 +3,7 @@
 #include "spidy/suit_wear.hpp"
 
 #include "spidy/fly_lean.hpp"
+#include "spidy/world_light.hpp"
 
 #include <bitset>
 #include <algorithm>
@@ -1139,7 +1140,9 @@ bool draw(std::vector<Vertex>& sink, size_t budget, const mesh_model::Mesh& mesh
     const size_t from = sink.size();
     if (from + size_t{count} * 3 > budget)
         return false;
-    const Vec3 light = normalized(Vec3{.3f, 1.f, .25f});
+    // HERO VR 0.0.78 WORLD LIGHT (world_light.hpp): the game's frame light (STUDIO: the 0.0.77 fixed light).
+    // The skinned suit's welded normals point out of the body (the rig's), so one-sided in world light.
+    const world_light::Light wl = world_light::current();
     const bool uvs = mesh.hasUvs();
     const auto P = [&](Vec3 p) {
         return place ? Vec3{place[0] * p.x + place[1] * p.y + place[2] * p.z + place[3], place[4] * p.x + place[5] * p.y + place[6] * p.z + place[7],
@@ -1151,17 +1154,28 @@ bool draw(std::vector<Vertex>& sink, size_t budget, const mesh_model::Mesh& mesh
                             place[8] * n.x + place[9] * n.y + place[10] * n.z}
                      : n;
     };
+    const auto lightAt = [&](Vec3 n, float& share) {
+        const Vec3 u = normalized(N(n));
+        if (!wl.world) {
+            share = 1.f;
+            const float lit = .32f + .68f * std::abs(dot(u, wl.toSun));
+            return Vec3{lit, lit, lit};
+        }
+        return world_light::shade(wl, Vec3{1, 1, 1}, u, true, &share);
+    };
     // Each welded vertex placed and lit once (not once per corner: about 4x fewer), then the corners copied.
     thread_local std::vector<Vec3> placed;
-    thread_local std::vector<float> lights;
+    thread_local std::vector<Vec3> lights;
+    thread_local std::vector<float> shares;
     const size_t nv = s.p.size();
     const bool once = size_t{count} * 3 >= nv * 2; // most of the suit drawn (the mirror): else per corner (the arms)
     if (once) {
         placed.resize(nv);
         lights.resize(nv);
+        shares.resize(nv);
         for (size_t v = 0; v < nv; ++v) {
             placed[v] = P(s.p[v]);
-            lights[v] = .32f + .68f * std::abs(dot(normalized(N(s.n[v])), light));
+            lights[v] = lightAt(s.n[v], shares[v]);
         }
     }
     sink.resize(from + size_t{count} * 3);
@@ -1176,8 +1190,10 @@ bool draw(std::vector<Vertex>& sink, size_t budget, const mesh_model::Mesh& mesh
         for (uint32_t k = 0; k < 3; ++k) {
             const uint32_t v = rig.corner[t * 3 + k];
             const float u = uvs ? mesh.uvs[t * 6 + k * 2] : 0.f, w = uvs ? mesh.uvs[t * 6 + k * 2 + 1] : 0.f;
-            const float lit = once ? lights[v] : .32f + .68f * std::abs(dot(normalized(N(s.n[v])), light));
-            *o++ = Vertex{once ? placed[v] : P(s.p[v]), tint * lit, 1.f, {u, w, layer, 1.f}};
+            float share = 1.f;
+            const Vec3 lit = once ? (share = shares[v], lights[v]) : lightAt(s.n[v], share);
+            *o++ = Vertex{once ? placed[v] : P(s.p[v]), world_light::mul(tint, lit), world_light::shadowAlpha(wl, share),
+                          {u, w, layer, 1.f}};
         }
     }
     for (size_t i = from; i < sink.size(); ++i)

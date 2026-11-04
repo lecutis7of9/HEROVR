@@ -39,6 +39,7 @@
 #include <cstring>
 
 #include "story077d.hpp"
+#include "story077g.hpp"
 namespace spidy::world_trace {
 enum Kind : uint32_t { npc = 0, spawn = 1, mission = 2, kinds = 3 };
 inline constexpr const char* kindNames[kinds] = {"NPC", "SPAWN", "MISSION"};
@@ -258,8 +259,17 @@ struct PromptStats {
     uint64_t scans{};                      // scans that looked for them
     uint32_t live[story077d::kindCount]{}; // in the last scan
     uint64_t appeared[story077d::kindCount]{}, gone[story077d::kindCount]{};
+    // HERO VR 0.0.77 INTERACT CARDS AND WAYPOINT: per kind, the nearest placed one in the last scan (metres from the
+    // hero, 1e9 none) and its place; the waypoint picks by source (story077g::Source).
+    float nearest[story077d::kindCount]{};
+    Vec3 nearestAt[story077d::kindCount]{};
+    uint64_t waypointPicks[4]{};
 };
 PromptStats promptStats();
+// HERO VR 0.0.77 WAYPOINT (story077g.hpp, CANDIDATE): the live.txt waypoints mode the scan picks for (story077g::
+// Waypoints), and the mark it picked (its place re-read at 10 Hz); false: none, or stale.
+void setWaypointMode(uint32_t mode);
+bool waypoint(story077g::Mark& out);
 // HERO VR 0.0.77 BOSS DAMAGE (CANDIDATE): a boss's class. ".?AVSandmanBot@@" is CONFIRMED (the user's
 // world trace 20261103: two spawns, 269 m from the hero - outside enemyReach, never in enemies()); the
 // others are CANDIDATE names (no log of them yet).

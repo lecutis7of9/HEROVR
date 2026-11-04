@@ -56,6 +56,10 @@ bool promptHeroKnown{};
 uintptr_t promptHeroRecord{};
 std::chrono::steady_clock::time_point promptWhen{}, promptMoved{};
 PromptStats promptCounts{};
+// HERO VR 0.0.77 WAYPOINT (story077g.hpp): the mode asked for, and the mark picked (record re-read at 10 Hz).
+std::atomic<uint32_t> waypointMode{story077g::waypointsOn};
+story077g::Mark waypointPub{};
+uintptr_t waypointPubRecord{};
 std::atomic<float> lookX{}, lookY{}, lookZ{-1};
 std::atomic<float> nearestEnemy{1e9f}; // metres at the last scan (BLOOD SPLATTER's plan B)
 std::atomic<float> nearestPerson{1e9f}; // Update 37.2: any civilian / pedestrian (NPC NEAR FADE's log)
@@ -456,6 +460,8 @@ void run() {
                 promptFirstScan = true;
                 std::lock_guard<std::mutex> lock(promptLock);
                 promptPubCount = 0;
+                waypointPub = {};
+                waypointPubRecord = 0;
             }
             if (!any && !enemiesWanted() && !promptsOn) {
                 work.status = 0;
@@ -520,7 +526,10 @@ void run() {
                     continue;
                 if (bits & heroBit)
                     hero = head.record;
-                if ((bits & promptBit) && found->second.prompt >= 0 && nowPrompts.size() < 2048)
+                // HERO VR 0.0.77 INTERACT CARDS: the catch-all kinds (any offer, a path waypoint) only up to 2048,
+                // so the truck / the pipe / a carry still fit.
+                if ((bits & promptBit) && found->second.prompt >= 0 &&
+                    nowPrompts.size() < (story077d::catchAllKind(static_cast<uint32_t>(found->second.prompt)) ? 2048u : 6144u))
                     nowPrompts[entry.address] = {head.record, static_cast<uint32_t>(found->second.prompt)};
                 if (bits & (civilianBit | enemyBit | allyBit | companionBit | pedestrianBit | botBit) &&
                     nowActors.size() < mostActors) {
@@ -722,11 +731,58 @@ void run() {
                         ++it;
                 }
                 promptFirstScan = false;
+                // HERO VR 0.0.77 INTERACT CARDS AND WAYPOINT: every placed object / marker kind's nearest (the
+                // log), and the waypoint's candidates (story077g::pick).
+                for (uint32_t k = 0; k < story077d::kindCount; ++k) {
+                    counts.nearest[k] = 1e9f;
+                    counts.nearestAt[k] = {};
+                }
+                std::vector<story077d::Seen> marks;
+                std::vector<uintptr_t> markRecords;
+                uint32_t reads = 0;
+                for (const auto& [address, l] : promptsLive) {
+                    const story077d::Kind* k = story077d::kind(l.kind);
+                    if (!k || k->where == story077d::screen || !l.record || ++reads > 4096)
+                        continue;
+                    Vec3 at{};
+                    if (!position(l.record, at) || !finite(at))
+                        continue;
+                    if (heroKnown) {
+                        const float m = length(at - heroAt);
+                        if (std::isfinite(m) && m < counts.nearest[l.kind]) {
+                            counts.nearest[l.kind] = m;
+                            counts.nearestAt[l.kind] = at;
+                        }
+                    }
+                    if (story077g::sourceOf(l.kind) != story077g::none && marks.size() < 4096) {
+                        story077d::Seen m;
+                        m.id = static_cast<uint64_t>(address);
+                        m.kind = l.kind;
+                        m.before = l.before;
+                        m.age = std::chrono::duration<float>(pnow - l.since).count();
+                        m.placed = true;
+                        m.world = at;
+                        marks.push_back(m);
+                        markRecords.push_back(l.record);
+                    }
+                }
+                const story077g::Mark mark = story077g::pick(marks.data(), static_cast<uint32_t>(marks.size()), heroAt,
+                                                             heroKnown, waypointMode.load(std::memory_order_relaxed));
+                uintptr_t markRecord{};
+                for (size_t q = 0; q < marks.size() && mark.shown; ++q)
+                    if (marks[q].id == mark.id)
+                        markRecord = markRecords[q];
+                ++counts.waypointPicks[mark.shown ? mark.source & 3 : 0];
+                {
+                    std::lock_guard<std::mutex> lock(promptLock);
+                    waypointPub = mark;
+                    waypointPubRecord = markRecord;
+                }
                 // The newest new screen-kind ones, then the nearest object-kind ones.
                 std::vector<std::pair<float, std::pair<story077d::Seen, uintptr_t>>> pick;
                 for (const auto& [address, l] : promptsLive) {
                     const story077d::Kind* k = story077d::kind(l.kind);
-                    if (!k || k->where == story077d::watchOnly)
+                    if (!k || k->where == story077d::watchOnly || k->where == story077d::marker)
                         continue;
                     story077d::Seen seenNow;
                     seenNow.id = static_cast<uint64_t>(address);
@@ -747,6 +803,12 @@ void run() {
                         score = length(at - heroAt);
                         if (!std::isfinite(score) || score > 60.f)
                             continue;
+                        // HERO VR 0.0.77 INTERACT CARDS: an interactable only within its reach (+2 m), the catch-all
+                        // offers after the named ones (so the truck / the pipe always get a slot).
+                        if (story077d::interactKind(l.kind) && score > k->reach + 2.f)
+                            continue;
+                        if (story077d::catchAllKind(l.kind))
+                            score += 100.f;
                     }
                     pick.push_back({score, {seenNow, l.record}});
                 }
@@ -801,6 +863,14 @@ void run() {
                     Vec3 h{};
                     if (promptHeroRecord && position(promptHeroRecord, h) && finite(h))
                         promptHero = h;
+                    if (waypointPub.shown && waypointPubRecord) { // HERO VR 0.0.77 WAYPOINT
+                        Vec3 w{};
+                        if (position(waypointPubRecord, w) && finite(w)) {
+                            waypointPub.world = w;
+                            if (promptHeroKnown)
+                                waypointPub.metres = length(w - promptHero);
+                        }
+                    }
                     promptMoved = std::chrono::steady_clock::now();
                 }
             }
@@ -855,6 +925,19 @@ uint32_t prompts(std::array<story077d::Seen, promptSlots>& out, Vec3& heroWorld,
         out[i].age += sinceScan;
     }
     return promptPubCount;
+}
+void setWaypointMode(uint32_t mode) { waypointMode.store(mode, std::memory_order_relaxed); }
+bool waypoint(story077g::Mark& out) {
+    out = {};
+    if (!running.load())
+        return false;
+    std::lock_guard<std::mutex> lock(promptLock);
+    const auto now = std::chrono::steady_clock::now();
+    if (now - promptMoved > std::chrono::milliseconds(1500) || now - promptWhen > std::chrono::seconds(4) ||
+        !waypointPub.shown)
+        return false;
+    out = waypointPub;
+    return true;
 }
 PromptStats promptStats() {
     std::lock_guard<std::mutex> lock(promptLock);

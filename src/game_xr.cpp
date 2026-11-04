@@ -67,6 +67,8 @@
 #include "spidy/story077e.hpp" // HERO VR 0.0.77 X IS THE GAME'S X
 #include "spidy/story077f.hpp" // HERO VR 0.0.77 HEAL ANYWHERE
 #include "spidy/prompt_cards.hpp" // HERO VR 0.0.77 PROMPT CARDS (drawing)
+#include "spidy/story077g.hpp" // HERO VR 0.0.77 WAYPOINT
+#include "spidy/waypoint_mark.hpp" // HERO VR 0.0.77 WAYPOINT (drawing)
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
 #include "spidy/blood_splatter.hpp"
@@ -1375,6 +1377,9 @@ std::atomic<uint32_t> storySprintNow{0}; // HERO VR 0.0.77 story_sprint: 0 on, 1
 // game frame in a window, b8b33ce's view); the button prompts are prompt_cards (0 on, the default; 1 off).
 std::atomic<uint32_t> promptWindowNow{story077d::windowOff};
 std::atomic<uint32_t> promptCardsNow{story077d::cardsOn};
+// HERO VR 0.0.77 WAYPOINT (story077g.hpp): live.txt waypoints - 0 on (the default: the objective's yellow diamond,
+// else the next mission's start), 1 objective (no mission starts), 2 off.
+std::atomic<uint32_t> waypointsNow{story077g::waypointsOn};
 // HERO VR 0.0.77 X IS THE GAME'S X (story077e.hpp): live.txt x_button - 0 game (the default: VR X tap is the
 // game's X, the menu button held 0.5 s is the View X sent), 1 view (05e70a2: X tap View, menu pauses on press).
 std::atomic<uint32_t> xButtonNow{story077e::xGame};
@@ -3198,6 +3203,22 @@ DWORD WINAPI run(void*) {
         uint64_t promptCardLogMs{}, promptKindsNoted{};
         uint64_t promptCardScreenIds{}, promptCardScreenShown{}, promptCardObjectShown{};
         uint64_t promptCardScreenLast{}, promptCardObjectLast{};
+        // HERO VR 0.0.77 INTERACT CARDS: an LB + RB (pull) / Y interact card shown last frame lets the right stick
+        // click / Y reach the game while a swing owns him too; and what the report counts.
+        bool pullCardNear{}, yCardNear{};
+        uint64_t pullCardFrames{}, pullCardClickFrames{}, pullCardSentFrames{}, pullCardGateFrames{};
+        uint64_t pullCardBlockedFly{}, pullCardBlockedNamed{}, pullCardBlockedX{}, pullCardBlockedChord{};
+        uint64_t yCardFrames{}, yCardHeldFrames{}, yCardSentFrames{}, yCardGateFrames{};
+        // HERO VR 0.0.77 WAYPOINT (story077g.hpp): this frame's mark, tracking space, and what the report counts.
+        struct WaypointNow {
+            bool shown{};
+            uint32_t source{}, kind{};
+            uint64_t id{};
+            Vec3 at{}; // tracking space
+            float metres{};
+        } waypointHere{};
+        uint64_t waypointFrames{}, waypointShownFrames{}, waypointDrawn{}, waypointEdgeFrames{}, waypointLogMs{};
+        uint64_t waypointBySource[4]{}, waypointChanges{}, waypointLastId{}, waypointNotedId{};
         uint64_t countersBefore{};
         uint32_t senseShown{}, senseFrames{}, senseSightFrames{}, senseTingles{};
         uint32_t senseBroken{}, senseDodges{};
@@ -7502,9 +7523,17 @@ DWORD WINAPI run(void*) {
                         // A Y the game names goes out as it is (NamedPress), with no
                         // turn or step of the interact's.
                         const uint32_t named = namedPress.claimed();
+                        // HERO VR 0.0.77 INTERACT CARDS: with a Y card up (last frame), Y reaches the game while a
+                        // swing owns him too.
+                        const bool yCardGate = yCardNear && steering && !calibrationInput && !layerOn && !phone.open();
+                        if (yCardNear) {
+                            ++yCardFrames;
+                            yCardGateFrames += yCardGate && !reaching && !inFlight;
+                            yCardHeldFrames += (origins.play() & buttonY) != 0;
+                        }
                         walk.interact = offerUse.update(
                             frame.seconds,
-                            (reaching || inFlight) && (origins.play() & buttonY) != 0 &&
+                            (reaching || inFlight || yCardGate) && (origins.play() & buttonY) != 0 &&
                                 !(named & game_pad::NamedPress::controlY),
                             onOwnWall, pointed,
                             {offers.usesTaken, offers.usesDeclined, offers.best},
@@ -7534,6 +7563,7 @@ DWORD WINAPI run(void*) {
                         // The game's Y: the player's, and after a tap the time the
                         // hero takes to turn to what they look at.
                         walk.interact = interactStep.pressed();
+                        yCardSentFrames += yCardNear && walk.interact;
                         // What the game names now, for a pull (below). Not in the pad
                         // layer: there the player presses the game's own buttons.
                         const auto asked = layerOn ? prompt_buttons::Demand{} : game_prompts::demand();
@@ -7640,7 +7670,21 @@ DWORD WINAPI run(void*) {
                                 consoleLine(line);
                             }
                         }
-                        const bool clickPulled = pullPress.update(frame.seconds, reaching || (storyThrow && inFlight),
+                        // HERO VR 0.0.77 INTERACT CARDS: with a pull card up (the truck, the pipe, a yank; last
+                        // frame), the click reaches the game while a swing owns him too.
+                        const bool pullCardGate = pullCardNear && steering && !calibrationInput && !layerOn && !phone.open();
+                        if (pullCardNear) {
+                            ++pullCardFrames;
+                            pullCardGateFrames += pullCardGate && !reaching && !(storyThrow && inFlight);
+                            if (frame.hands[1].stickClick) {
+                                ++pullCardClickFrames;
+                                pullCardBlockedNamed += (named & game_pad::NamedPress::rightClick) != 0;
+                                pullCardBlockedFly += flyNow.flying;
+                                pullCardBlockedChord += flyChord.claims();
+                                pullCardBlockedX += abilityX;
+                            }
+                        }
+                        const bool clickPulled = pullPress.update(frame.seconds, reaching || (storyThrow && inFlight) || pullCardGate,
                                                                   pullClick, frame.hands[0].stickClick);
                         const bool pulled = clickPulled || (yanked && playing) || storyYanked;
                         if (clickPulled && !storyPulling) {
@@ -7662,6 +7706,7 @@ DWORD WINAPI run(void*) {
                             game_prompts::note(onWall ? "the player's pull -> the game's LB + RB, on a wall"
                                                       : "the player's pull -> the game's LB + RB");
                         pulling_ = walk.pull;
+                        pullCardSentFrames += pullCardNear && (walk.pull || (pulled && walk.demand.leftTrigger));
                         // The right stick pushed down heals, in the air as on
                         // the ground; pushed up it is the game's LT + RT, while
                         // a web carries the player too (inFlight). Left and
@@ -8162,10 +8207,44 @@ DWORD WINAPI run(void*) {
                         // the prompt objects the scan sees, only in VR gameplay (never at the menus, never flat).
                         // Read-only; any fault turns only the cards off for the frame.
                         promptCardCount = 0;
+                        pullCardNear = yCardNear = false;
+                        waypointHere = {};
                         try {
-                            const bool cardsWanted = promptCardsNow.load() == story077d::cardsOn && vrPlay &&
-                                                     mapping == game_pad::Mapping::gameplay && !flatScreen;
-                            world_trace::setPromptsWanted(cardsWanted);
+                            const bool vrGameplay = vrPlay && mapping == game_pad::Mapping::gameplay && !flatScreen;
+                            const bool cardsWanted = promptCardsNow.load() == story077d::cardsOn && vrGameplay;
+                            // HERO VR 0.0.77 WAYPOINT (story077g.hpp, live.txt waypoints): the same scan finds it.
+                            const uint32_t waypointMode = waypointsNow.load();
+                            const bool waypointWanted = waypointMode != story077g::waypointsOff && vrGameplay;
+                            world_trace::setWaypointMode(waypointMode);
+                            world_trace::setPromptsWanted(cardsWanted || waypointWanted);
+                            if (waypointWanted) {
+                                ++waypointFrames;
+                                story077g::Mark mark;
+                                if (world_trace::waypoint(mark) && validTrackedPose(motion.headPose)) {
+                                    const Pose toTrack = inverse(compose(motion.headPose, inverse(frame.head)));
+                                    // The diamond a little above the place (a person's / a thing's middle).
+                                    const Vec3 at = compose(toTrack, Pose{mark.world + Vec3{0, 1.2f, 0}, {}}).position;
+                                    if (finite(at)) {
+                                        waypointHere = {true, mark.source, mark.kind, mark.id, at, mark.metres};
+                                        ++waypointShownFrames;
+                                        ++waypointBySource[mark.source & 3];
+                                        if (mark.id != waypointLastId) {
+                                            waypointLastId = mark.id;
+                                            ++waypointChanges;
+                                        }
+                                        if (mark.id == waypointLastId && waypointChanges <= 200 && waypointNotedId != mark.id) {
+                                            waypointNotedId = mark.id;
+                                            char note[300];
+                                            const auto* kd = story077d::kind(mark.kind);
+                                            sprintf_s(note, "HERO VR 0.0.77 WAYPOINT (CANDIDATE): now %s %s at (%.1f, %.1f, %.1f), %.0f m",
+                                                      story077g::sourceName(mark.source), kd ? kd->cls : "?",
+                                                      mark.world.x, mark.world.y, mark.world.z, mark.metres);
+                                            game_prompts::note(note);
+                                            consoleLine(note);
+                                        }
+                                    }
+                                }
+                            }
                             if (cardsWanted) {
                                 ++promptCardFrames;
                                 std::array<story077d::Seen, world_trace::promptSlots> seenNow{};
@@ -8183,6 +8262,13 @@ DWORD WINAPI run(void*) {
                                 bool objectShown{}, screenShown{};
                                 for (uint32_t c = 0; c < chosen && promptCardCount < story077d::maxCards; ++c) {
                                     PromptCardNow card{cards[c].kind, cards[c].onObject, {}};
+                                    // HERO VR 0.0.77 INTERACT CARDS: the pull / Y gates (next frame's input).
+                                    if (story077d::interactKind(cards[c].kind)) {
+                                        if (story077d::pullKind(cards[c].kind))
+                                            pullCardNear = true;
+                                        else
+                                            yCardNear = true;
+                                    }
                                     if (card.onObject) {
                                         card.at = compose(fromWorld, Pose{cards[c].world, {}}).position;
                                         if (!finite(card.at) || !validTrackedPose(motion.headPose))
@@ -8205,17 +8291,23 @@ DWORD WINAPI run(void*) {
                                 promptCardScreenFrames += screenShown;
                             }
                             const uint64_t cardNowMs = GetTickCount64();
-                            if (cardsWanted || promptCardFrames) {
+                            if (cardsWanted || waypointWanted || promptCardFrames || waypointFrames) {
                                 const auto stats = world_trace::promptStats();
                                 for (uint32_t k = 0; k < story077d::kindCount; ++k)
                                     if ((stats.appeared[k] || stats.live[k]) && !(promptKindsNoted & (1ull << k))) {
                                         promptKindsNoted |= 1ull << k;
                                         const story077d::Kind* kd = story077d::kind(k);
                                         char note[260];
-                                        sprintf_s(note, "HERO VR 0.0.77 PROMPT CARDS: first seen %s (%s: %s = %s), live %u",
+                                        char where[96] = "";
+                                        if (stats.nearest[k] < 1e8f)
+                                            sprintf_s(where, ", nearest %.0f m at (%.1f, %.1f, %.1f)", stats.nearest[k],
+                                                      stats.nearestAt[k].x, stats.nearestAt[k].y, stats.nearestAt[k].z);
+                                        sprintf_s(note, "HERO VR 0.0.77 PROMPT CARDS: first seen %s (%s: %s = %s), live %u%s",
                                                   kd->cls, kd->where == story077d::object ? "object card"
-                                                           : kd->where == story077d::screen ? "screen card" : "watched only",
-                                                  kd->game, kd->vr, stats.live[k]);
+                                                           : kd->where == story077d::screen ? "screen card"
+                                                           : kd->where == story077d::marker ? "waypoint candidate"
+                                                                                             : "watched only",
+                                                  kd->game, kd->vr, stats.live[k], where);
                                         game_prompts::note(note);
                                     }
                                 if (!promptCardLogMs || cardNowMs - promptCardLogMs >= 10000) {
@@ -8225,12 +8317,15 @@ DWORD WINAPI run(void*) {
                                         if (stats.live[k] || stats.appeared[k] || stats.gone[k]) {
                                             char part[160];
                                             const char* cls = story077d::kind(k)->cls;
-                                            sprintf_s(part, " %s live %u +%llu -%llu;", cls + (std::strlen(cls) > 4 ? 4 : 0),
+                                            char near_[32] = "";
+                                            if (stats.nearest[k] < 1e8f)
+                                                sprintf_s(near_, " near %.0f m", stats.nearest[k]);
+                                            sprintf_s(part, " %s live %u +%llu -%llu%s;", cls + (std::strlen(cls) > 4 ? 4 : 0),
                                                       stats.live[k], static_cast<unsigned long long>(stats.appeared[k]),
-                                                      static_cast<unsigned long long>(stats.gone[k]));
+                                                      static_cast<unsigned long long>(stats.gone[k]), near_);
                                             kindsLine += part;
                                         }
-                                    char line[2200];
+                                    char line[3400];
                                     sprintf_s(line, "HERO VR 0.0.77 PROMPT CARDS (CANDIDATE) %s: frames %llu, scans %llu, object "
                                                     "cards %llu frames / %llu shown, screen cards %llu frames / %llu shown, drawn "
                                                     "%llu, full frame %s;%s",
@@ -8243,12 +8338,57 @@ DWORD WINAPI run(void*) {
                                               static_cast<unsigned long long>(promptCardScreenShown),
                                               static_cast<unsigned long long>(promptCardsDrawn),
                                               promptWindowNow.load() == story077d::windowDebugFull ? "DEBUG_FULL" : "never",
-                                              kindsLine.empty() ? " no prompt objects seen" : kindsLine.substr(0, 1900).c_str());
+                                              kindsLine.empty() ? " no prompt objects seen" : kindsLine.substr(0, 3000).c_str());
                                     consoleLine(line);
+                                    // HERO VR 0.0.77 INTERACT CARDS AND WAYPOINT: the holds and the mark.
+                                    char more[900];
+                                    sprintf_s(more, "HERO VR 0.0.77 INTERACT CARDS (CANDIDATE): pull card %llu frames, right stick "
+                                                    "click %llu, LB+RB sent %llu, let through a swing %llu, click blocked: fly %llu "
+                                                    "fly chord %llu named R3 %llu X held %llu; Y card %llu frames, Y held %llu, Y "
+                                                    "sent %llu, let through a swing %llu",
+                                              static_cast<unsigned long long>(pullCardFrames),
+                                              static_cast<unsigned long long>(pullCardClickFrames),
+                                              static_cast<unsigned long long>(pullCardSentFrames),
+                                              static_cast<unsigned long long>(pullCardGateFrames),
+                                              static_cast<unsigned long long>(pullCardBlockedFly),
+                                              static_cast<unsigned long long>(pullCardBlockedChord),
+                                              static_cast<unsigned long long>(pullCardBlockedNamed),
+                                              static_cast<unsigned long long>(pullCardBlockedX),
+                                              static_cast<unsigned long long>(yCardFrames),
+                                              static_cast<unsigned long long>(yCardHeldFrames),
+                                              static_cast<unsigned long long>(yCardSentFrames),
+                                              static_cast<unsigned long long>(yCardGateFrames));
+                                    consoleLine(more);
+                                    story077g::Mark now;
+                                    const bool have = world_trace::waypoint(now);
+                                    const auto* wk = have ? story077d::kind(now.kind) : nullptr;
+                                    sprintf_s(more, "HERO VR 0.0.77 WAYPOINT (CANDIDATE) %s: frames %llu, shown %llu, drawn %llu, "
+                                                    "edge arrow %llu, changes %llu, by source POI %llu / interactable %llu / "
+                                                    "mission start %llu, scan picks none %llu POI %llu interactable %llu mission "
+                                                    "%llu; now %s %s (%.1f, %.1f, %.1f) %.0f m",
+                                              waypointsNow.load() == story077g::waypointsOn ? "ON"
+                                              : waypointsNow.load() == story077g::waypointsObjective ? "OBJECTIVE" : "OFF",
+                                              static_cast<unsigned long long>(waypointFrames),
+                                              static_cast<unsigned long long>(waypointShownFrames),
+                                              static_cast<unsigned long long>(waypointDrawn),
+                                              static_cast<unsigned long long>(waypointEdgeFrames),
+                                              static_cast<unsigned long long>(waypointChanges),
+                                              static_cast<unsigned long long>(waypointBySource[1]),
+                                              static_cast<unsigned long long>(waypointBySource[2]),
+                                              static_cast<unsigned long long>(waypointBySource[3]),
+                                              static_cast<unsigned long long>(stats.waypointPicks[0]),
+                                              static_cast<unsigned long long>(stats.waypointPicks[1]),
+                                              static_cast<unsigned long long>(stats.waypointPicks[2]),
+                                              static_cast<unsigned long long>(stats.waypointPicks[3]),
+                                              have ? story077g::sourceName(now.source) : "none", wk ? wk->cls : "-",
+                                              now.world.x, now.world.y, now.world.z, now.metres);
+                                    consoleLine(more);
                                 }
                             }
                         } catch (...) {
                             promptCardCount = 0;
+                            pullCardNear = yCardNear = false;
+                            waypointHere = {};
                         }
                         // Update 37: the web shooter and the gadgets by gesture, and hand
                         // hits, as the game's own pad buttons (combat_input.hpp).
@@ -15602,9 +15742,9 @@ DWORD WINAPI run(void*) {
                                 bool drew{};
                                 for (uint32_t c = 0; c < promptCardCount && c < story077d::maxCards; ++c) {
                                     const auto& card = promptCardsHere[c];
-                                    char game[48];
+                                    char game[96];
                                     sprintf_s(game, "GAME: %s", story077d::gameLine(card.kind));
-                                    char vr[64];
+                                    char vr[96];
                                     sprintf_s(vr, "VR: %s", story077d::vrLine(card.kind));
                                     if (card.onObject) {
                                         const Vec3 to = card.at - eyes.position;
@@ -15620,6 +15760,42 @@ DWORD WINAPI run(void*) {
                                     }
                                 }
                                 promptCardsDrawn += drew;
+                            } catch (...) {
+                                translucent.resize(from);
+                            }
+                        }
+                        // HERO VR 0.0.77 WAYPOINT (story077g.hpp): the yellow diamond along the way to the objective
+                        // (at most story077g::drawAhead m out, the same size in view), its distance beneath, over the
+                        // game's picture (walls do not hide it); out of view, an arrow at the view's edge. The mod's own
+                        // marks, never the game's picture. Should one fail, only the waypoint goes off.
+                        if (!saved->flatScreen && waypointHere.shown && validTrackedPose(rendered.headPose)) {
+                            const size_t from = translucent.size();
+                            try {
+                                Pose eyes = rendered.headPose;
+                                eyes.position += travel;
+                                const Vec3 right = eyes.orientation.rotate({1, 0, 0}), up = eyes.orientation.rotate({0, 1, 0}),
+                                           ahead = eyes.orientation.rotate({0, 0, -1});
+                                const Vec3 to = waypointHere.at - eyes.position;
+                                const float m = length(to);
+                                bool drew{};
+                                if (std::isfinite(m) && m > .2f) {
+                                    const Vec3 way = to * (1.f / m);
+                                    if (!story077g::outOfView(to, ahead)) {
+                                        const float out = std::min(m, story077g::drawAhead);
+                                        char text[48];
+                                        story077g::label(text, sizeof text, waypointHere.source, waypointHere.metres);
+                                        drew = waypoint_mark::diamond(translucent, text, eyes.position + way * out, right, up,
+                                                                      out * story077g::diamondPerMetre, .95f) > 0;
+                                    } else {
+                                        float x{}, y{};
+                                        story077g::edgeWay(to, right, up, x, y);
+                                        const Vec3 at = eyes.position + ahead * story077g::edgeAhead +
+                                                        (right * x + up * y) * story077g::edgeOut;
+                                        drew = waypoint_mark::arrow(translucent, at, right, up, x, y, story077g::edgeSize, .9f) > 0;
+                                        waypointEdgeFrames += drew;
+                                    }
+                                }
+                                waypointDrawn += drew;
                             } catch (...) {
                                 translucent.resize(from);
                             }
@@ -16679,6 +16855,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeadDodge(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStorySprint(void* v) { return setLive(v, 0, 1, 5565, storySprintNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptWindow(void* v) { return setLive(v, 0, 1, 5566, promptWindowNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptCards(void* v) { return setLive(v, 0, 1, 5568, promptCardsNow, asU32); }
+// HERO VR 0.0.77 WAYPOINT (story077g.hpp): live.txt waypoints (0 on, 1 objective, 2 off).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWaypoints(void* v) { return setLive(v, 0, 2, 5580, waypointsNow, asU32); }
 // HERO VR 0.0.77 X IS THE GAME'S X: x_button 0 game (the default), 1 view (05e70a2's X = View).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXButton(void* v) { return setLive(v, 0, 1, 5569, xButtonNow, asU32); }
 // HERO VR 0.0.77 HEAL ANYWHERE (story077f.hpp): live.txt screen_heal.

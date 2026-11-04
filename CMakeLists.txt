@@ -64,6 +64,7 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/suit_wear.cpp
             src/test_notice.cpp
             src/prompt_cards.cpp
+            src/waypoint_mark.cpp
             src/van_screen.cpp
             src/hideout074.cpp
             src/batcave074.cpp
@@ -191,6 +192,10 @@ add_test(NAME story077c COMMAND spidy_story077c_tests)
 add_executable(spidy_story077d_tests tests/story077d_tests.cpp src/prompt_cards.cpp src/overlay_text.cpp)
 target_include_directories(spidy_story077d_tests PRIVATE include)
 add_test(NAME story077d COMMAND spidy_story077d_tests)
+# HERO VR 0.0.77 WAYPOINT (include/spidy/story077g.hpp, src/waypoint_mark.cpp).
+add_executable(spidy_story077g_tests tests/story077g_tests.cpp src/waypoint_mark.cpp src/overlay_text.cpp)
+target_include_directories(spidy_story077g_tests PRIVATE include)
+add_test(NAME story077g COMMAND spidy_story077g_tests)
 # HERO VR 0.0.77 X IS THE GAME'S X (include/spidy/story077e.hpp): the X tap and the menu hold.
 add_executable(spidy_story077e_tests tests/story077e_tests.cpp)
 target_include_directories(spidy_story077e_tests PRIVATE include)

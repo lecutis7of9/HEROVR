@@ -19,7 +19,9 @@
 #include <cstring>
 
 namespace spidy::story077d {
-enum Where : uint32_t { screen = 0, object = 1, watchOnly = 2 };
+// marker (HERO VR 0.0.77 INTERACT CARDS AND WAYPOINT, story077g.hpp): never a card - a candidate place of the
+// current objective for the yellow waypoint, and logged.
+enum Where : uint32_t { screen = 0, object = 1, watchOnly = 2, marker = 3 };
 struct Kind {
     const char* cls;  // decorated RTTI name (exact)
     const char* game; // the game's button(s), as its prompt shows them
@@ -35,7 +37,7 @@ inline const char* vrControl(const char* gameButtons) {
         const char* vr;
     };
     static constexpr Map maps[] = {
-        {"LB+RB", "BOTH TRIGGERS / YANK"},     {"LB+X", "HOLD X + PUNCH"},        {"LB+Y", "HOLD X + Y"},
+        {"LB+RB", "HOLD RIGHT STICK CLICK / TWO-HAND YANK"},     {"LB+X", "HOLD X + PUNCH"},        {"LB+Y", "HOLD X + Y"},
         {"LB+B", "HOLD X + B"},                {"LB+A", "HOLD X + A"},            {"L3+R3", "HOLD X + RIGHT STICK CLICK"},
         {"X", "TAP X / PUNCH"},                {"MASH X", "TAP X FAST / PUNCH FAST"},          {"Y", "Y (WEB STRIKE)"},
         {"B", "B / STEP YOUR HEAD (DODGE)"},   {"A", "A (JUMP)"},                 {"Y+B", "Y + B"},
@@ -51,17 +53,17 @@ inline const char* vrControl(const char* gameButtons) {
 inline constexpr Kind kinds[] = {
     // Object prompts (world-anchored).
     {".?AVWebStrikePrompt@@", "Y", "Y (WEB STRIKE)", object, 0, 30},
-    {".?AVGrabAndThrowable@@", "LB+RB", "BOTH TRIGGERS / YANK", object, 0, 12},
-    {".?AVThrowablePickupPoint@@", "LB+RB", "BOTH TRIGGERS / YANK", object, 0, 12},
-    {".?AVWebSnatchSpecialThrowable@@", "LB+RB", "BOTH TRIGGERS / YANK", object, 0, 15},
-    {".?AVLiftableInteract@@", "LB+RB", "BOTH TRIGGERS / YANK", object, 0, 6},
+    {".?AVGrabAndThrowable@@", "LB+RB", "HOLD RIGHT STICK CLICK / TWO-HAND YANK", object, 0, 12},
+    {".?AVThrowablePickupPoint@@", "LB+RB", "HOLD RIGHT STICK CLICK / TWO-HAND YANK", object, 0, 12},
+    {".?AVWebSnatchSpecialThrowable@@", "LB+RB", "HOLD RIGHT STICK CLICK / TWO-HAND YANK", object, 0, 15},
+    {".?AVLiftableInteract@@", "LB+RB", "HOLD RIGHT STICK CLICK / TWO-HAND YANK", object, 0, 6},
     // Screen prompts (QTE / mash), below the centre.
     {".?AVButtonMashInteract@@", "MASH X", "TAP X FAST / PUNCH FAST", screen, 8, 0},
     {".?AVCineQTEShotControllerButtonMashAction@@", "MASH X", "TAP X FAST / PUNCH FAST", screen, 8, 0},
     {".?AVCineQTEShotControllerPowerMeterAction@@", "MASH X", "TAP X FAST / PUNCH FAST", screen, 8, 0},
     {".?AVCineQTEShotControllerButtonPressAction@@", "QTE", "PRESS IT NOW: X = PUNCH, Y, B, A", screen, 4, 0},
     {".?AVCineQTEShotControllerStickMotionAction@@", "LEFT STICK", "LEFT STICK", screen, 5, 0},
-    {".?AVCineQTEShotControllerThrowArcAction@@", "AIM", "LOOK AT IT + BOTH TRIGGERS", screen, 6, 0},
+    {".?AVCineQTEShotControllerThrowArcAction@@", "AIM", "LOOK AT IT + RIGHT STICK CLICK", screen, 6, 0},
     {".?AVCineQTEShotControllerAimAtPointsAction@@", "AIM", "LOOK AT IT", screen, 6, 0},
     {".?AVCineQTEShotControllerTriggerSweetSpotAction@@", "RT", "RIGHT TRIGGER", screen, 6, 0},
     {".?AVCombatQTEOverlayTrigger@@", "QTE", "PRESS IT NOW: X = PUNCH, Y, B, A", screen, 4, 0},
@@ -76,9 +78,34 @@ inline constexpr Kind kinds[] = {
     {".?AVCineApproachPrompt@@", "", "", watchOnly, 0, 0},
     {".?AVSandFragmentOffer@@", "", "", watchOnly, 0, 0},
     {".?AVSandFragment@@", "", "", watchOnly, 0, 0},
+    // HERO VR 0.0.77 INTERACT CARDS (CANDIDATE kinds; the class names and their bases are CONFIRMED in
+    // Spider-Man2.exe's RTTI: VehiclePushable : VehicleBase : Component, WaterPipe : Component,
+    // EnviroInteractStandard/Drag/Pillar/Faller/Bot : EnviroInteractBase, InteractLocation*Offer :
+    // InteractLocationOffer : HoldOffer : ProximityOffer : Offer, PickupCarryableOffer : HoldOffer, DoorOffer /
+    // VentOffer / InWorldInteractOffer / BotInteractOffer / ... : ProximityOffer). A class's most derived kind wins.
+    // The truck / tanker to move (the game: "LB + RB (hold)", then the left stick toward you).
+    {".?AVVehiclePushable@@", "LB+RB HOLD + LEFT STICK BACK", "HOLD RIGHT STICK CLICK + LEFT STICK BACK", object, 0, 20},
+    // The water pipe to tear off (the game: LB + RB).
+    {".?AVWaterPipe@@", "LB+RB HOLD", "HOLD RIGHT STICK CLICK", object, 0, 20},
+    // Things in the world to yank and throw (the game: LB + RB).
+    {".?AVEnviroInteractBase@@", "LB+RB", "HOLD RIGHT STICK CLICK / TWO-HAND YANK", object, 0, 12},
+    // Hold-to-use offers: the stand-here interactions, pickups and carries (the game: hold its interact).
+    {".?AVInteractLocationOffer@@", "HOLD Y", "HOLD Y", object, 0, 10},
+    {".?AVPickupCarryableOffer@@", "HOLD Y", "HOLD Y", object, 0, 10},
+    {".?AVHoldOffer@@", "HOLD Y", "HOLD Y", object, 0, 8},
+    // Every other offer the game makes near the hero (a launcher, a door, a vent, a person to help): its interact.
+    {".?AVInWorldInteractOffer@@", "Y", "Y (HOLD Y: WALKS YOU TO IT)", object, 0, 10},
+    {".?AVProximityOffer@@", "Y", "Y (HOLD Y: WALKS YOU TO IT)", object, 0, 6},
+    // WAYPOINT candidates (story077g.hpp): never a card.
+    {".?AVAddPOIAction@@", "", "", marker, 0, 0},
+    {".?AVAddInteractPOIAction@@", "", "", marker, 0, 0},
+    {".?AVInteractLocation@@", "", "", marker, 0, 0},
+    {".?AVMissionLocationProxy@@", "", "", marker, 0, 0},
+    {".?AVWaypoint@@", "", "", watchOnly, 0, 0},
+    {".?AVInWorldInteract@@", "", "", watchOnly, 0, 0},
 };
 inline constexpr uint32_t kindCount = sizeof(kinds) / sizeof(kinds[0]);
-static_assert(kindCount <= 32);
+static_assert(kindCount <= 64); // promptKindsNoted is a 64-bit mask
 // The kind of an exact decorated class name; -1 none.
 inline int kindOf(const char* name) {
     if (!name || std::strncmp(name, ".?AV", 4))
@@ -89,6 +116,30 @@ inline int kindOf(const char* name) {
     return -1;
 }
 inline const Kind* kind(uint32_t i) { return i < kindCount ? &kinds[i] : nullptr; }
+// HERO VR 0.0.77 INTERACT CARDS: the interactables' kinds (the truck, the pipe, yanks, offers). One right on the hero
+// (an offer the hero entity carries) is never a card: the screen card is for a web strike / throw prompt only.
+inline bool interactKind(uint32_t i) {
+    const Kind* k = kind(i);
+    if (!k || k->where != object)
+        return false;
+    for (const char* c : {".?AVVehiclePushable@@", ".?AVWaterPipe@@", ".?AVEnviroInteractBase@@",
+                          ".?AVInteractLocationOffer@@", ".?AVPickupCarryableOffer@@", ".?AVHoldOffer@@",
+                          ".?AVInWorldInteractOffer@@", ".?AVProximityOffer@@"})
+        if (!std::strcmp(k->cls, c))
+            return true;
+    return false;
+}
+// The catch-all kinds (any offer, a path waypoint, an in-world interact): many in a city; capped first.
+inline bool catchAllKind(uint32_t i) {
+    const Kind* k = kind(i);
+    return k && (!std::strcmp(k->cls, ".?AVProximityOffer@@") || !std::strcmp(k->cls, ".?AVWaypoint@@") ||
+                 !std::strcmp(k->cls, ".?AVInWorldInteract@@"));
+}
+// A kind whose game button is LB + RB (the pull / yank); the rest of the interact kinds are the game's Y.
+inline bool pullKind(uint32_t i) {
+    const Kind* k = kind(i);
+    return k && k->where == object && !std::strncmp(k->game, "LB+RB", 5);
+}
 
 // One object of a prompt class from the last scan (world_trace::prompts).
 struct Seen {
@@ -118,7 +169,7 @@ inline uint32_t choose(const Seen* seen, uint32_t n, Vec3 hero, bool heroKnown, 
     for (uint32_t i = 0; i < n; ++i) {
         const Seen& s = seen[i];
         const Kind* k = kind(s.kind);
-        if (!k || k->where == watchOnly || !std::isfinite(s.age) || s.age < 0)
+        if (!k || k->where == watchOnly || k->where == marker || !std::isfinite(s.age) || s.age < 0)
             continue;
         bool asScreen = k->where == screen;
         if (k->where == object) {
@@ -127,6 +178,8 @@ inline uint32_t choose(const Seen* seen, uint32_t n, Vec3 hero, bool heroKnown, 
             const float m = length(s.world - hero);
             if (!std::isfinite(m) || m > k->reach)
                 continue;
+            if (m < nearHeroMetres && interactKind(s.kind))
+                continue; // an offer on the hero himself: none
             if (m < nearHeroMetres) {
                 // on the hero himself (a web strike's prompt object): only while new, as a screen card
                 if (s.before || s.age > 6.f)

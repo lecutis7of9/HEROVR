@@ -95,10 +95,10 @@ class Wiring(unittest.TestCase):
         at = g.index('HERO VR 0.0.77 PROMPT CARDS (CANDIDATE, story077d.hpp, live.txt prompt_cards)')
         body = g[at:g.index('// Update 37: the web shooter and the gadgets by gesture', at)]
         # only in VR gameplay: never at the menus, never flat
-        self.assertIn('promptCardsNow.load() == story077d::cardsOn && vrPlay &&\n'
-                      '                                                     mapping == game_pad::Mapping::gameplay && !flatScreen;',
-                      body)
-        self.assertIn('world_trace::setPromptsWanted(cardsWanted);', body)
+        # HERO VR 0.0.77 WAYPOINT: the same scan serves the cards and the waypoint (tests/hero077_waypoint_tests.py).
+        self.assertIn('const bool vrGameplay = vrPlay && mapping == game_pad::Mapping::gameplay && !flatScreen;', body)
+        self.assertIn('promptCardsNow.load() == story077d::cardsOn && vrGameplay;', body)
+        self.assertIn('world_trace::setPromptsWanted(cardsWanted || waypointWanted);', body)
         self.assertIn('catch (...)', body)
         self.assertIn('HERO VR 0.0.77 PROMPT CARDS (CANDIDATE) %s', body)
         self.assertIn('HERO VR 0.0.77 PROMPT CARDS: first seen %s', body)

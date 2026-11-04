@@ -555,6 +555,10 @@ SETTINGS = {
                      "QTEs - over debris you can throw and a web strike target, or a small card a bit below the "
                      "centre for a QTE - each naming the game's button and the VR control that sends it, never a "
                      "picture of the game; 0 on; 1 off) - live, no restart needed"),
+    # HERO VR 0.0.77 WAYPOINT (include/spidy/story077g.hpp)
+    'waypoints': ((0, 2), 'SpidyWaypoints', "WAYPOINTS {} (a yellow diamond in VR over where the objective is, "
+                  "with its distance, seen through walls, and an arrow at the edge of your view while it is out of "
+                  "sight; 0 on, the default; 1 objective: no next-mission markers; 2 off) - live, no restart needed"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
                     "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
@@ -740,6 +744,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'story_sprint': ('on', 'off'),  # HERO VR 0.0.77 STORY INPUTS (sprint)
                 'prompt_window': ('off', 'debug_full'),  # HERO VR 0.0.77 PROMPT WINDOW (debug only now)
                 'prompt_cards': ('on', 'off'),  # HERO VR 0.0.77 PROMPT CARDS
+                'waypoints': ('on', 'objective', 'off'),  # HERO VR 0.0.77 WAYPOINT
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
                 'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
                 'fly_classic': ('off', 'on'),  # HERO VR 0.0.76 FLIGHT (off: the reworked flight)
@@ -1012,6 +1017,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            # HERO VR 0.0.77 PROMPT CARDS: the old prompt_window on / large / 2 (b8b33ce) are off now (0)
            'prompt_window': {'off': 0, 'debug_full': 1, 'on': 0, 'large': 0, '0': 0, '1': 1, '2': 0},
            'prompt_cards': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 PROMPT CARDS
+           'waypoints': {'on': 0, 'objective': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 WAYPOINT
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
            'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
            'fly_classic': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.76 FLIGHT
@@ -1355,6 +1361,7 @@ START_ONLY = START_ONLY + ('prompt_window', 'boss_damage', 'prompt_cards')  # HE
 START_ONLY = START_ONLY + ('x_button',)  # HERO VR 0.0.77 X IS THE GAME'S X: kept between sessions
 START_ONLY = START_ONLY + ('screen_heal',)  # HERO VR 0.0.77 HEAL ANYWHERE: kept between sessions
 START_ONLY = START_ONLY + ('cutscenes',)  # HERO VR 0.0.77 CUTSCENES: kept between sessions
+START_ONLY = START_ONLY + ('waypoints',)  # HERO VR 0.0.77 WAYPOINT
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

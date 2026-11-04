@@ -198,17 +198,19 @@ void movesScreen(std::vector<Vertex>& v, const Plane& p) {
         {"SURGE", "X + STICK CLICK"},
         {"X TAP / MENU HOLD", "GAME X / VIEW"},
         {"R STICK DOWN HELD", "HEAL, CARDS TOO"},
-        {"TWO HAND YANK", "THROW LB+RB"},
+        {"R CLICK HELD / YANK", "LB+RB TRUCK PIPE"},
+        {"Y HELD", "USE, GRAB, WALKS IN"},
         {"LOOK OR POINT", "AIMS THE THROW"},
         {"B ANYWHERE", "DODGE"},
         {"HEAD STEP", "DODGE THAT WAY"},
         {"BUZZ", "SPIDER SENSE NOW"},
         {"PUNCH FAST", "MASH X"},
         {"STICK ALL THE WAY", "SPRINT RT"},
+        {"YELLOW DIAMOND", "OBJECTIVE, WAYPOINTS"},
     };
     int i = 0;
     for (const auto& line : lines) {
-        const float y = .053f - i * .0068f;
+        const float y = .053f - i * .0062f; // HERO VR 0.0.77 INTERACT CARDS: 20 lines fit
         const bool head = i == 0 || i == 10;
         p.text(v, line[0], -.031f, y, .0026f, .03f, head ? red : white, 0);
         p.text(v, line[1], .001f, y, .0026f, .033f, head ? red : soft, 0);

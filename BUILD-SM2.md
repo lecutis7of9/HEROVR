@@ -3032,6 +3032,12 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   tests/story077d_tests.cpp, tests/hero077_prompt_boss_tests.py): prompt_window is debug only (off (default),
   debug_full; the full frame only at debug_full); prompt_cards (on (default), off; SpidyPromptCards 5568) draws the
   mod's own cards from world_trace's prompt objects (promptBit, setPromptsWanted, prompts, promptStats).
+- HERO VR 0.0.77 INTERACT CARDS AND WAYPOINT (include/spidy/story077d.hpp's interact and marker kinds,
+  include/spidy/story077g.hpp, include/spidy/waypoint_mark.hpp, src/waypoint_mark.cpp, tests/story077g_tests.cpp,
+  tests/hero077_waypoint_tests.py): world_trace keeps the interactables' and the markers' records (the catch-all
+  offers capped at 2048), picks the waypoint (setWaypointMode, waypoint) and logs each kind's nearest (promptStats);
+  game_xr draws the diamond / edge arrow and lets the pull / Y hold through a swing while their card is up; waypoints
+  (on (default), objective, off; SpidyWaypoints 5580).
 - HERO VR 0.0.77 X IS THE GAME'S X (include/spidy/story077e.hpp, tests/story077e_tests.cpp): XPulse (a VR X tap
   is the game's X for the spiders; game_pad::Walk::xIsGameX makes X held the game's X, not Back) and MenuHold (the
   menu button in VR play: a tap Start on release, held 0.5 s the 0.1 s Back with a buzz); x_button (game (default),

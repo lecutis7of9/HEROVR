@@ -2,6 +2,31 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-cutscene (2) - INTERACT CARDS and the yellow WAYPOINT in VR (TEST build, not released)
+
+From the player's report on story (9): the truck to move for the firefighters, the water pipe to break and the things
+to grab for a mission had no prompt in VR, and the game's yellow objective waypoint is not shown in VR.
+- **Root cause (CONFIRMED from his logs and the code):** PROMPT CARDS knew only the throwable, web strike and QTE
+  classes (0 object cards shown in his sessions); the generic interactables were no kind. The waypoint is the game's
+  cohtml HUD, which VR does not show, and the mod drew none.
+- **INTERACT CARDS** (CANDIDATE; the classes CONFIRMED in Spider-Man2.exe's RTTI): world-anchored cards over
+  VehiclePushable ("GAME: LB+RB HOLD + LEFT STICK BACK / VR: HOLD RIGHT STICK CLICK + LEFT STICK BACK", 20 m),
+  WaterPipe ("LB+RB HOLD / HOLD RIGHT STICK CLICK", 20 m), EnviroInteractBase (LB+RB, 12 m), InteractLocationOffer,
+  PickupCarryableOffer and HoldOffer ("HOLD Y", 8-10 m), InWorldInteractOffer and any other ProximityOffer
+  ("Y (HOLD Y: WALKS YOU TO IT)", 6-10 m). The most derived class wins. An offer on the hero himself is never a card.
+  The throwables' line is now "HOLD RIGHT STICK CLICK / TWO-HAND YANK" (what sends the game's LB+RB).
+- **The holds reach the game:** with a pull card up, the right stick click's hold is let through while a swing owns
+  him too (pullCardGate); with a Y card up, Y the same (yCardGate). Not while flying, the X ability or a named R3.
+- **WAYPOINT** (CANDIDATE, live.txt `waypoints`: on (default) / objective / off, SpidyWaypoints 5580;
+  include/spidy/story077g.hpp, src/waypoint_mark.cpp): a yellow diamond the mod draws over the objective's place with
+  "OBJECTIVE 123 M", over the game's picture (walls do not hide it), the same size in view; out of view (38 degrees)
+  a yellow arrow at the view's edge. The place: the newest AddPOIAction / AddInteractPOIAction with a place, else the
+  nearest truck / pipe / hold offer / InteractLocation 3-150 m away, else (on only) the nearest MissionLocationProxy
+  ("MISSION 1.2 KM"; its place CONFIRMED readable in his world trace). Never a picture of the game.
+- Diagnostics: first seen per kind with the nearest place; every 10 s the kinds with their nearest distance, the pull /
+  Y card frames (click held, LB+RB sent, let through a swing, blocked by fly / chord / named R3 / X), and the waypoint
+  (frames, shown, drawn, edge arrow, source, class, place, metres); a note each time the waypoint changes (200 max).
+
 ## hero-0.0.77-cutscene (1) - CUTSCENES: 3D and immersive scenes, opt-in, with story (9)'s heal and crawl (TEST build, not released)
 
 A separate test build on hero-0.0.77-story (9) (5ec540e: HEAL ANYWHERE and the floor crawl's left stick, both kept:

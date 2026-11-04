@@ -27,14 +27,14 @@ int main() {
               mash = kindNamed(".?AVButtonMashInteract@@"), simple = kindNamed(".?AVSimplePrompt@@");
     check(strike >= 0 && throwable >= 0 && mash >= 0 && simple >= 0, "kinds found");
     check(kindOf(".?AVNothing@@") < 0 && kindOf(nullptr) < 0 && kindOf("WebStrikePrompt") < 0, "no kind");
-    check(!std::strcmp(vrControl("LB+RB"), "BOTH TRIGGERS / YANK"), "LB+RB yank");
+    check(!std::strcmp(vrControl("LB+RB"), "HOLD RIGHT STICK CLICK / TWO-HAND YANK"), "LB+RB yank");
     check(!std::strcmp(vrControl("LB+X"), "HOLD X + PUNCH"), "LB+X hold x punch");
     check(!vrControl("ZZ") && !vrControl(nullptr), "unknown button");
-    check(!std::strcmp(vrLine(throwable), "BOTH TRIGGERS / YANK") && !std::strcmp(gameLine(throwable), "LB+RB"), "throw card");
+    check(!std::strcmp(vrLine(throwable), "HOLD RIGHT STICK CLICK / TWO-HAND YANK") && !std::strcmp(gameLine(throwable), "LB+RB"), "throw card");
     check(!std::strcmp(vrLine(strike), vrControl("Y")), "web strike card");
     check(!std::strcmp(vrLine(mash), vrControl("MASH X")), "mash card");
     for (uint32_t k = 0; k < kindCount; ++k)
-        if (kinds[k].where != watchOnly) {
+        if (kinds[k].where == object || kinds[k].where == screen) {
             check(kinds[k].game[0] && kinds[k].vr[0], "every card has both lines");
             for (const char* c = kinds[k].vr; *c; ++c)
                 check(!(*c >= 'a' && *c <= 'z'), "capitals only (the stroke font)");
@@ -97,6 +97,32 @@ int main() {
     check(prompt_cards::append(v, "A", "B", {NAN, 0, 0}, {1, 0, 0}, {0, 1, 0}, .045f, 1.f) == 0 && v.empty(), "NaN: none");
     check(prompt_cards::append(v, "", "", {0, 0, -1}, {1, 0, 0}, {0, 1, 0}, .045f, 1.f) == 0, "empty: none");
     check(prompt_cards::append(v, "A", "B", {0, 0, -1}, {1, 0, 0}, {0, 1, 0}, 0.f, 1.f) == 0, "no height: none");
+    // HERO VR 0.0.77 INTERACT CARDS: the truck, the pipe, a yank, the offers.
+    const int truck = kindNamed(".?AVVehiclePushable@@"), pipe = kindNamed(".?AVWaterPipe@@"),
+              enviro = kindNamed(".?AVEnviroInteractBase@@"), hold = kindNamed(".?AVHoldOffer@@"),
+              carry = kindNamed(".?AVPickupCarryableOffer@@"), offer = kindNamed(".?AVProximityOffer@@"),
+              poiK = kindNamed(".?AVAddPOIAction@@"), mission = kindNamed(".?AVMissionLocationProxy@@");
+    check(truck >= 0 && pipe >= 0 && enviro >= 0 && hold >= 0 && carry >= 0 && offer >= 0 && poiK >= 0 && mission >= 0,
+          "interact kinds found");
+    check(pullKind(truck) && pullKind(pipe) && pullKind(enviro) && !pullKind(hold) && !pullKind(offer), "pull kinds");
+    check(interactKind(truck) && interactKind(carry) && interactKind(offer) && !interactKind(throwable) &&
+              !interactKind(poiK),
+          "interact kinds");
+    check(!std::strcmp(vrLine(truck), "HOLD RIGHT STICK CLICK + LEFT STICK BACK"), "truck card");
+    check(!std::strcmp(vrLine(pipe), "HOLD RIGHT STICK CLICK") && !std::strcmp(vrLine(hold), "HOLD Y"), "pipe / hold");
+    check(kinds[poiK].where == marker && kinds[mission].where == marker, "markers");
+    Seen t[3]{};
+    t[0] = Seen{31, {115, 0, 100}, 30.f, static_cast<uint32_t>(truck), true, true}; // 15 m, there before
+    check(choose(t, 1, hero, true, out) == 1 && out[0].onObject && out[0].id == 31, "truck 15 m: an object card");
+    t[0].world = {130, 0, 100};
+    check(choose(t, 1, hero, true, out) == 0, "truck 30 m: none");
+    t[1] = Seen{32, {100.5f, 0, 100}, .5f, static_cast<uint32_t>(offer), true, false}; // on the hero, new
+    check(choose(t + 1, 1, hero, true, out) == 0, "an offer on the hero: no screen card");
+    t[2] = Seen{33, {100, 0, 100}, 1.f, static_cast<uint32_t>(poiK), true, false};
+    check(choose(t + 2, 1, hero, true, out) == 0, "a marker: never a card");
+    for (uint32_t k = 0; k < kindCount; ++k)
+        check(std::strlen(kinds[k].game) + 6 < 96 && std::strlen(kinds[k].vr) + 4 < 96, "lines fit the buffers");
+    check(kindCount <= 64, "kinds fit the 64-bit noted mask");
     // The settings: the full frame off by default, the cards on.
     check(windowOff == 0 && cardsOn == 0, "defaults: no full frame, cards on");
     if (failures)

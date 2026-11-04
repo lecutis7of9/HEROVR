@@ -2473,7 +2473,12 @@ void App::controls(ImVec2 origin, ImVec2 size) {
           {"Y", "Interact with what you look at: the game's Y (backpacks, doors, prompts); web strike in a "
                 "fight, while you swing too (a car in a chase). Hold it and you step up to the thing, until "
                 "the game takes it"},
-          {"Click the right stick", "The game's LB + RB: pull a door or a grate where the game shows the two"},
+          {"Click the right stick", "The game's LB + RB: pull a door or a grate where the game shows the two. Hold it to "
+                                    "move a truck (pull the left stick back too) or tear off a water pipe: a yellow "
+                                    "card over it says so"},
+          {"Hold Y", "Use, grab or carry what a card over it names; held, you walk to it"},
+          {"Yellow diamond", "Where the objective is, with its distance, seen through walls; an arrow at the edge "
+                             "points the way. live.txt waypoints = objective / off"},
           {"Right stick down", "Heal: the game's D-pad down. Push it down and hold it a moment; on a game card too while hurt (close the card with A)"},
           {"Right stick up", "The game's LT + RT: zip to a point, enter a vent, where the game shows the "
                              "two; while you swing too. No point? Keep holding (time slows as the game "

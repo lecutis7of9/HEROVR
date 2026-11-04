@@ -4,6 +4,7 @@
 // writes only its own record.
 #include "spidy/world_trace.hpp"
 #include "spidy/cut8.hpp" // HERO VR 0.0.77 CUT8 POI TARGET
+#include "spidy/cut10_poi.hpp" // HERO VR 0.0.78 CUT10 GUI2 POI
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -367,6 +368,10 @@ void run() {
     uint32_t anchorLines{};                             // HERO VR 0.0.78 CUT9 ANCHOR
     std::unordered_map<uintptr_t, uint64_t> anchorSig;  // per object: its slot word and offset from the boss
     uint64_t anchorLogMs{};
+    uint64_t gui2PoiMs{};                                // HERO VR 0.0.78 CUT10 GUI2 POI
+    uint32_t gui2PoiLines{};
+    bool gui2PoiChecked{}, gui2PoiOk{};
+    std::unordered_map<uint32_t, uint64_t> gui2PoiSig;
     const auto poiTargets = [&](uintptr_t component, const char* kindName, bool heroOk, Vec3 heroWorld) {
         if (!poiTable || !poiCount || poiTargetLines >= 300)
             return;
@@ -1092,6 +1097,77 @@ void run() {
                         std::lock_guard<std::mutex> lock(promptLock);
                         if (poiDumpLines.size() < 400)
                             poiDumpLines.push_back(line);
+                    }
+                }
+                // HERO VR 0.0.78 CUT10 GUI2 POI (diagnostic, read-only, draws nothing): the game's own POI manager
+                // (include/spidy/cut10_poi.hpp), every 10 s, only when the POIView and manager tables match exactly.
+                // Logs the icon-record count, each live icon record's words (on change), and any world place found in
+                // the 0x370 records, so a report shows which record is the Y zip prompt / waypoint / beacon.
+                if (gui2PoiLines < cut10::maxLines) {
+                    const uint64_t ms = GetTickCount64();
+                    if (!gui2PoiMs || ms - gui2PoiMs >= 10000) {
+                        gui2PoiMs = ms;
+                        const uintptr_t view = imageBase + cut10::poiViewRva, manager = view + cut10::managerOffset;
+                        std::vector<std::string> out;
+                        if (!gui2PoiChecked) {
+                            gui2PoiChecked = true;
+                            gui2PoiOk = cut10::layoutMatches(imageBase, pointer(view), pointer(manager));
+                            out.push_back(gui2PoiOk ? "CUT10 GUI2 POI the game's POIView and POI manager found (2.810.0.0 layout)"
+                                                    : "CUT10 GUI2 POI not this build's layout: nothing read");
+                        }
+                        if (gui2PoiOk && cut10::layoutMatches(imageBase, pointer(view), pointer(manager))) {
+                            int32_t icons = -1, records = -1;
+                            read(manager + cut10::iconCount, &icons, 4);
+                            read(manager + cut10::recordCount, &records, 4);
+                            const uintptr_t iconAt = pointer(manager + cut10::iconArray);
+                            const uintptr_t recordAt = pointer(manager + cut10::recordArray);
+                            char line[236];
+                            sprintf_s(line, "CUT10 GUI2 POI manager 0x%llx: %d icon records at 0x%llx, %d records at 0x%llx; hero %s",
+                                      static_cast<unsigned long long>(manager), icons, static_cast<unsigned long long>(iconAt),
+                                      records, static_cast<unsigned long long>(recordAt), heroKnown ? "known" : "unknown");
+                            out.push_back(line);
+                            for (int32_t i = 0; cut10::countSane(icons) && iconAt && i < icons &&
+                                                i < static_cast<int32_t>(cut10::maxRecords); ++i) {
+                                uint32_t w[12]{};
+                                if (!read(iconAt + static_cast<uintptr_t>(i) * cut10::iconStride, w, sizeof w))
+                                    break;
+                                const uint64_t sig = cut10::signature(w, 12);
+                                auto& was = gui2PoiSig[static_cast<uint32_t>(i)];
+                                if (was == sig)
+                                    continue;
+                                was = sig;
+                                float f[2]{};
+                                std::memcpy(f, &w[8], sizeof f);
+                                sprintf_s(line, "CUT10 GUI2 POI icon %d: %08x %08x %08x %08x %08x %08x atlas %08x %08x f %.3f %.3f "
+                                                "%08x %08x", i, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], f[0], f[1], w[10], w[11]);
+                                out.push_back(line);
+                            }
+                            for (int32_t i = 0; heroKnown && cut10::countSane(records) && recordAt && i < records &&
+                                                i < static_cast<int32_t>(cut10::maxRecords); ++i) {
+                                float r[cut10::recordStride / 4]{};
+                                if (!read(recordAt + static_cast<uintptr_t>(i) * cut10::recordStride, r, sizeof r))
+                                    break;
+                                for (uint32_t o = 0; o + 3 <= cut10::recordStride / 4; ++o)
+                                    if (cut10::worldTriple(r + o, heroAt.x, heroAt.y, heroAt.z)) {
+                                        const uint64_t sig = cut10::signature(reinterpret_cast<const uint32_t*>(r + o), 3) ^ o;
+                                        auto& was = gui2PoiSig[0x10000u + static_cast<uint32_t>(i) * 0x100u + o];
+                                        if (was != sig) {
+                                            was = sig;
+                                            sprintf_s(line, "CUT10 GUI2 POI record %d +0x%x world %.1f %.1f %.1f (%.0f m)", i, o * 4,
+                                                      r[o], r[o + 1], r[o + 2],
+                                                      length(Vec3{r[o], r[o + 1], r[o + 2]} - heroAt));
+                                            out.push_back(line);
+                                        }
+                                        o += 2;
+                                    }
+                            }
+                        }
+                        std::lock_guard<std::mutex> lock(promptLock);
+                        for (auto& l : out)
+                            if (gui2PoiLines < cut10::maxLines && poiDumpLines.size() < 600) {
+                                ++gui2PoiLines;
+                                poiDumpLines.push_back(std::move(l));
+                            }
                     }
                 }
                 const story077g::Mark mark = story077g::pick(marks.data(), static_cast<uint32_t>(marks.size()), heroAt,

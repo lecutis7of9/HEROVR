@@ -239,6 +239,9 @@ add_test(NAME cut8 COMMAND spidy_cut8_tests)
 add_executable(spidy_cut9_tests tests/cut9_tests.cpp) # HERO VR 0.0.78 CUT9
 target_include_directories(spidy_cut9_tests PRIVATE include)
 add_test(NAME cut9 COMMAND spidy_cut9_tests)
+add_executable(spidy_cut10_poi_tests tests/cut10_poi_tests.cpp) # HERO VR 0.0.78 CUT10
+target_include_directories(spidy_cut10_poi_tests PRIVATE include)
+add_test(NAME cut10_poi COMMAND spidy_cut10_poi_tests)
 # HERO VR 0.0.78 WORLD LIGHT (include/spidy/world_light.hpp): the game's frame light, STUDIO unchanged.
 add_executable(spidy_world_light_tests tests/world_light_tests.cpp src/world_light.cpp)
 target_include_directories(spidy_world_light_tests PRIVATE include)

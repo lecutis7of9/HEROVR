@@ -2,6 +2,23 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut10 - Punisher arsenal and world light merged, the leg holster measured, the game's own POI manager found (TEST build)
+
+- **Merged:** hero-0.0.77-cutfix9-weapons (PUNISHER ARSENAL + GUN BLOOD) and hero-0.0.77-cutfix9-light (WORLD LIGHT /
+  WORLD SHADOW). The 80k HQ Punisher suit is drawn through the same suit path as every suit, so it gets the world light
+  (CONFIRMED in code; in game CANDIDATE).
+- **Leg holster grab zone (CONFIRMED against the mesh):** measured on the drawn HQ suit's right-thigh holster, the grab
+  point moved from below .735 / side .165 (the belt line) to below .85 / side .24 / ahead -.06. The suit's left thigh is
+  a pouch panel, not a holster. The arsenal play test now draws from these constants.
+- **stereo_taa:** the retired eye-TAA live.txt switch has a neutral name; the old key is still read.
+- **The game's own world prompts / waypoint / beacon (found, not yet in VR):** static RE of 2.810.0.0 shows SM2's world
+  UI is GUI2 (Coherent Gameface), not Scaleform. The game's POIView is one static object (image+0xb0f4588, vtable
+  0x53cf538) and its POI manager sits inside it at +0x730 (vtable 0x53cf408), holding the per-POI icon records
+  (stride 0xc4, count at +0x64) - CONFIRMED by disassembly. The world-to-screen projection those elements use is not
+  yet found, so nothing is reprojected per eye yet. New read-only CUT10 GUI2 POI lines (only when both tables match,
+  200 a session) log the records and any world place in them, so a log taken with the Y showing on Sandman proves
+  which record is the game's Y prompt. Nothing is drawn.
+
 ## hero-0.0.78-cut9 - the title flat from the first frame, the beacon's range, the calibration look, no ghost screen (TEST build)
 
 From the player's cut8 reports ("prompts and main menu are top priority for 78"):

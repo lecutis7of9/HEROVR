@@ -3109,6 +3109,14 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   flat screen, for 1.5 s; the QTE card only after the freeze has held 250 ms); calibration: calib_look = holo draws
   the holo checklist in either UI STYLE while its art is decoded (the tech plate was drawn for ui_style = TECH), CUT9
   CALIBRATION START / END lines; the cheat sheet's MJ run line. No new live.txt switch.
+- cut10 (merges of hero-0.0.77-cutfix9-weapons and -light; include/spidy/holster.hpp legHolsterBelow .85 / Side .24 /
+  Ahead -.06 measured on the HQ suit; tools/live_settings.py stereo_taa with its old key as an alias;
+  include/spidy/cut10_poi.hpp, src/world_trace.cpp, tests/cut10_poi_tests.cpp): the CUT10 GUI2 POI lines - the game's
+  static POIView (image+0xb0f4588, getters 0xc699a0 / 0xdf7f90, ctor 0xc641d0, vtable 0x53cf538) and its inline
+  UIElementPOIManager (+0x730, vtable 0x53cf408; icon records +0x58 stride 0xc4 count +0x64, read by the 0xe0ce20
+  icon pass; records +0x80 stride 0x370, init 0xe073f0, count +0x8c CANDIDATE), read SEH-guarded only when both
+  tables match, every 10 s, 200 lines a session, with the POI DUMP lines. Read-only, nothing drawn. No new live.txt
+  switch.
 - cut9 (resumed: include/spidy/story077b.hpp StoryRun; sfx.hpp levelDb / levelTargetLufs and the *_user WAVs;
   hero072.hpp clawIsStab / claw blood; tools/launcher/src/WhatsNew.cs, tools/launcher/tools/make_version_json.py
   whats_new_history): the game's RT prompt turns the stick run on (off at a web); sounds leveled at -20 LUFS, the

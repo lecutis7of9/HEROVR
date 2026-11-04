@@ -97,10 +97,15 @@ inline constexpr Kind kinds[] = {
     {".?AVInWorldInteractOffer@@", "Y", "Y (HOLD Y: WALKS YOU TO IT)", object, 0, 10},
     {".?AVProximityOffer@@", "Y", "Y (HOLD Y: WALKS YOU TO IT)", object, 0, 6},
     // WAYPOINT candidates (story077g.hpp): never a card.
-    {".?AVAddPOIAction@@", "", "", marker, 0, 0},
-    {".?AVAddInteractPOIAction@@", "", "", marker, 0, 0},
-    {".?AVInteractLocation@@", "", "", marker, 0, 0},
-    {".?AVMissionLocationProxy@@", "", "", marker, 0, 0},
+    // cut3: the game's own POI components (the HUD's markers); story077g reads their POI type.
+    {".?AVPointOfInterestPrius@@", "", "", marker, 0, 0},
+    {".?AVPointOfInterest@@", "", "", marker, 0, 0},
+    {".?AVPOIGamePrius@@", "", "", marker, 0, 0},
+    {".?AVPOIPrius@@", "", "", marker, 0, 0},
+    {".?AVPOIPriusBase@@", "", "", marker, 0, 0},
+    {".?AVSyncedPOIObject@@", "", "", marker, 0, 0},
+    {".?AVPOIGame@GUI2@@", "", "", marker, 0, 0}, // the HUD's own POI (GUI2, CONFIRMED in the exe's RTTI)
+    {".?AVPOI@GUI2@@", "", "", marker, 0, 0},
     {".?AVWaypoint@@", "", "", watchOnly, 0, 0},
     {".?AVInWorldInteract@@", "", "", watchOnly, 0, 0},
 };

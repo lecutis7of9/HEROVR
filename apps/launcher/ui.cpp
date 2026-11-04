@@ -2477,8 +2477,8 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                                     "move a truck (pull the left stick back too) or tear off a water pipe: a yellow "
                                     "card over it says so"},
           {"Hold Y", "Use, grab or carry what a card over it names; held, you walk to it"},
-          {"Yellow diamond", "Where the objective is, with its distance, seen through walls; an arrow at the edge "
-                             "points the way. live.txt waypoints = objective / off"},
+          {"Scan, then yellow diamond", "Scan (hand to temple + trigger): for about 8 s a diamond over the game's own "
+                                        "objective marker, with its distance. live.txt waypoints = always / off"},
           {"Right stick down", "Heal: the game's D-pad down. Push it down and hold it a moment; on a game card too while hurt (close the card with A)"},
           {"Right stick up", "The game's LT + RT: zip to a point, enter a vent, where the game shows the "
                              "two; while you swing too. No point? Keep holding (time slows as the game "

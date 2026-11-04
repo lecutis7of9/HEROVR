@@ -101,7 +101,7 @@ int main() {
     const int truck = kindNamed(".?AVVehiclePushable@@"), pipe = kindNamed(".?AVWaterPipe@@"),
               enviro = kindNamed(".?AVEnviroInteractBase@@"), hold = kindNamed(".?AVHoldOffer@@"),
               carry = kindNamed(".?AVPickupCarryableOffer@@"), offer = kindNamed(".?AVProximityOffer@@"),
-              poiK = kindNamed(".?AVAddPOIAction@@"), mission = kindNamed(".?AVMissionLocationProxy@@");
+              poiK = kindNamed(".?AVPointOfInterestPrius@@"), mission = kindNamed(".?AVPOIGamePrius@@");
     check(truck >= 0 && pipe >= 0 && enviro >= 0 && hold >= 0 && carry >= 0 && offer >= 0 && poiK >= 0 && mission >= 0,
           "interact kinds found");
     check(pullKind(truck) && pullKind(pipe) && pullKind(enviro) && !pullKind(hold) && !pullKind(offer), "pull kinds");

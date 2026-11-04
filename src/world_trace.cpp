@@ -57,7 +57,7 @@ uintptr_t promptHeroRecord{};
 std::chrono::steady_clock::time_point promptWhen{}, promptMoved{};
 PromptStats promptCounts{};
 // HERO VR 0.0.77 WAYPOINT (story077g.hpp): the mode asked for, and the mark picked (record re-read at 10 Hz).
-std::atomic<uint32_t> waypointMode{story077g::waypointsOn};
+std::atomic<uint32_t> waypointMode{story077g::waypointsScan};
 story077g::Mark waypointPub{};
 uintptr_t waypointPubRecord{};
 std::atomic<float> lookX{}, lookY{}, lookZ{-1};
@@ -243,6 +243,41 @@ void run() {
             c = classes.emplace(vt, classify(vt)).first;
         }
         return c->second.name[0] ? c->second.name : nullptr;
+    };
+    // cut3 (story077g.hpp, CANDIDATE layout): a game POI component's type - the first pointer in its first 64 words
+    // to an object whose RTTI name is a POIType*, or one step further through its config / library entry / instance
+    // data. nullptr: none found (counted as untyped).
+    std::unordered_map<uintptr_t, const char*> poiTypeOf;
+    const auto poiTypeName = [&](uintptr_t component) -> const char* {
+        const char* holders[4]{};
+        uintptr_t holderAt[4]{};
+        uint32_t holderCount = 0;
+        uint64_t words[64]{};
+        if (!read(component, words, sizeof(words)))
+            return nullptr;
+        for (uint64_t w : words) {
+            uintptr_t vt{};
+            const char* n = vtableName(static_cast<uintptr_t>(w), vt);
+            if (story077g::isPoiType(n))
+                return n;
+            if (story077g::poiHolder(n) && holderCount < 4) {
+                holders[holderCount] = n;
+                holderAt[holderCount++] = static_cast<uintptr_t>(w);
+            }
+        }
+        for (uint32_t h = 0; h < holderCount; ++h) {
+            uint64_t inner[32]{};
+            if (!read(holderAt[h], inner, sizeof(inner)))
+                continue;
+            for (uint64_t w : inner) {
+                uintptr_t vt{};
+                const char* n = vtableName(static_cast<uintptr_t>(w), vt);
+                if (story077g::isPoiType(n))
+                    return n;
+            }
+        }
+        (void)holders;
+        return nullptr;
     };
     const auto botStep = [&](uintptr_t nearest) {
         if (!botOn.load(std::memory_order_relaxed))
@@ -457,6 +492,7 @@ void run() {
             const bool promptsOn = promptsWanted();
             if (!promptsOn && promptFirstScan == false) {
                 promptsLive.clear();
+                poiTypeOf.clear();
                 promptFirstScan = true;
                 std::lock_guard<std::mutex> lock(promptLock);
                 promptPubCount = 0;
@@ -737,9 +773,12 @@ void run() {
                     counts.nearest[k] = 1e9f;
                     counts.nearestAt[k] = {};
                 }
-                std::vector<story077d::Seen> marks;
+                std::vector<story077g::Candidate> marks;
                 std::vector<uintptr_t> markRecords;
-                uint32_t reads = 0;
+                uint32_t reads = 0, poiNewReads = 0;
+                counts.poiComponents = counts.poiTyped = counts.poiUntyped = counts.poiTypeCount = 0;
+                for (auto& c : counts.objectiveCandidates)
+                    c = 0;
                 for (const auto& [address, l] : promptsLive) {
                     const story077d::Kind* k = story077d::kind(l.kind);
                     if (!k || k->where == story077d::screen || !l.record || ++reads > 4096)
@@ -754,25 +793,55 @@ void run() {
                             counts.nearestAt[l.kind] = at;
                         }
                     }
-                    if (story077g::sourceOf(l.kind) != story077g::none && marks.size() < 4096) {
-                        story077d::Seen m;
-                        m.id = static_cast<uint64_t>(address);
-                        m.kind = l.kind;
-                        m.before = l.before;
-                        m.age = std::chrono::duration<float>(pnow - l.since).count();
-                        m.placed = true;
-                        m.world = at;
-                        marks.push_back(m);
-                        markRecords.push_back(l.record);
+                    // cut3 (story077g.hpp): a game POI component - its type (by RTTI) says whether it is the
+                    // objective. Read once per component (cached), at most 64 new ones a scan.
+                    if (story077g::poiComponentKind(l.kind)) {
+                        ++counts.poiComponents;
+                        auto t = poiTypeOf.find(address);
+                        if (t == poiTypeOf.end() && poiNewReads < 64) {
+                            ++poiNewReads;
+                            t = poiTypeOf.emplace(address, poiTypeName(address)).first;
+                        }
+                        if (t == poiTypeOf.end())
+                            continue;
+                        const char* tn = t->second;
+                        if (!tn) {
+                            ++counts.poiUntyped;
+                            continue;
+                        }
+                        ++counts.poiTyped;
+                        const float m = heroKnown ? length(at - heroAt) : -1.f;
+                        uint32_t slot = 0;
+                        while (slot < counts.poiTypeCount && std::strcmp(counts.poiTypes[slot].name, tn))
+                            ++slot;
+                        if (slot == counts.poiTypeCount && slot < PromptStats::poiTypeSlots) {
+                            strncpy_s(counts.poiTypes[slot].name, tn, _TRUNCATE);
+                            counts.poiTypes[slot].live = 0;
+                            counts.poiTypes[slot].nearest = 1e9f;
+                            ++counts.poiTypeCount;
+                        }
+                        if (slot < counts.poiTypeCount) {
+                            ++counts.poiTypes[slot].live;
+                            if (m >= 0 && m < counts.poiTypes[slot].nearest)
+                                counts.poiTypes[slot].nearest = m;
+                        }
+                        const uint32_t src = story077g::sourceOfType(tn);
+                        if (src != story077g::none && marks.size() < 512) {
+                            marks.push_back({src, static_cast<uint64_t>(address), at});
+                            markRecords.push_back(l.record);
+                            ++counts.objectiveCandidates[src];
+                        }
                     }
                 }
+                for (auto it = poiTypeOf.begin(); it != poiTypeOf.end();) // forget the gone ones
+                    it = promptsLive.count(it->first) ? std::next(it) : poiTypeOf.erase(it);
                 const story077g::Mark mark = story077g::pick(marks.data(), static_cast<uint32_t>(marks.size()), heroAt,
                                                              heroKnown, waypointMode.load(std::memory_order_relaxed));
                 uintptr_t markRecord{};
                 for (size_t q = 0; q < marks.size() && mark.shown; ++q)
                     if (marks[q].id == mark.id)
                         markRecord = markRecords[q];
-                ++counts.waypointPicks[mark.shown ? mark.source & 3 : 0];
+                ++counts.waypointPicks[mark.shown ? mark.source % story077g::sources : 0];
                 {
                     std::lock_guard<std::mutex> lock(promptLock);
                     waypointPub = mark;

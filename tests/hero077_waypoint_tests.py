@@ -26,10 +26,10 @@ class Settings(unittest.TestCase):
     def test_waypoints_setting(self):
         rng, exp, text = L.SETTINGS['waypoints']
         self.assertEqual((rng, exp), ((0, 2), 'SpidyWaypoints'))
-        self.assertEqual(L.CHOICE_NAMES['waypoints'], ('on', 'objective', 'off'))
-        self.assertEqual([L.CHOICES['waypoints'][n] for n in ('on', 'objective', 'off')], [0, 1, 2])
+        self.assertEqual(L.CHOICE_NAMES['waypoints'], ('scan', 'always', 'off'))
+        self.assertEqual([L.CHOICES['waypoints'][n] for n in ('scan', 'always', 'off')], [0, 1, 2])
         self.assertIn('waypoints', L.START_ONLY)
-        self.assertIn('0 on, the default', text)
+        self.assertIn('0 scan, the default', text)
         self.assertIn('live, no restart needed', text)
 
 
@@ -41,7 +41,7 @@ class Wiring(unittest.TestCase):
         g = self.game
         self.assertRegex(g, r'SpidyWaypoints\(void\* v\) \{ return setLive\(v, 0, 2, 5580, waypointsNow, asU32\); \}')
         self.assertEqual(len(re.findall(r'\b5580\b', g)), 1)
-        self.assertIn('std::atomic<uint32_t> waypointsNow{story077g::waypointsOn};', g)
+        self.assertIn('std::atomic<uint32_t> waypointsNow{story077g::waypointsScan};', g)
 
     def test_waypoint_draw_is_ours(self):
         g = self.game
@@ -58,6 +58,9 @@ class Wiring(unittest.TestCase):
         g = self.game
         self.assertIn('const bool waypointWanted = waypointMode != story077g::waypointsOff && vrGameplay;', g)
         self.assertIn('world_trace::waypoint(mark)', g)
+        self.assertIn('story077g::scanAlpha(waypointMode', g)
+        self.assertIn('HERO VR 0.0.77 WAYPOINT: scan %u - showing', g)
+        self.assertIn('story077g::sourceOfType(tn)', src('src/world_trace.cpp'))
         self.assertIn('HERO VR 0.0.77 WAYPOINT (CANDIDATE) %s: frames', g)
         self.assertIn('HERO VR 0.0.77 INTERACT CARDS (CANDIDATE): pull card', g)
         # the pull / Y cards let the click / Y through a swing that owns him
@@ -71,8 +74,8 @@ class Wiring(unittest.TestCase):
     def test_kinds(self):
         d = src('include/spidy/story077d.hpp')
         for cls in ('VehiclePushable', 'WaterPipe', 'EnviroInteractBase', 'HoldOffer', 'PickupCarryableOffer',
-                    'InteractLocationOffer', 'InWorldInteractOffer', 'ProximityOffer', 'AddPOIAction',
-                    'MissionLocationProxy'):
+                    'InteractLocationOffer', 'InWorldInteractOffer', 'ProximityOffer', 'PointOfInterestPrius',
+                    'POIGamePrius'):
             self.assertIn('".?AV%s@@"' % cls, d)
         self.assertIn('static_assert(kindCount <= 64)', d)
         cm = src('CMakeLists.txt')

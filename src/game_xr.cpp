@@ -1379,9 +1379,9 @@ std::atomic<uint32_t> storySprintNow{0}; // HERO VR 0.0.77 story_sprint: 0 on, 1
 // game frame in a window, b8b33ce's view); the button prompts are prompt_cards (0 on, the default; 1 off).
 std::atomic<uint32_t> promptWindowNow{story077d::windowOff};
 std::atomic<uint32_t> promptCardsNow{story077d::cardsOn};
-// HERO VR 0.0.77 WAYPOINT (story077g.hpp): live.txt waypoints - 0 on (the default: the objective's yellow diamond,
-// else the next mission's start), 1 objective (no mission starts), 2 off.
-std::atomic<uint32_t> waypointsNow{story077g::waypointsOn};
+// HERO VR 0.0.77 WAYPOINT (story077g.hpp): live.txt waypoints - 0 scan (the default: the game's own objective, about
+// 8 s after each scan), 1 always, 2 off.
+std::atomic<uint32_t> waypointsNow{story077g::waypointsScan};
 // HERO VR 0.0.77 X IS THE GAME'S X (story077e.hpp): live.txt x_button - 0 game (the default: VR X tap is the
 // game's X, the menu button held 0.5 s is the View X sent), 1 view (05e70a2: X tap View, menu pauses on press).
 std::atomic<uint32_t> xButtonNow{story077e::xGame};
@@ -3224,9 +3224,14 @@ DWORD WINAPI run(void*) {
             uint64_t id{};
             Vec3 at{}; // tracking space
             float metres{};
+            float alpha{1}; // cut3: the fade after a scan (story077g::scanAlpha)
         } waypointHere{};
+        // cut3 (pt1803u): the scans seen, the last one's time (frame seconds), and the shows they started.
+        uint32_t waypointScansSeen{};
+        double waypointScanAt{-1e9};
+        uint64_t waypointScanShows{}, waypointScanNothing{};
         uint64_t waypointFrames{}, waypointShownFrames{}, waypointDrawn{}, waypointEdgeFrames{}, waypointLogMs{};
-        uint64_t waypointBySource[4]{}, waypointChanges{}, waypointLastId{}, waypointNotedId{};
+        uint64_t waypointBySource[story077g::sources]{}, waypointChanges{}, waypointLastId{}, waypointNotedId{};
         uint64_t countersBefore{};
         uint32_t senseShown{}, senseFrames{}, senseSightFrames{}, senseTingles{};
         uint32_t senseBroken{}, senseDodges{};
@@ -8296,20 +8301,47 @@ DWORD WINAPI run(void*) {
                             const bool cardsWanted = promptCardsNow.load() == story077d::cardsOn && vrGameplay;
                             // HERO VR 0.0.77 WAYPOINT (story077g.hpp, live.txt waypoints): the same scan finds it.
                             const uint32_t waypointMode = waypointsNow.load();
+                            // cut3 (pt1803u): a scan (hand to temple + trigger: the game's R3) shows it for about 8 s.
+                            const bool scanNow = templePress.scans() != waypointScansSeen;
+                            if (scanNow) {
+                                waypointScansSeen = templePress.scans();
+                                waypointScanAt = frame.seconds;
+                            }
+                            const float waypointAlpha =
+                                story077g::scanAlpha(waypointMode, static_cast<float>(frame.seconds - waypointScanAt));
+                            // The scan keeps running between shows (the mark is ready the moment he scans).
                             const bool waypointWanted = waypointMode != story077g::waypointsOff && vrGameplay;
                             world_trace::setWaypointMode(waypointMode);
                             world_trace::setPromptsWanted(cardsWanted || waypointWanted);
                             if (waypointWanted) {
                                 ++waypointFrames;
                                 story077g::Mark mark;
-                                if (world_trace::waypoint(mark) && validTrackedPose(motion.headPose)) {
+                                const bool haveMark = world_trace::waypoint(mark);
+                                if (scanNow && waypointMode == story077g::waypointsScan) {
+                                    char note[300];
+                                    if (haveMark) {
+                                        ++waypointScanShows;
+                                        sprintf_s(note, "HERO VR 0.0.77 WAYPOINT: scan %u - showing %s for %.0f s, %.0f m",
+                                                  waypointScansSeen, story077g::sourceName(mark.source),
+                                                  story077g::showSeconds, mark.metres);
+                                    } else {
+                                        ++waypointScanNothing;
+                                        sprintf_s(note, "HERO VR 0.0.77 WAYPOINT: scan %u - no objective POI found, nothing shown",
+                                                  waypointScansSeen);
+                                    }
+                                    if (waypointScanShows + waypointScanNothing <= 300) {
+                                        game_prompts::note(note);
+                                        consoleLine(note);
+                                    }
+                                }
+                                if (haveMark && waypointAlpha > 0 && validTrackedPose(motion.headPose)) {
                                     const Pose toTrack = inverse(compose(motion.headPose, inverse(frame.head)));
                                     // The diamond a little above the place (a person's / a thing's middle).
                                     const Vec3 at = compose(toTrack, Pose{mark.world + Vec3{0, 1.2f, 0}, {}}).position;
                                     if (finite(at)) {
-                                        waypointHere = {true, mark.source, mark.kind, mark.id, at, mark.metres};
+                                        waypointHere = {true, mark.source, mark.kind, mark.id, at, mark.metres, waypointAlpha};
                                         ++waypointShownFrames;
-                                        ++waypointBySource[mark.source & 3];
+                                        ++waypointBySource[mark.source % story077g::sources];
                                         if (mark.id != waypointLastId) {
                                             waypointLastId = mark.id;
                                             ++waypointChanges;
@@ -8317,9 +8349,8 @@ DWORD WINAPI run(void*) {
                                         if (mark.id == waypointLastId && waypointChanges <= 200 && waypointNotedId != mark.id) {
                                             waypointNotedId = mark.id;
                                             char note[300];
-                                            const auto* kd = story077d::kind(mark.kind);
-                                            sprintf_s(note, "HERO VR 0.0.77 WAYPOINT (CANDIDATE): now %s %s at (%.1f, %.1f, %.1f), %.0f m",
-                                                      story077g::sourceName(mark.source), kd ? kd->cls : "?",
+                                            sprintf_s(note, "HERO VR 0.0.77 WAYPOINT (CANDIDATE): now the game's %s POI at (%.1f, %.1f, %.1f), %.0f m",
+                                                      story077g::sourceName(mark.source),
                                                       mark.world.x, mark.world.y, mark.world.z, mark.metres);
                                             game_prompts::note(note);
                                             consoleLine(note);
@@ -8443,28 +8474,42 @@ DWORD WINAPI run(void*) {
                                     consoleLine(more);
                                     story077g::Mark now;
                                     const bool have = world_trace::waypoint(now);
-                                    const auto* wk = have ? story077d::kind(now.kind) : nullptr;
-                                    sprintf_s(more, "HERO VR 0.0.77 WAYPOINT (CANDIDATE) %s: frames %llu, shown %llu, drawn %llu, "
-                                                    "edge arrow %llu, changes %llu, by source POI %llu / interactable %llu / "
-                                                    "mission start %llu, scan picks none %llu POI %llu interactable %llu mission "
-                                                    "%llu; now %s %s (%.1f, %.1f, %.1f) %.0f m",
-                                              waypointsNow.load() == story077g::waypointsOn ? "ON"
-                                              : waypointsNow.load() == story077g::waypointsObjective ? "OBJECTIVE" : "OFF",
+                                    const uint32_t wm = waypointsNow.load();
+                                    // cut3: the candidate sources found (the game's POI components, their types and
+                                    // nearest), which was chosen and why, and its distance (10 s lines: over time).
+                                    std::string types;
+                                    for (uint32_t t = 0; t < stats.poiTypeCount && t < world_trace::PromptStats::poiTypeSlots; ++t) {
+                                        char part[120];
+                                        const char* tn = stats.poiTypes[t].name;
+                                        sprintf_s(part, " %s x%u near %.0f m%s;", tn + (std::strlen(tn) > 4 ? 4 : 0),
+                                                  stats.poiTypes[t].live, stats.poiTypes[t].nearest,
+                                                  story077g::sourceOfType(tn) ? " (objective)" : "");
+                                        types += part;
+                                    }
+                                    char wline[2600];
+                                    sprintf_s(wline, "HERO VR 0.0.77 WAYPOINT (CANDIDATE) %s: frames %llu, shown %llu, drawn %llu, "
+                                                     "edge arrow %llu, changes %llu, scans shown %llu / nothing %llu; game POI "
+                                                     "components %u, typed %u, untyped %u, objective candidates Objective %u Quest %u "
+                                                     "ZipToObjective %u CustomWaypoint %u; scan picks none %llu; types:%s; now %s "
+                                                     "(%s) (%.1f, %.1f, %.1f) %.0f m",
+                                              wm == story077g::waypointsScan     ? "SCAN"
+                                              : wm == story077g::waypointsAlways ? "ALWAYS" : "OFF",
                                               static_cast<unsigned long long>(waypointFrames),
                                               static_cast<unsigned long long>(waypointShownFrames),
                                               static_cast<unsigned long long>(waypointDrawn),
                                               static_cast<unsigned long long>(waypointEdgeFrames),
                                               static_cast<unsigned long long>(waypointChanges),
-                                              static_cast<unsigned long long>(waypointBySource[1]),
-                                              static_cast<unsigned long long>(waypointBySource[2]),
-                                              static_cast<unsigned long long>(waypointBySource[3]),
+                                              static_cast<unsigned long long>(waypointScanShows),
+                                              static_cast<unsigned long long>(waypointScanNothing),
+                                              stats.poiComponents, stats.poiTyped, stats.poiUntyped,
+                                              stats.objectiveCandidates[1], stats.objectiveCandidates[2],
+                                              stats.objectiveCandidates[3], stats.objectiveCandidates[4],
                                               static_cast<unsigned long long>(stats.waypointPicks[0]),
-                                              static_cast<unsigned long long>(stats.waypointPicks[1]),
-                                              static_cast<unsigned long long>(stats.waypointPicks[2]),
-                                              static_cast<unsigned long long>(stats.waypointPicks[3]),
-                                              have ? story077g::sourceName(now.source) : "none", wk ? wk->cls : "-",
+                                              types.empty() ? " none" : types.substr(0, 1800).c_str(),
+                                              have ? story077g::sourceName(now.source) : "none",
+                                              have ? "best POI type, then nearest" : "no objective POI: nothing shown",
                                               now.world.x, now.world.y, now.world.z, now.metres);
-                                    consoleLine(more);
+                                    consoleLine(wline);
                                 }
                             }
                         } catch (...) {
@@ -15867,13 +15912,13 @@ DWORD WINAPI run(void*) {
                                         char text[48];
                                         story077g::label(text, sizeof text, waypointHere.source, waypointHere.metres);
                                         drew = waypoint_mark::diamond(translucent, text, eyes.position + way * out, right, up,
-                                                                      out * story077g::diamondPerMetre, .95f) > 0;
+                                                                      out * story077g::diamondPerMetre, .95f * waypointHere.alpha) > 0;
                                     } else {
                                         float x{}, y{};
                                         story077g::edgeWay(to, right, up, x, y);
                                         const Vec3 at = eyes.position + ahead * story077g::edgeAhead +
                                                         (right * x + up * y) * story077g::edgeOut;
-                                        drew = waypoint_mark::arrow(translucent, at, right, up, x, y, story077g::edgeSize, .9f) > 0;
+                                        drew = waypoint_mark::arrow(translucent, at, right, up, x, y, story077g::edgeSize, .9f * waypointHere.alpha) > 0;
                                         waypointEdgeFrames += drew;
                                     }
                                 }
@@ -16937,7 +16982,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeadDodge(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStorySprint(void* v) { return setLive(v, 0, 1, 5565, storySprintNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptWindow(void* v) { return setLive(v, 0, 1, 5566, promptWindowNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptCards(void* v) { return setLive(v, 0, 1, 5568, promptCardsNow, asU32); }
-// HERO VR 0.0.77 WAYPOINT (story077g.hpp): live.txt waypoints (0 on, 1 objective, 2 off).
+// HERO VR 0.0.77 WAYPOINT (story077g.hpp): live.txt waypoints (0 scan - the default, 1 always, 2 off).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWaypoints(void* v) { return setLive(v, 0, 2, 5580, waypointsNow, asU32); }
 // HERO VR 0.0.77 X IS THE GAME'S X: x_button 0 game (the default), 1 view (05e70a2's X = View).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXButton(void* v) { return setLive(v, 0, 1, 5569, xButtonNow, asU32); }

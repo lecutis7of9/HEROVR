@@ -263,7 +263,17 @@ struct PromptStats {
     // hero, 1e9 none) and its place; the waypoint picks by source (story077g::Source).
     float nearest[story077d::kindCount]{};
     Vec3 nearestAt[story077d::kindCount]{};
-    uint64_t waypointPicks[4]{};
+    uint64_t waypointPicks[story077g::sources]{};
+    // cut3: the game's POI components in the last scan, those whose POI type was found / not, the types seen (live
+    // count, nearest metres) and the objective candidates by source (story077g::Source).
+    static constexpr uint32_t poiTypeSlots = 16;
+    struct PoiType {
+        char name[64]{};
+        uint32_t live{};
+        float nearest{};
+    } poiTypes[poiTypeSlots]{};
+    uint32_t poiTypeCount{}, poiComponents{}, poiTyped{}, poiUntyped{};
+    uint32_t objectiveCandidates[story077g::sources]{};
 };
 PromptStats promptStats();
 // HERO VR 0.0.77 WAYPOINT (story077g.hpp, CANDIDATE): the live.txt waypoints mode the scan picks for (story077g::

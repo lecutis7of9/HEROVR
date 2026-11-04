@@ -3038,6 +3038,12 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   offers capped at 2048), picks the waypoint (setWaypointMode, waypoint) and logs each kind's nearest (promptStats);
   game_xr draws the diamond / edge arrow and lets the pull / Y hold through a swing while their card is up; waypoints
   (on (default), objective, off; SpidyWaypoints 5580).
+- cut3 WAYPOINT (story077g.hpp): the only source is the game's own POI components (PointOfInterest*, POIPrius*,
+  POIGamePrius, SyncedPOIObject marker kinds) whose POI type, found by RTTI in the component's first 64 words or one
+  step through its POIConfig / library entry, is POITypeObjective > Quest > ZipToObjective > CustomWaypoint (cached
+  per component, 64 new reads a scan); the interactable and mission-start guesses are gone. promptStats logs the POI
+  type census. game_xr shows it story077g::scanAlpha (8 s, 1.5 s fade) after each templePress scan; waypoints =
+  scan (default), always, off.
 - HERO VR 0.0.77 X IS THE GAME'S X (include/spidy/story077e.hpp, tests/story077e_tests.cpp): XPulse (a VR X tap
   is the game's X for the spiders; game_pad::Walk::xIsGameX makes X held the game's X, not Back) and MenuHold (the
   menu button in VR play: a tap Start on release, held 0.5 s the 0.1 s Back with a buzz); x_button (game (default),

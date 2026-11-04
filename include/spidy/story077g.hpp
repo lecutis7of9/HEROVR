@@ -8,13 +8,16 @@
 // The interact kinds are in story077d.hpp's table; this is the WAYPOINT: a yellow diamond the mod draws (never a
 // picture of the game) over the current objective's CANDIDATE place, with its distance, over the game's picture
 // (walls do not hide it), and an arrow at the edge of the view while it is out of sight.
-// Sources, in order (each CANDIDATE that it is the objective; the positions are the records' own matrices):
-//   1. an AddPOIAction / AddInteractPOIAction (the script action that adds a map / HUD marker) with a place, newest
-//      first - the objective marker the game's HUD would show (CANDIDATE: none logged yet);
-//   2. the nearest objective-like interactable 3-150 m away (the truck, the pipe, a hold offer - a carry, a pickup,
-//      a stand-here interaction - an InteractLocation);
-//   3. (waypoints = on only) the nearest MissionLocationProxy within 3 km: the next mission's start (its place is
-//      CONFIRMED readable: FALCON_CHASE_BROOKLYN, MYSTERIO_CHALLENGE_05 in the 20261103 world trace).
+// cut3 (pt1802u: "it shows up but it doesnt take you to your missions. also why is it one you made? it should just
+// be the game own one working"): his cut2 report had 0 POI picks - the diamond pointed at the nearest
+// MissionLocationProxy (a mission start 236-570 m off), never the objective. Those guesses are gone. The only source
+// now is the game's own HUD marker data: a PointOfInterest / POIPrius component (the game's POI, the thing its HUD
+// draws a marker for) whose POI type (an object it points at, found by its RTTI name) is the objective's:
+//   POITypeObjective, POITypeQuest, POITypeZipToObjective (the game's objective markers), POITypeCustomWaypoint
+//   (the waypoint he sets on the game's map). Every class name is CONFIRMED in Spider-Man2.exe's RTTI; that the
+//   components are in the scan's registry and point at their type is CANDIDATE (the diagnostics count both).
+// Nothing found: nothing shown (never a guess). And only after a scan (pt1803u: "it should ONLY appear when the
+// player does the scan"): waypoints = scan (the default) shows it about 8 s after each scan, fading out.
 // Pure and allocation-free.
 #include "math.hpp"
 #include "story077d.hpp"
@@ -24,46 +27,66 @@
 #include <cstring>
 
 namespace spidy::story077g {
-// live.txt waypoints: 0 on (the default: objective, else the next mission's start), 1 objective (no mission
-// starts), 2 off.
-enum Waypoints : uint32_t { waypointsOn = 0, waypointsObjective = 1, waypointsOff = 2 };
-enum Source : uint32_t { none = 0, poi = 1, interactable = 2, missionStart = 3 };
+// live.txt waypoints: 0 scan (the default: shown for showSeconds after each scan), 1 always, 2 off.
+enum Waypoints : uint32_t { waypointsScan = 0, waypointsAlways = 1, waypointsOff = 2 };
+// The game's own POI types that are the objective, best first.
+enum Source : uint32_t { none = 0, objective = 1, quest = 2, zipToObjective = 3, customWaypoint = 4, sources = 5 };
 inline const char* sourceName(uint32_t s) {
     switch (s) {
-    case poi: return "POI action";
-    case interactable: return "objective interactable";
-    case missionStart: return "mission start";
+    case objective: return "POITypeObjective";
+    case quest: return "POITypeQuest";
+    case zipToObjective: return "POITypeZipToObjective";
+    case customWaypoint: return "POITypeCustomWaypoint";
     default: return "none";
     }
 }
 inline const char* sourceLabel(uint32_t s) {
     switch (s) {
-    case missionStart: return "MISSION";
     case none: return "";
+    case customWaypoint: return "WAYPOINT";
     default: return "OBJECTIVE";
     }
 }
-inline bool isClass(uint32_t k, const char* cls) {
-    const auto* d = story077d::kind(k);
-    return d && !std::strcmp(d->cls, cls);
+// The POI component classes the scan reads the type of (story077d marker kinds).
+inline bool poiComponent(const char* cls) {
+    if (!cls)
+        return false;
+    constexpr const char* names[] = {".?AVPointOfInterest@@", ".?AVPointOfInterestPrius@@", ".?AVPOIPrius@@",
+                                     ".?AVPOIPriusBase@@", ".?AVPOIGamePrius@@", ".?AVSyncedPOIObject@@",
+                                     ".?AVPOIGame@GUI2@@", ".?AVPOI@GUI2@@"};
+    for (const char* n : names)
+        if (!std::strcmp(cls, n))
+            return true;
+    return false;
 }
-// Which source a kind can be.
-inline uint32_t sourceOf(uint32_t k) {
-    if (isClass(k, ".?AVAddPOIAction@@") || isClass(k, ".?AVAddInteractPOIAction@@"))
-        return poi;
-    if (isClass(k, ".?AVMissionLocationProxy@@"))
-        return missionStart;
-    if (isClass(k, ".?AVInteractLocation@@") || isClass(k, ".?AVVehiclePushable@@") || isClass(k, ".?AVWaterPipe@@") ||
-        isClass(k, ".?AVInteractLocationOffer@@") || isClass(k, ".?AVPickupCarryableOffer@@") ||
-        isClass(k, ".?AVHoldOffer@@"))
-        return interactable;
+inline bool poiComponentKind(uint32_t k) {
+    const auto* d = story077d::kind(k);
+    return d && poiComponent(d->cls);
+}
+inline bool isPoiType(const char* name) { return name && !std::strncmp(name, ".?AVPOIType", 11); }
+// An object the POI points at that may hold its type one step further (its config / library entry).
+inline bool poiHolder(const char* name) {
+    return name && (std::strstr(name, "POIConfig") || std::strstr(name, "POIGameConfig") ||
+                    std::strstr(name, "POILibraryEntry") || std::strstr(name, "POIInstanceData"));
+}
+// A POI type's source; none for every other type (a mission start, a crime, a collectible, combat brackets).
+inline uint32_t sourceOfType(const char* name) {
+    if (!name)
+        return none;
+    if (!std::strcmp(name, ".?AVPOITypeObjective@@")) return objective;
+    if (!std::strcmp(name, ".?AVPOITypeQuest@@")) return quest;
+    if (!std::strcmp(name, ".?AVPOITypeZipToObjective@@")) return zipToObjective;
+    if (!std::strcmp(name, ".?AVPOITypeCustomWaypoint@@")) return customWaypoint;
     return none;
 }
-inline constexpr float poiFarthest = 3000.f, interactNearest = 3.f, interactFarthest = 150.f,
-                       missionFarthest = 3000.f, poiNearest = 2.f;
-// Not a place: the origin, or no read.
-inline bool somewhere(const story077d::Seen& s) {
-    return s.placed && finite(s.world) && (std::fabs(s.world.x) + std::fabs(s.world.y) + std::fabs(s.world.z)) > 1.f;
+inline constexpr float nearest = 2.f, farthest = 6000.f;
+struct Candidate {
+    uint32_t source{};
+    uint64_t id{};
+    Vec3 world{};
+};
+inline bool somewhere(Vec3 w) {
+    return finite(w) && (std::fabs(w.x) + std::fabs(w.y) + std::fabs(w.z)) > 1.f;
 }
 struct Mark {
     bool shown{};
@@ -72,39 +95,35 @@ struct Mark {
     Vec3 world{};
     float metres{};
 };
-inline Mark pick(const story077d::Seen* seen, uint32_t n, Vec3 hero, bool heroKnown, uint32_t mode) {
+// The best source, then the nearest; a candidate 2-6000 m away. Off, or no hero: none.
+inline Mark pick(const Candidate* c, uint32_t n, Vec3 hero, bool heroKnown, uint32_t mode) {
     Mark best;
-    if (mode == waypointsOff || !heroKnown || !finite(hero) || !seen)
+    if (mode == waypointsOff || !heroKnown || !finite(hero) || !c)
         return best;
     float bestScore = 1e30f;
     for (uint32_t i = 0; i < n; ++i) {
-        const auto& s = seen[i];
-        const uint32_t src = sourceOf(s.kind);
-        if (src == none || !somewhere(s))
+        if (c[i].source == none || c[i].source >= sources || !somewhere(c[i].world))
             continue;
-        const float m = length(s.world - hero);
-        if (!std::isfinite(m))
+        const float m = length(c[i].world - hero);
+        if (!std::isfinite(m) || m < nearest || m > farthest)
             continue;
-        float score;
-        if (src == poi) {
-            if (m < poiNearest || m > poiFarthest || !std::isfinite(s.age) || s.age < 0)
-                continue;
-            score = s.age; // newest first, ahead of every other source
-        } else if (src == interactable) {
-            if (m < interactNearest || m > interactFarthest)
-                continue;
-            score = 1e6f + m;
-        } else {
-            if (mode != waypointsOn || m > missionFarthest)
-                continue;
-            score = 1e8f + m;
-        }
+        const float score = c[i].source * 1e5f + m;
         if (score < bestScore) {
             bestScore = score;
-            best = Mark{true, src, s.kind, s.id, s.world, m};
+            best = Mark{true, c[i].source, 0, c[i].id, c[i].world, m};
         }
     }
     return best;
+}
+// After a scan (waypoints = scan): fully shown showSeconds - fadeSeconds, then fading to nothing at showSeconds.
+inline constexpr float showSeconds = 8.f, fadeSeconds = 1.5f;
+inline float scanAlpha(uint32_t mode, float sinceScan) {
+    if (mode == waypointsAlways)
+        return 1.f;
+    if (mode != waypointsScan || !std::isfinite(sinceScan) || sinceScan < 0 || sinceScan >= showSeconds)
+        return 0.f;
+    const float left = showSeconds - sinceScan;
+    return left >= fadeSeconds ? 1.f : left / fadeSeconds;
 }
 // Drawing: the diamond sits along the line to the objective at most drawAhead metres away and keeps about the same
 // size in view; out of the view cone (edgeDegrees from the look) an arrow at the view's edge points the way.
@@ -129,7 +148,7 @@ inline bool edgeWay(Vec3 toObjective, Vec3 right, Vec3 up, float& x, float& y) {
     x /= l, y /= l;
     return true;
 }
-// The readout under the diamond: "OBJECTIVE 123 M" (or "MISSION 1.2 KM").
+// The readout under the diamond: "OBJECTIVE 123 M" (or "WAYPOINT 1.2 KM").
 inline void label(char* out, size_t size, uint32_t source, float metres) {
     if (!out || !size)
         return;

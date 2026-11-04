@@ -2,6 +2,17 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-cutscene (3) - the WAYPOINT is the game's own objective, shown after a scan (TEST build)
+
+From the player's report on cut2: the diamond showed but did not lead to his missions, and should be the game's own.
+- **Root cause (CONFIRMED from his log):** no POI action was ever found (POI 0); the diamond fell back to the nearest
+  mission start (236-570 m off) or an interactable - guesses, not his objective.
+- **Fix:** those guesses are gone. The only source is the game's own POI markers (the ones its HUD draws), read with
+  their POI type: POITypeObjective, Quest, ZipToObjective or his own map waypoint (CustomWaypoint). None found:
+  nothing shown. (CANDIDATE: the classes are CONFIRMED in the exe; the log now counts the POI types it finds.)
+- **Only after a scan:** hidden by default; each scan (hand to temple + trigger) shows it for about 8 s, fading out.
+  live.txt `waypoints`: `scan` (default), `always`, `off`. The log notes each scan's show.
+
 ## hero-0.0.77-cutscene (2) - INTERACT CARDS and the yellow WAYPOINT in VR (TEST build, not released)
 
 From the player's report on story (9): the truck to move for the firefighters, the water pipe to break and the things

@@ -19,48 +19,61 @@ void check(bool ok, const char* what) {
     }
 }
 uint32_t k(const char* cls) { return static_cast<uint32_t>(story077d::kindOf(cls)); }
-story077d::Seen at(uint64_t id, Vec3 w, float age, const char* cls) {
-    return story077d::Seen{id, w, age, k(cls), true, true};
-}
 } // namespace
 
 int main() {
     const Vec3 hero{100, 0, 100};
-    check(sourceOf(k(".?AVAddPOIAction@@")) == poi && sourceOf(k(".?AVVehiclePushable@@")) == interactable &&
-              sourceOf(k(".?AVMissionLocationProxy@@")) == missionStart &&
-              sourceOf(k(".?AVGrabAndThrowable@@")) == none && sourceOf(k(".?AVProximityOffer@@")) == none,
-          "sources");
-    story077d::Seen s[5]{};
-    s[0] = at(1, {400, 0, 100}, 5, ".?AVMissionLocationProxy@@");  // 300 m
-    s[1] = at(2, {140, 0, 100}, 50, ".?AVVehiclePushable@@");      // 40 m
-    s[2] = at(3, {120, 0, 100}, 50, ".?AVPickupCarryableOffer@@"); // 20 m
-    s[3] = at(4, {100, 0, 900}, 9, ".?AVAddPOIAction@@");          // 800 m, newer
-    s[4] = at(5, {100, 0, 600}, 3, ".?AVAddPOIAction@@");          // 500 m, newest
-    Mark m = pick(s, 5, hero, true, waypointsOn);
-    check(m.shown && m.source == poi && m.id == 5 && std::fabs(m.metres - 500) < .1f, "the newest POI first");
-    m = pick(s, 3, hero, true, waypointsOn);
-    check(m.shown && m.source == interactable && m.id == 3, "then the nearest objective interactable");
-    m = pick(s, 1, hero, true, waypointsOn);
-    check(m.shown && m.source == missionStart && m.id == 1, "then a mission start");
-    check(!pick(s, 1, hero, true, waypointsObjective).shown, "objective: no mission starts");
-    check(!pick(s, 5, hero, true, waypointsOff).shown, "off: none");
-    check(!pick(s, 5, hero, false, waypointsOn).shown && !pick(nullptr, 3, hero, true, waypointsOn).shown, "unknown: none");
-    story077d::Seen near[3]{};
-    near[0] = at(7, {101, 0, 100}, 1, ".?AVWaterPipe@@"); // 1 m: you are there
-    near[1] = at(8, {0, 0, 0}, 1, ".?AVAddPOIAction@@");  // the origin: no place
-    near[2] = at(9, {NAN, 0, 0}, 1, ".?AVAddPOIAction@@");
-    check(!pick(near, 3, hero, true, waypointsOn).shown, "too near / origin / NaN: none");
+    // cut3: only the game's own objective POI types; every guess (mission starts, interactables) is gone.
+    check(sourceOfType(".?AVPOITypeObjective@@") == objective && sourceOfType(".?AVPOITypeQuest@@") == quest &&
+              sourceOfType(".?AVPOITypeZipToObjective@@") == zipToObjective &&
+              sourceOfType(".?AVPOITypeCustomWaypoint@@") == customWaypoint &&
+              sourceOfType(".?AVPOITypeMissionStart@@") == none && sourceOfType(".?AVPOITypeCrime@@") == none &&
+              sourceOfType(nullptr) == none,
+          "sources: the objective's POI types only");
+    check(isPoiType(".?AVPOITypeObjective@@") && !isPoiType(".?AVPOIConfig@@") && poiHolder(".?AVPOIConfig@@") &&
+              poiComponent(".?AVPointOfInterestPrius@@") && !poiComponent(".?AVMissionLocationProxy@@") &&
+              !poiComponent(".?AVVehiclePushable@@"),
+          "POI names");
+    check(poiComponentKind(k(".?AVPointOfInterestPrius@@")) && !poiComponentKind(k(".?AVProximityOffer@@")),
+          "POI component kinds");
+    Candidate s[4]{};
+    s[0] = {customWaypoint, 1, {120, 0, 100}};  // 20 m
+    s[1] = {quest, 2, {100, 0, 400}};           // 300 m
+    s[2] = {objective, 3, {100, 0, 900}};       // 800 m
+    s[3] = {objective, 4, {100, 0, 600}};       // 500 m
+    Mark m = pick(s, 4, hero, true, waypointsScan);
+    check(m.shown && m.source == objective && m.id == 4 && std::fabs(m.metres - 500) < .1f, "the nearest objective first");
+    m = pick(s, 2, hero, true, waypointsAlways);
+    check(m.shown && m.source == quest && m.id == 2, "then a quest");
+    m = pick(s, 1, hero, true, waypointsScan);
+    check(m.shown && m.source == customWaypoint, "then his map waypoint");
+    check(!pick(s, 4, hero, true, waypointsOff).shown, "off: none");
+    check(!pick(s, 4, hero, false, waypointsScan).shown && !pick(nullptr, 3, hero, true, waypointsScan).shown,
+          "unknown: none");
+    check(!pick(s, 0, hero, true, waypointsScan).shown, "no objective POI: nothing (never a guess)");
+    Candidate near[4]{};
+    near[0] = {objective, 7, {101, 0, 100}}; // 1 m: you are there
+    near[1] = {objective, 8, {0, 0, 0}};     // the origin: no place
+    near[2] = {objective, 9, {NAN, 0, 0}};
+    near[3] = {none, 10, {200, 0, 100}};     // not the objective
+    check(!pick(near, 4, hero, true, waypointsScan).shown, "too near / origin / NaN / not objective: none");
+    // cut3 (pt1803u): after a scan, about 8 s, fading out.
+    check(scanAlpha(waypointsScan, 0) == 1 && scanAlpha(waypointsScan, 6) == 1, "scan: shown");
+    check(scanAlpha(waypointsScan, 7.25f) > .4f && scanAlpha(waypointsScan, 7.25f) < .6f, "scan: fading");
+    check(scanAlpha(waypointsScan, 8) == 0 && scanAlpha(waypointsScan, 1e9f) == 0 && scanAlpha(waypointsScan, -1) == 0,
+          "scan: hidden after 8 s / before any scan");
+    check(scanAlpha(waypointsAlways, 1e9f) == 1 && scanAlpha(waypointsOff, 0) == 0, "always / off");
     // View: ahead in view, behind out of it.
     check(!outOfView({0, 0, -10}, {0, 0, -1}) && outOfView({10, 0, 0}, {0, 0, -1}) && outOfView({0, 0, 10}, {0, 0, -1}),
           "view cone");
     float x{}, y{};
     check(edgeWay({10, 0, 0}, {1, 0, 0}, {0, 1, 0}, x, y) && x > .99f, "edge arrow right");
     char text[48];
-    label(text, sizeof text, poi, 123.4f);
+    label(text, sizeof text, objective, 123.4f);
     check(!std::strcmp(text, "OBJECTIVE 123 M"), "label metres");
-    label(text, sizeof text, missionStart, 1234.f);
-    check(!std::strcmp(text, "MISSION 1.2 KM"), "label km");
-    label(text, sizeof text, poi, NAN);
+    label(text, sizeof text, customWaypoint, 1234.f);
+    check(!std::strcmp(text, "WAYPOINT 1.2 KM"), "label km");
+    label(text, sizeof text, objective, NAN);
     check(!text[0], "label NaN: none");
     // Drawing: small, some vertices; nonsense none.
     std::vector<Vertex> v;
@@ -74,7 +87,7 @@ int main() {
     check(waypoint_mark::diamond(v, "", {NAN, 0, 0}, {1, 0, 0}, {0, 1, 0}, .2f, 1) == 0 && v.empty(), "NaN: none");
     check(waypoint_mark::arrow(v, {0, 0, -1.4f}, {1, 0, 0}, {0, 1, 0}, 1, 0, edgeSize, 1) == 6, "an arrow draws");
     check(waypoint_mark::arrow(v, {0, 0, -1.4f}, {1, 0, 0}, {0, 1, 0}, 0, 0, edgeSize, 1) == 0, "no way: none");
-    check(waypointsOn == 0, "default on");
+    check(waypointsScan == 0, "default scan");
     if (failures)
         std::printf("%d failure(s)\n", failures);
     else

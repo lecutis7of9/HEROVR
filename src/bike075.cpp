@@ -5,6 +5,7 @@
 #include "spidy/launcher_text.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <exception>
 
 namespace spidy::bike075 {
@@ -130,12 +131,34 @@ bool parseLayout(std::string_view text, Layout& out, std::string& why) {
     }
 }
 
+Vec3 riderEye(const Layout& l) {
+    const Vec3 hip{l.eye.x, l.eye.y - riderTorso, l.eye.z};
+    const auto reach = [&](float lean) {
+        const Vec3 e{hip.x, hip.y + riderTorso * std::cos(lean), hip.z - riderTorso * std::sin(lean)};
+        return std::max(length(e - l.gripLeft), length(e - l.gripRight));
+    };
+    const auto finite = [](Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); };
+    if (!finite(l.eye) || !finite(l.gripLeft) || !finite(l.gripRight) || !finite(l.hub) || reach(0) <= van072::driverReach)
+        return l.eye;
+    float lo = 0, hi = mostLean; // reach falls as he leans (toward the bars); bisect it to driverReach
+    if (reach(hi) > van072::driverReach)
+        lo = hi;
+    else
+        for (int i = 0; i < 40; ++i) {
+            const float m = (lo + hi) * .5f;
+            (reach(m) > van072::driverReach ? lo : hi) = m;
+        }
+    const float a = hi;
+    const Vec3 e{hip.x, hip.y + riderTorso * std::cos(a), hip.z - riderTorso * std::sin(a)};
+    return std::isfinite(e.x + e.y + e.z) && e.y > l.hub.y ? e : l.eye;
+}
+
 van072::Tune tune(const Layout& l) {
     van072::Tune t{};
     t.handlebar = true;
     t.handleOut = l.handleOut;
     t.handleIn = l.handleIn;
-    t.eye = l.eye;
+    t.eye = riderEye(l); // 0.0.78 SEAT REACH: leaned to the grips (bike075.hpp)
     t.hub = l.hub;
     t.axis = {0, 1, 0}; // the hands' circle: round +y (the steer part is drawn round the rake: steerAxes)
     t.exit = l.exit;

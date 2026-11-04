@@ -876,6 +876,11 @@ std::atomic<uint64_t> suitShownAtMs{0};
 std::atomic<bool> capeGlidingNow{false};
 std::atomic<bool> suitsRigged{false}; // Test build 10: suitRigs made (the game thread reads them after)
 bool suitShownNow() { return suit_wear::shownNow(GetTickCount64(), suitShownAtMs.load(std::memory_order_relaxed)); }
+// 0.0.78 SUIT HOLSTERS: the suit drawn now has its own thigh holsters (hero007::ownThighHolsters).
+bool suitOwnHolsters() {
+    const uint32_t ws = wornSuitSlot.load();
+    return mesh_model::slotIsSuit(ws) && suitShownNow() && hero007::ownThighHolsters(mesh_model::suitFolders[ws - mesh_model::slotSuitFirst]);
+}
 // Version 0.0.72 REAL MODELS: a model texture (PNG, JPEG, anything Windows reads) to RGBA8 with WIC, its
 // sRGB values kept; false (that image left untextured) on any failure. COM is set up by the caller.
 bool wicDecode(const uint8_t* data, size_t size, mesh_model::Picture& out) {
@@ -5031,6 +5036,7 @@ DWORD WINAPI run(void*) {
                             hin.hero = heroNow();
                             hin.head = frame.head;
                             hin.crossDraw = combat38::holsterCrossDraw(c38(combat38::holsterHands)); hin.eyeHeight = calibratedEye;
+                            hin.suitHolster = suitOwnHolsters(); // 0.0.78 SUIT HOLSTERS
                             hin.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
                             hin.beltZones = combat38::beltZonesOn(c38(combat38::beltZones)); // 0.0.74 test 10 BELT ZONES
                             hin.throwSwing = combat38::throwSwingOn(c38(combat38::throwSwing)); // 0.0.74 test 10 THROW BY SWING
@@ -10379,6 +10385,7 @@ DWORD WINAPI run(void*) {
                                         hin.chain = c38(combat38::batarangChain);
                                         hin.reload = c38(combat38::easyReload);
                                         hin.crossDraw = combat38::holsterCrossDraw(c38(combat38::holsterHands)); hin.eyeHeight = calibratedEye;
+                            hin.suitHolster = suitOwnHolsters(); // 0.0.78 SUIT HOLSTERS
                                         hin.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
                                         hin.beltZones = combat38::beltZonesOn(c38(combat38::beltZones)); // 0.0.74 test 10 BELT ZONES
                                         hin.throwSwing = combat38::throwSwingOn(c38(combat38::throwSwing)); // 0.0.74 test 10 THROW BY SWING

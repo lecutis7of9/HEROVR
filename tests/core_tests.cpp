@@ -32199,7 +32199,16 @@ int main() {
             Vec3 cat, cf, cu;
             wornPose(zone, head, body, cat, cf, cu);
             check(length(cat - at) > .01f, "the classic hip pose moved to the thigh too");
+            // 0.0.78 SUIT HOLSTERS: the HQ PUNISHER's own holster, in the draw zone, barrel down, on its side
+            Vec3 sat, sf, su;
+            wornPose(zone, head, body, sat, sf, su, hipSuit);
+            const float side = zone == hl::leftHip ? -1.f : 1.f;
+            check(hl::inZone(zone, hl::bodyPoint(sat, head, body)) && sat.x * side > .15f && sat.y < head.y - .6f && sf.y < -.95f &&
+                      std::fabs(dot(sf, su)) < 1e-3f,
+                  "the suit's own holster: in its draw zone, on its side, barrel down");
         }
+        check(ownThighHolsters("Suit_punisher_1") && !ownThighHolsters("Suit_punisher_2") && !ownThighHolsters(nullptr),
+              "only the HQ PUNISHER models its own holsters");
         // The drop-leg holster draws, finite, in its budget.
         Item it{lookPistol, {.19f, .84f, 0}, {0, -1, 0}, {0, 0, -1}, 0, 4, 1, false};
         std::vector<spidy::Vertex> v;
@@ -33515,8 +33524,8 @@ int main() {
             check(L.handleOut.x < -.5f && L.handleIn.x < -.5f && L.handleOut.x > -L.width / 2 - .2f,
                   "the handles on the driver's side: " + car);
             const van072::Tune t = bm::tune(c);
-            check(t.length == L.length && t.width == L.width && length(t.eye - L.eye) < 1e-6f && length(t.hub - L.hub) < 1e-6f &&
-                      length(t.exit - L.exit) < 1e-6f && t.topSpeed == van072::Tune{}.topSpeed && t.wheelBase > 2.5f && t.wheelBase < 3.8f,
+            check(t.length == L.length && t.width == L.width && length(t.eye - van072::carReachEye(L.eye, L.hub, .185f)) < 1e-6f &&
+                      length(t.hub - L.hub) < 1e-6f && length(t.exit - L.exit) < 1e-6f && t.topSpeed == van072::Tune{}.topSpeed && t.wheelBase > 2.5f && t.wheelBase < 3.8f,
                   "its tune: its geometry, the van's driving: " + car);
             check(length(van072::axisOf(t)) > .99f, "a usable wheel axis: " + car);
             check(std::string(mm::slotFolders[mm::slotBatmobileFirst + c]) == std::string("Vehicle/Batmobile/") + bm::folders[c] &&
@@ -33545,6 +33554,55 @@ int main() {
               "no Glass slots: each car's glass is in its body");
         for (uint32_t s2 = 0; s2 < mm::slots; ++s2)
             check(std::string(mm::slotFolders[s2]).find("/Glass") == std::string::npos, "no Glass folder loaded");
+    });
+    test("0.0.78 SEAT REACH: every vehicle's seated eye a natural reach (0.45 - 0.6 m) from its wheel's or bars' grips", [] {
+        namespace bm = batmobile074;
+        namespace bk = spidy::bike075;
+        // the van: its measured seat was 0.70 m from the 9-and-3 grips; the eye is slid forward at its height
+        const float van0 = van072::carGripReach(van072::seatEye072, van072::wheelHub, .19f);
+        const float van1 = van072::carGripReach(van072::Tune{}.eye, van072::wheelHub, van072::Tune{}.wheelRadius);
+        check(van0 > .65f && std::fabs(van1 - van072::driverReach) < .005f, "the van: " + std::to_string(van0) + " -> " + std::to_string(van1));
+        check(length(van072::seatEye - van072::carReachEye(van072::seatEye072, van072::wheelHub, .19f)) < 1e-3f &&
+                  van072::seatEye.y == vehicle074::seatEye.y && van072::seatEye.z == vehicle074::seatEye.z,
+              "the van's seat eye is carReachEye's, the two copies agree");
+        for (uint32_t c = 0; c < bm::cars; ++c) {
+            const bm::Layout& L = bm::layout(c);
+            const van072::Tune t = bm::tune(c);
+            const float was = van072::carGripReach(L.eye, L.hub, .185f), now = van072::carGripReach(t.eye, t.hub, .185f);
+            const std::string car = bm::folders[c];
+            check(was > .6f && now >= .45f && now <= .6f && std::fabs(now - van072::driverReach) < .005f,
+                  car + ": " + std::to_string(was) + " -> " + std::to_string(now));
+            check(t.eye.y == L.eye.y && t.eye.x == L.eye.x && t.eye.z < L.eye.z && t.eye.z > t.hub.z + .19f && t.eye.z > L.screen.z,
+                  "slid forward only, at his height, still behind the wheel and the screen: " + car);
+        }
+        // the shipped bikes' layouts (Models/Vehicle/Motorcycle/<bike>/layout.json, tools/bike076/convert.py)
+        const auto bike = [](Vec3 eye, Vec3 hub, Vec3 gl, Vec3 gr, Vec3 screen) {
+            bk::Layout l;
+            l.eye = eye, l.hub = hub, l.gripLeft = gl, l.gripRight = gr, l.screen = screen, l.tracker = screen;
+            return l;
+        };
+        const bk::Layout bikes[] = {
+            bike({0, 1.3008f, .4323f}, {0, .9599f, -.3076f}, {-.3513f, .9599f, -.2107f}, {.3507f, .9599f, -.21f}, {0, .9899f, -.311f}),
+            bike({0, 1.4386f, .4343f}, {0, 1.0805f, -.3473f}, {-.4322f, 1.0805f, -.1219f}, {.4322f, 1.0805f, -.1219f}, {0, 1.1505f, -.2217f})};
+        const char* names[] = {"Cap", "Wolverine"};
+        for (int b = 0; b < 2; ++b) {
+            const bk::Layout& l = bikes[b];
+            const auto reach = [&](Vec3 e) { return std::max(length(e - l.gripLeft), length(e - l.gripRight)); };
+            const Vec3 e = bk::riderEye(l);
+            const float lean = std::atan2(l.eye.z - e.z, e.y - (l.eye.y - bk::riderTorso)) * 57.29578f;
+            check(reach(l.eye) > .75f && reach(e) >= .45f && reach(e) <= .6f && std::fabs(reach(e) - van072::driverReach) < .005f,
+                  std::string(names[b]) + ": " + std::to_string(reach(l.eye)) + " -> " + std::to_string(reach(e)));
+            check(lean > 15 && lean < 35 && std::fabs(length(e - (l.eye - Vec3{0, bk::riderTorso, 0})) - bk::riderTorso) < 1e-4f &&
+                      e.y > l.hub.y + .2f && e.z > l.screen.z && e.z > l.gripLeft.z,
+                  std::string(names[b]) + ": a forward lean about the hip, over and behind the bars");
+        }
+        // already near, or NaN: kept
+        check(length(van072::carReachEye({0, 1.4f, -.7f}, {0, 1.1f, -1.f}, .19f) - Vec3{0, 1.4f, -.7f}) < 1e-6f, "near: kept");
+        const Vec3 bad = van072::carReachEye({NAN, 1, 0}, {0, 1, -1}, .19f);
+        check(std::isnan(bad.x), "NaN: kept as given, no guess");
+        bk::Layout nanL = bikes[0];
+        nanL.gripLeft.x = NAN;
+        check(length(bk::riderEye(nanL) - nanL.eye) < 1e-6f, "a NaN grip: no lean, the eye as given");
     });
     test("0.0.74 test 1 BATMOBILE DASH: the Batman screen - BATCAVE, SIT, the picker; no CASES or LOCKER", [] {
         namespace vs = van_screen;
@@ -33775,7 +33833,7 @@ int main() {
         f.predictedDisplayTime = 3;
         r1.update(f, {10, 20, 30}, {0, 0, -1}, true);
         const Vec3 c = r1.seatOffsetApplied();
-        check(std::fabs(std::sqrt(c.x * c.x + c.z * c.z) - .5f) < 1e-4f, "the rig clamps the level part too");
+        check(std::fabs(std::sqrt(c.x * c.x + c.z * c.z) - vehicle074::seatReach) < 1e-4f, "the rig clamps the level part too (0.0.78: 1 m)");
         r1.seatOffset({NAN, 0, 0});
         f.predictedDisplayTime = 4;
         r1.update(f, {10, 20, 30}, {0, 0, -1}, true);

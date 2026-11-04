@@ -43,6 +43,11 @@ bool frame(const Skeleton& k, uint32_t b, Vec3 f, Vec3& x, Vec3& y, Vec3& z) {
         break;
     case boneForeL:
     case boneForeR:
+        // 0.0.78 WRIST TWIST: the twist chain's forearm the body's facing alone (skin() adds the hand's roll)
+        if (k.twistChain) {
+            ref = square(f, y);
+            break;
+        }
         // 0.0.73 HERO HANDS: a profile's forearmFollow leans it to the hand's back (no wrist pinch); 0: as before
         ref = normalized(square(f, y)) * (1.f - .9f * std::clamp(k.foreFollow, 0.f, 1.f)) +
               normalized(square(k.handBack[b == boneForeL ? 0 : 1], y)) * (1.f + std::clamp(k.foreFollow, 0.f, 1.f));
@@ -468,6 +473,16 @@ const HandProfile& handProfile(const char* suitFolder) {
         const char* folder;
         const HandProfile* profile;
     } wolverines[] = {{"Suit_wolverine_1", &wvClassic}, {"Suit_wolverine_3", &wvJacket}, {"Suit_wolverine_4", &wvWeaponX}};
+    // 0.0.78 PUNISHER HQ (the owner's own model in Suit_punisher_1): its forearms a twist chain (WRIST TWIST: the
+    // hand's roll spread elbow -> wrist, no candy-wrapper wrist); its hands otherwise the shared path's.
+    static const HandProfile punisherHq = [] {
+        HandProfile p;
+        p.name = "punisher_hq";
+        p.twistChain = true;
+        return p;
+    }();
+    if (suitFolder && std::strcmp(suitFolder, "Suit_punisher_1") == 0)
+        return punisherHq;
     if (suitFolder)
         for (const auto& e : wolverines)
             if (std::strcmp(suitFolder, e.folder) == 0)
@@ -791,6 +806,7 @@ bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
     out.up = up;
     out.heroHands = t.heroHands;
     out.foreFollow = t.heroHands ? std::clamp(rig.hands.forearmFollow, 0.f, 1.f) : 0.f;
+    out.twistChain = t.heroHands && rig.hands.twistChain;
     const HandProfile& P = handsOf(rig, t.heroHands); // 0.0.73 HERO HANDS
     // the arms
     for (int side = 0; side < 2; ++side) {
@@ -866,6 +882,20 @@ bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
     return true;
 }
 
+namespace {
+// 0.0.78 WRIST TWIST: the hand's roll about the forearm on skeleton k (radians): the hand bone's frame (x, z: its
+// back) read in the forearm's (x, y, z), both of its axes square to the forearm counted (whichever stands across
+// it: a wrist bent so the back of the hand points along the forearm still has its x across it).
+float forearmRoll(const Skeleton& k, int side, Vec3 f, Vec3 x, Vec3 y, Vec3 z) {
+    Vec3 hx, hy, hz;
+    if (!frame(k, side ? boneHandR : boneHandL, f, hx, hy, hz))
+        return 0.f;
+    (void)y;
+    const float sn = dot(hz, x) - dot(hx, z), cs = dot(hz, z) + dot(hx, x);
+    return std::abs(sn) + std::abs(cs) > 1e-4f ? std::atan2(sn, cs) : 0.f;
+}
+} // namespace
+
 bool moves(const Rig& rig, const Skeleton& live, BoneMove out[bones]) {
     if (!rig.ok || !live.ok)
         return false;
@@ -873,11 +903,12 @@ bool moves(const Rig& rig, const Skeleton& live, BoneMove out[bones]) {
     Skeleton rp;
     const auto moved = [](Vec3 a, Vec3 b) { return length(a - b) > 1e-6f; };
     const bool turned = live.heroHands && (moved(rig.profileBack[0], rig.skeleton.handBack[0]) || moved(rig.profileBack[1], rig.skeleton.handBack[1]) ||
-                                           live.foreFollow != 0.f);
+                                           live.foreFollow != 0.f || live.twistChain);
     if (turned) {
         rp = rig.skeleton;
         rp.handBack[0] = rig.profileBack[0], rp.handBack[1] = rig.profileBack[1];
         rp.foreFollow = live.foreFollow; // the rest forearm framed as the live one
+        rp.twistChain = live.twistChain;
     }
     const Skeleton& r = turned ? rp : rig.skeleton;
     const HandProfile& P = handsOf(rig, live.heroHands);
@@ -908,6 +939,15 @@ bool moves(const Rig& rig, const Skeleton& live, BoneMove out[bones]) {
             }
         out[b].a0 = r.at[boneEnds[b][0]];
         out[b].a1 = live.at[boneEnds[b][0]];
+        if (live.twistChain && (b == boneForeL || b == boneForeR)) { // 0.0.78 WRIST TWIST
+            const int side = b == boneForeR;
+            out[b].twist = forearmRoll(live, side, f1, x1, y1, z1) - forearmRoll(r, side, f0, x0, y0, z0);
+            if (!std::isfinite(out[b].twist))
+                out[b].twist = 0;
+            out[b].twist = std::remainder(out[b].twist, 6.2831853f); // -pi .. pi
+            out[b].axis1 = y1, out[b].axis0 = y0;
+            out[b].restLength = l0 / s;
+        }
         if (b == boneHandL || b == boneHandR) { // Test build 12 FIST
             const int side = b == boneHandR;
             out[b].x0 = x0, out[b].y0 = y0, out[b].z0 = z0;
@@ -1118,10 +1158,17 @@ bool skin(const Rig& rig, const BoneMove m[bones], Skinned& out) {
             Vec3 rn_ = rn;
             if (b.curl > 1e-3f && b.fingers > 1e-4f)
                 curlFinger(b, d, rn_);
-            p += (b.a1 + Vec3{b.m[0] * d.x + b.m[1] * d.y + b.m[2] * d.z, b.m[3] * d.x + b.m[4] * d.y + b.m[5] * d.z,
-                              b.m[6] * d.x + b.m[7] * d.y + b.m[8] * d.z}) * w;
-            q += Vec3{b.n[0] * rn_.x + b.n[1] * rn_.y + b.n[2] * rn_.z, b.n[3] * rn_.x + b.n[4] * rn_.y + b.n[5] * rn_.z,
-                      b.n[6] * rn_.x + b.n[7] * rn_.y + b.n[8] * rn_.z} * w;
+            Vec3 md{b.m[0] * d.x + b.m[1] * d.y + b.m[2] * d.z, b.m[3] * d.x + b.m[4] * d.y + b.m[5] * d.z,
+                    b.m[6] * d.x + b.m[7] * d.y + b.m[8] * d.z};
+            Vec3 mn{b.n[0] * rn_.x + b.n[1] * rn_.y + b.n[2] * rn_.z, b.n[3] * rn_.x + b.n[4] * rn_.y + b.n[5] * rn_.z,
+                    b.n[6] * rn_.x + b.n[7] * rn_.y + b.n[8] * rn_.z};
+            if (b.twist != 0.f && b.restLength > 1e-4f) { // 0.0.78 WRIST TWIST: the roll spread elbow -> wrist
+                const float a = b.twist * std::clamp(dot(d, b.axis0) / b.restLength, 0.f, 1.f);
+                md = turnAbout(md, b.axis1, a);
+                mn = turnAbout(mn, b.axis1, a);
+            }
+            p += (b.a1 + md) * w;
+            q += mn * w;
         }
         out.p[v] = p;
         out.n[v] = q;

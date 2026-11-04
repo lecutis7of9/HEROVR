@@ -53,7 +53,22 @@ SUITS = [
     dict(folder='Suit_wolverine_1', zip='ce04af29', drop=INNER),
     dict(folder='Suit_wolverine_3', zip='697d3bb3', drop=INNER),
     dict(folder='Suit_wolverine_4', zip='1073e863', drop=INNER),
-    dict(folder='Suit_punisher_1', zip='f642847d', drop=INNER),
+    # 0.0.78: the owner's own HQ Punisher (a single glb, 592,596 triangles, one 4096 px base colour with
+    # normal/roughness/metallic maps; no rig) replaces build 9's VEST in the same folder (its slot and MP hash).
+    # Its base colour is split over 4 atlases (UV quadrants: about 2048 px across the body) and the normal map's
+    # cavity is baked into it (the suit shader draws the base colour only, with no normal/roughness/metallic maps).
+    dict(folder='Suit_punisher_1', glb='/workspace/drive-dl/model/model.glb', drop=INNER,
+         texture='/workspace/drive-dl/model/texture_0.png', cavity='/workspace/drive-dl/model/texture_0_normal.png',
+         quadrants=True, atlases=4, turn_deg=-24, arm_keep=.07, target=80000, bake_normal=True,  # its body modelled turned 24 degrees to its right (top view of shoulders and belt)
+         # target: 80,000 triangles (owner, t1889u: 24,000 lost its silhouette; mesh_model::suitHqTriangles is its draw cap)
+         # arm_keep: its rest hands touch the holsters (keep_arms takes the hands' weights off them)
+         # metres, in the converted frame (feet at y 0, facing +z, the character's right at -x): from the 5 cm grids
+         joints=dict(shoulderR=(-.21, 1.43, -.06), elbowR=(-.30, 1.09, -.07), wristR=(-.31, .90, .02),
+                     shoulderL=(.21, 1.43, -.04), elbowL=(.30, 1.09, -.04), wristL=(.30, .90, .06),
+                     tipR=(-.27, .74, .05), tipL=(.27, .74, .06)),
+         license='Model Information:\n* title:\tPunisher (HQ)\n* source:\tthe HERO VR owner\'s own model file '
+                 '(model.glb, texture_0*.png), supplied by him for this mod\n\nModel License:\n* as its owner '
+                 'supplied it, for use in HERO VR\n'),
     dict(folder='Suit_punisher_2', zip='3a9db847', drop=INNER),
     dict(folder='Suit_thor_1', zip='9cba5a01', drop=INNER, prop_bones='^Bone010'),  # the hammer
     dict(folder='Suit_thor_2', zip='0d36fd1f', drop=INNER, props='^07___Default$'),  # the hammer
@@ -81,6 +96,11 @@ HEAT_SECONDS = 300  # Blender's bone heat can stall on a suit of many loose plat
 
 def unpack(downloads, s):
     dst = os.path.join(SOURCES, s['folder'])
+    if s.get('glb'):  # a model file given directly (0.0.78's Punisher): read where it is
+        if s.get('license'):
+            os.makedirs(dst, exist_ok=True)
+            open(os.path.join(dst, 'license.txt'), 'w').write(s['license'])
+        return dst, s['glb']
     if not glob.glob(os.path.join(dst, '*.gltf')) and not glob.glob(os.path.join(dst, '*.glb')):
         z = os.path.join(downloads, s['zip'] + '.zip')
         if not os.path.exists(z):
@@ -139,6 +159,162 @@ def resolve_images(src, mats, notes, scene=''):
             notes.append('%s: untextured glass, drawn dark' % m['name'])
 
 
+def bake_cavity(base, normal, path, strength=.45):
+    """The base colour darkened where the tangent-space normal map tilts away (seams, folds, stitching, pores):
+    the detail of the 592k-triangle sculpt the decimated suit cannot keep, independent of the light (the
+    shader lights per vertex). -> path."""
+    if os.path.exists(path):
+        return path
+    b = np.asarray(Image.open(base).convert('RGB'), np.float32) / 255
+    n = np.asarray(Image.open(normal).convert('RGB').resize(Image.open(base).size, Image.BILINEAR), np.float32) / 255
+    nz = np.clip(n[..., 2] * 2 - 1, 0, 1)
+    cav = 1 - strength * (1 - nz ** 1.5)
+    Image.fromarray((np.clip(b * cav[..., None], 0, 1) * 255 + .5).astype(np.uint8)).save(path)
+    return path
+
+
+def quadrant_materials(mats, uv, mat, work, folder):
+    """One textured material -> 4 (the triangles by the UV quadrant of their centre), so atlases() crops each
+    quadrant of a 4096 px texture into its own 1024 px atlas (2048 px across, not 1024). The few triangles the
+    decimation stretched over a UV seam (more than a quadrant across, about 40 of 24,000: their texture smeared
+    either way) are clamped into their quadrant (2% over its edge) so they do not widen its crop. -> mats, mat,
+    notes, uv."""
+    out, newmat, notes, uv = [], mat.copy(), [], uv.copy()
+    c = uv.mean(1)
+    for i, m in enumerate(mats):
+        sel = mat == i
+        if not m['image'] or not sel.any():
+            continue
+        q = (c[:, 0] >= .5).astype(np.int64) + 2 * (c[:, 1] >= .5).astype(np.int64)
+        for k in range(4):
+            link = os.path.join(work, '%s_q%d%s' % (folder, k, os.path.splitext(m['image'])[1]))
+            if os.path.lexists(link):
+                os.remove(link)
+            os.symlink(os.path.abspath(m['image']), link)
+            mm = dict(m, name='%s_q%d' % (m['name'], k), image=link)
+            mats = mats + [mm]
+            here = sel & (q == k)
+            newmat[here] = len(mats) - 1
+            lo = np.array([.5 * (k % 2), .5 * (k // 2)]) - .02
+            uv[here] = np.clip(np.clip(uv[here], lo, lo + .54), 0, 1)
+        notes.append('%s split into 4 UV quadrants (one atlas each; seam-stretched triangles clamped)' % m['name'])
+    return mats, newmat, notes, uv
+
+
+def combine_normals(baked, source, path):
+    """The high-to-low bake where it is sound, the source's own normal map elsewhere (a texel no low triangle
+    covers stays black; a ray that hit the wrong surface tilts past 70 degrees, or far from the source's own)."""
+    from PIL import Image
+    b = np.asarray(Image.open(baked).convert('RGB'), np.float32) / 255 * 2 - 1
+    src = Image.open(source).convert('RGB')
+    if src.size != (b.shape[1], b.shape[0]):
+        src = src.resize((b.shape[1], b.shape[0]), Image.BILINEAR)
+    a = np.asarray(src, np.float32) / 255 * 2 - 1
+    ok = (b[..., 2] > .34) & (np.abs(b).sum(2) > .5)
+    # and within 37 degrees of the source's own normal: the bake adds the sculpt's detail on top of it; a texel
+    # that turns far from it is a ray that hit the wrong surface (the dark swaths of the first bake)
+    cos = (a * b).sum(2) / np.maximum(np.linalg.norm(a, axis=2) * np.linalg.norm(b, axis=2), 1e-6)
+    ok &= cos > .8
+    out = np.where(ok[..., None], b, a)
+    Image.fromarray(np.clip((out + 1) * 127.5 + .5, 0, 255).astype(np.uint8)).save(path)
+    print('  normals: %.1f%% of texels from the high-to-low bake' % (100 * ok.mean()), flush=True)
+    return path
+
+
+def holster_off(tris, uv, skin, texture, J, ends):
+    """0.0.78 (t1884u): the rest hands close over the holsters' tops, so a hand's weights also held the leather
+    under its fingers (one welded surface: no part to cut by). A triangle mostly on a hand or forearm, below its
+    wrist, whose base colour is the holsters' brown leather (not the black glove, not the bare fingertips: those
+    are much redder and brighter) goes to the thigh of that side."""
+    from PIL import Image
+    im = np.asarray(Image.open(texture).convert('RGB'), np.float32) / 255
+    h, w = im.shape[:2]
+    m = np.mod(uv.mean(1), 1)
+    col = im[np.clip((m[:, 1] * h).astype(int), 0, h - 1), np.clip((m[:, 0] * w).astype(int), 0, w - 1)]
+    br, rb = col.mean(1), col[:, 0] - col[:, 2]
+    leather = (br > .2) & (rb > .03) & (rb < .15)
+    skin_ = (rb >= .15) & (br > .3)  # the bare fingertips
+    c = tris.mean(1)
+    moved = 0
+    for side in 'LR':
+        arm = [sk.BONES.index('fore' + side), sk.BONES.index('hand' + side)]
+        wy = J[sk.JOINTS.index('wrist' + side)][1]
+        sg = 1 if side == 'L' else -1
+        tip = ends[sk.TIP_L if side == 'L' else sk.TIP_R]
+        # and anything not glove-black, not bare skin, nearer the body than the fingertips (the holster's edge in the fist)
+        inner = (br > .16) & ~skin_ & (sg * c[:, 0] < sg * tip[0] - .015)
+        on = (skin[:, :, arm].sum(2).mean(1) > .5) & (leather | inner) & (c[:, 1] < wy - .01) & (np.sign(c[:, 0]) == sg)
+        # and, round the wrist (4 cm either way along the forearm), what stands off it by more than 5.8 cm: the holster
+        # box beside the rest wrist (the wrist itself is about 4.5 cm round its axis)
+        e, wr = J[sk.JOINTS.index('elbow' + side)], J[sk.JOINTS.index('wrist' + side)]
+        ax = (wr - e) / np.linalg.norm(wr - e)
+        dv = c - wr
+        al = dv @ ax
+        rad = np.linalg.norm(dv - np.outer(al, ax), axis=1)
+        on |= (skin[:, :, arm].sum(2).mean(1) > .3) & (np.abs(al) < .04) & (rad > .058) & (np.sign(c[:, 0]) == sg)
+        thigh = sk.BONES.index('thigh' + side)
+        skin[on] = 0
+        skin[on, :, thigh] = 1
+        moved += int(on.sum())
+    return skin, ['%d holster-leather triangles under the rest hands put on the thighs (by their base colour)' % moved]
+
+
+def keep_arms(tris, skin, ends, keep):
+    """0.0.78 PUNISHER HQ: a suit whose rest hands touch its holsters (the owner's own model) got the hands' and
+    forearms' bone-heat weights on the holster and thigh gear they touch, which then flew off with the hand. Each
+    corner weighted to a forearm or hand but farther than `keep` (m at 1.8 m) from every forearm and hand bone and
+    nearer another bone: that arm weight goes to the nearest other bone."""
+    arm = [sk.BONES.index(n) for n in ('foreL', 'handL', 'foreR', 'handR')]
+    E = np.asarray(ends, np.float64)
+    seg = lambda P, a, b: np.linalg.norm(P - (a + np.outer(np.clip(((P - a) @ (b - a)) / max(1e-9, (b - a) @ (b - a)), 0, 1), b - a)), axis=1)
+    P = tris.reshape(-1, 3).astype(np.float64)
+    W = skin.reshape(-1, 16).copy()
+    dist = np.stack([seg(P, E[sk.BONE_ENDS[b, 0]], E[sk.BONE_ENDS[b, 1]]) for b in range(16)], 1)
+    others = [b for b in range(16) if b not in arm]
+    darm, doth = dist[:, arm].min(1), dist[:, others].min(1)
+    stray = (W[:, arm].sum(1) > 1e-4) & (darm > keep * HEIGHT / 1.8) & (doth < darm)
+    near = np.array(others)[dist[:, others].argmin(1)]
+    moved = W[stray][:, arm].sum(1)
+    W[np.ix_(stray, arm)] = 0
+    W[np.nonzero(stray)[0], near[stray]] += moved
+    W /= np.maximum(W.sum(1, keepdims=True), 1e-9)
+    n = int(stray.sum())
+    notes = ['%d corners off the arms (farther than %.0f cm from the forearms and hands, nearer another bone: the '
+             'holsters the rest hands touch)' % (n, keep * 100)] if n else []
+    # The model is one welded surface: its rest hands are joined to the holsters they touch, so a triangle (or a
+    # corner) shared by a hand and the thigh's gear stretched between them as the hand moved (21 cm spikes in
+    # apps/wrist_twist_preview). Each corner keeps either its forearm/hand weight or the weight of the bones off
+    # that arm (whichever is more), and each triangle goes wholly to the side most of its corners are on (the
+    # others take its nearest such corner's weights): the hand parts from the holster cleanly.
+    W = W.reshape(-1, 3, 16)
+    cut_c = cut_t = 0
+    for side in 'LR':
+        a = [sk.BONES.index(n) for n in ('fore' + side, 'hand' + side)]
+        chain = a + [sk.BONES.index(n) for n in ('clav' + side, 'upper' + side)]
+        u = [b for b in range(16) if b not in chain]
+        wa, wu = W[..., a].sum(-1), W[..., u].sum(-1)
+        mixed = (wa > 1e-3) & (wu > 1e-3)
+        keep_a = mixed & (wa > wu)
+        keep_u = mixed & ~(wa > wu)
+        W[..., a] = np.where(keep_u[..., None], 0, W[..., a])
+        W[..., u] = np.where(keep_a[..., None], 0, W[..., u])
+        cut_c += int(mixed.sum())
+        on_a = W[..., a].sum(-1) > W[..., u].sum(-1)
+        cnt = on_a.sum(1)
+        for t in np.nonzero((cnt > 0) & (cnt < 3))[0]:
+            maj = cnt[t] >= 2
+            src = [c for c in range(3) if on_a[t, c] == maj]
+            for c in range(3):
+                if on_a[t, c] != maj:
+                    d = [np.linalg.norm(tris[t, c] - tris[t, k]) for k in src]
+                    W[t, c] = W[t, src[int(np.argmin(d))]]
+            cut_t += 1
+    W /= np.maximum(W.sum(-1, keepdims=True), 1e-9)
+    if cut_c or cut_t:
+        notes.append('%d corners and %d triangles parted between the hands and what the rest hands touch' % (cut_c, cut_t))
+    return tris, W.reshape(skin.shape).astype(skin.dtype), notes
+
+
 def flat_behind(tris):
     """Triangles of connected parts (welded at 0.1 mm) at least 40 cm across, under 12 cm thick, their centre
     more than 10 cm behind the pelvis: a shield on the back."""
@@ -187,7 +363,7 @@ def merge_images(mats, mat):
     return out, np.array([remap[int(x)] for x in mat])
 
 
-def atlases(mats, uv, mat, used, work, folder):
+def atlases(mats, uv, mat, used, work, folder, most=ATLASES):
     """Textured materials -> at most ATLASES atlases (balanced by cropped texture area, each cropped to its
     UVs, one scale per atlas). -> uv, mat, mats, notes."""
     from convert_thor_van_072 import atlas  # crop + pack + remap (the 0.0.72 van's)
@@ -199,7 +375,7 @@ def atlases(mats, uv, mat, used, work, folder):
         W, H = Image.open(mats[i]['image']).size
         q = np.clip(uv[mat == i].reshape(-1, 2), 0, 1)
         area[i] = max(1, (np.ptp(q[:, 0]) * W) * (np.ptp(q[:, 1]) * H)) if len(q) else 1
-    n = min(ATLASES, len(tex))
+    n = min(most, len(tex))
     groups, load = [[] for _ in range(n)], [0.] * n
     for i in sorted(tex, key=lambda i: -area[i]):
         k = int(np.argmin(load))
@@ -354,6 +530,13 @@ def convert(s, downloads, out_models, work):
             notes.append('dropped %d triangles on bone %s (a prop not worn: the game draws its own)' % (
                 int(on.sum()), ', '.join(sorted({names[t] for t in top[on]}))))
     tris, uv, mat, sj, sw = tris[keep], uv[keep], mat[keep], sj[keep], sw[keep]
+    if s.get('texture'):  # the base colour given beside the model (its glb packs it, the extract cannot follow)
+        tex = s['texture']
+        if s.get('cavity'):
+            tex = bake_cavity(tex, s['cavity'], os.path.join(work, folder + '_cavity.png'))
+            notes.append('the normal map\'s cavity baked into the base colour (the suit shader has no normal map)')
+        for m in mats:
+            m['image'], m['factor'] = tex, [1, 1, 1, 1]
     resolve_images(src, mats, notes, scene)
     P = tris.reshape(-1, 3)
     lo, hi = P.min(0), P.max(0)
@@ -372,6 +555,15 @@ def convert(s, downloads, out_models, work):
             lo, hi = P.min(0), P.max(0)
             notes.append('turned %d degrees to face the player\'s way (modelled facing %s)' % (
                 round(np.degrees(turn)), 'sideways' if abs(abs(np.degrees(turn)) - 90) < 15 else 'off-axis'))
+    elif s.get('turn_deg'):  # unrigged and modelled turned: measured by hand from a top view of its shoulders and belt
+        turn = float(np.radians(s['turn_deg']))
+        if abs(np.degrees(turn)) > 3:
+            c, si = np.cos(turn), np.sin(turn)
+            Ry = np.array([[c, 0, si], [0, 1, 0], [-si, 0, c]])
+            tris = tris @ Ry.T
+            P = tris.reshape(-1, 3)
+            lo, hi = P.min(0), P.max(0)
+            notes.append('turned %d degrees to face the player\'s way (measured: its shoulders and belt across +x)' % round(np.degrees(turn)))
     P0 = (P - [0, lo[1], 0]) * scale
     band = P0[(P0[:, 1] > .55 * HEIGHT) & (P0[:, 1] < .75 * HEIGHT)]
     cx = np.median(band[:, 0])
@@ -386,6 +578,12 @@ def convert(s, downloads, out_models, work):
     tris = ((tris - [0, lo[1], 0]) * scale - shift)
     P = tris.reshape(-1, 3)
     J = J - shift if rig is not None else sk.shape_joints(P)
+    if s.get('joints'):  # measured by hand from the mesh's slices where the shape guess fails (a hand resting on a holster)
+        J = np.array(J, float)
+        for name, at in s['joints'].items():
+            if name in sk.JOINTS:
+                J[sk.JOINTS.index(name)] = at
+        notes.append('joints set by hand: ' + ', '.join(sorted(s['joints'])))
     if s.get('drop_flat_behind'):  # a prop carried on the back (Cap's shield: the game draws its own)
         gone = flat_behind(tris)
         if gone.any():
@@ -395,6 +593,9 @@ def convert(s, downloads, out_models, work):
     if rig is None:
         notes.append('joints from the body\'s shape (no rig)')
     ends = sk.ends_of(J, P)
+    for name, k in (('tipL', sk.TIP_L), ('tipR', sk.TIP_R)):  # the fingertips, where the reach caught a holster
+        if name in (s.get('joints') or {}):
+            ends[k] = s['joints'][name]
     # the artist's weights onto the 16 bones
     if rig is not None and sj.size:
         roles = np.array(sk.rig_roles(bones))
@@ -411,7 +612,7 @@ def convert(s, downloads, out_models, work):
     uv = wrap_uv(uv)
     sin = os.path.join(work, folder + '_skin_in.npz')
     sout = os.path.join(work, folder + '_skin.npz')
-    np.savez(sin, tris=tris, uv=uv, mat=mat, target=TARGET, ends=ends, bones=sk.BONE_ENDS, skin=skin)
+    np.savez(sin, tris=tris, uv=uv, mat=mat, target=s.get('target', TARGET), ends=ends, bones=sk.BONE_ENDS, skin=skin)
     key = hashlib.sha256(open(sin, 'rb').read() + open(os.path.join(HERE, 'bpy_suit_skin.py'), 'rb').read()).hexdigest()
     keyfile = sout + '.key'
     if not (REUSE and os.path.exists(sout) and os.path.exists(keyfile) and open(keyfile).read() == key):
@@ -425,9 +626,32 @@ def convert(s, downloads, out_models, work):
     tris, uv, mat, nrm, skin = r['tris'], r['uv'], r['mat'], r['nrm'], r['skin']
     if int(r['lost']):
         notes.append('%d vertices weighted to their nearest bone (bone heat found no path)' % int(r['lost']))
+    if s.get('bake_normal'):  # 0.0.78 (t1889u): the source's every triangle and its normal map baked onto the decimated suit
+        baked = os.path.join(work, folder + '_hi2lo_normal.png')
+        bk = baked + '.key'
+        bkey = hashlib.sha256(key.encode() + open(sout, 'rb').read()[:1 << 20] + open(os.path.join(HERE, 'bpy_bake_normal.py'), 'rb').read()).hexdigest()
+        if not (os.path.exists(baked) and os.path.exists(bk) and open(bk).read() == bkey):
+            bpy('bpy_bake_normal.py', sin, sout, s['cavity'], baked, log=os.path.join(work, folder + '_bake.log'))
+            open(bk, 'w').write(bkey)
+        tex = bake_cavity(s['texture'], combine_normals(baked, s['cavity'], os.path.join(work, folder + '_normal_combined.png')),
+                          os.path.join(work, folder + '_cavity_hi2lo.png'))
+        for m in mats:
+            m['image'] = tex
+        notes.append('a high-to-low normal bake (%d source triangles and the source normal map onto the %d shipped), its cavity '
+                     'baked into the base colour' % (src_tris, len(tris)))
+    if s.get('arm_keep'):  # 0.0.78: the hands rest on the holsters - heat spread them onto the thighs' gear
+        tris, skin, an = keep_arms(tris, skin, ends, s['arm_keep'])
+        notes += an
+        if s.get('texture'):
+            skin, an = holster_off(tris, uv, skin, s['texture'], J, ends)
+            notes += an
     mats, mat = merge_images(mats, mat)
     used = sorted(set(mat.tolist()))
-    uv, mat, mats, an = atlases(mats, wrap_uv(uv), mat, used, work, folder)
+    if s.get('quadrants'):
+        mats, mat, qn, uv = quadrant_materials(mats, wrap_uv(uv), mat, work, folder)
+        notes += qn
+        used = sorted(set(mat.tolist()))
+    uv, mat, mats, an = atlases(mats, wrap_uv(uv), mat, used, work, folder, s.get('atlases', ATLASES))
     notes += an
     hb = [sk.hand_back(J, ends, P, 'L').round(4).tolist(), sk.hand_back(J, ends, P, 'R').round(4).tolist()]
     extras = {'suit': {'joints': J.round(5).ravel().tolist(), 'ends': ends[16:].round(5).ravel().tolist(),
@@ -438,9 +662,9 @@ def convert(s, downloads, out_models, work):
     lic = os.path.join(src, 'license.txt')
     if os.path.exists(lic):
         shutil.copy(lic, os.path.join(dst, 'license.txt'))
-    title = '%s  (%s)  %d -> %d triangles' % (folder, s['zip'], src_tris, len(tris))
+    title = '%s  (%s)  %d -> %d triangles' % (folder, s.get('zip', os.path.basename(s.get('glb', ''))), src_tris, len(tris))
     preview(os.path.join(work, 'preview_%s.png' % folder), tris, ends, skin, title)
-    return dict(folder=folder, source=s['zip'], source_triangles=src_tris, triangles=len(tris),
+    return dict(folder=folder, source=s.get('zip', os.path.basename(s.get('glb', ''))), source_triangles=src_tris, triangles=len(tris),
                 bytes=os.path.getsize(os.path.join(dst, 'scene.glb')), rigged=rig is not None, notes=notes)
 
 
@@ -457,7 +681,7 @@ def main():
     for s in SUITS:
         if only and s['folder'] not in only:
             continue
-        print('==', s['folder'], s['zip'], flush=True)
+        print('==', s['folder'], s.get('zip', s.get('glb')), flush=True)
         rep = convert(s, a.downloads, a.out, a.work)
         print(json.dumps(rep, indent=1), flush=True)
         report.append(rep)

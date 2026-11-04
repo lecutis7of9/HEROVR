@@ -87,6 +87,12 @@ inline constexpr float screenScale = .5f;
 inline constexpr float trackerOverScreen = .085f * .5f + .02f;
 // The bike's riding numbers: the van's pedals and summon with the bike's geometry and HANDLEBAR steering.
 van072::Tune tune(const Layout& l);
+// 0.0.78 SEAT REACH (owner t1891u: "far too far back from the motorcycle handlebars"): ROOT CAUSE - convert.py put
+// the eye straight over the seat (an upright 0.72 m torso), 0.64 m behind the grips (Cap 0.81 m, Wolverine 0.79 m
+// eye -> grip: past an arm's reach). The rider leans forward about his hip (the eye's 0.72 m under it) until the
+// grips are van072::driverReach away (Cap 25, Wolverine 28 degrees; at most mostLean). Bad input: the eye kept.
+inline constexpr float riderTorso = .72f, mostLean = .7f;
+Vec3 riderEye(const Layout& l);
 // The steer part's model axes in the bike's frame, turned `angle` (van072's handlebar sign: + a right turn) round
 // the layout's steer axis: `up` the model's +y, `toward` its +z. A vertical axis gives van072::wheelAxes' own.
 void steerAxes(float angle, const Layout& l, Vec3& up, Vec3& toward);

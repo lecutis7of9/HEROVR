@@ -279,7 +279,8 @@ ModelMisses modelMisses();
 inline constexpr size_t modelSinkBudget = 3 * (10 * size_t{mesh_model::drawTriangles} + size_t{mesh_model::vanTriangles} +
                                                2 * size_t{mesh_model::drawTriangles} + 2 * size_t{mesh_model::hammerTriangles} +
                                                2 * size_t{mesh_model::drawTriangles} +
-                                               size_t{mesh_model::hideoutTriangles}); // 0.0.74 test 1: + the hideout room
+                                               size_t{mesh_model::hideoutTriangles} + // 0.0.74 test 1: + the hideout room
+                                               4 * size_t{mesh_model::suitHqTriangles}); // 0.0.78: the HQ Punisher worn (and mirrored) and two more on others
 
 // The vertex budget (each softBar 54, softTriangle 21, a 10-sided glob 90): the most one call may add.
 namespace budget {

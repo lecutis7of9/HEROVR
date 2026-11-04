@@ -3109,3 +3109,17 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   flat screen, for 1.5 s; the QTE card only after the freeze has held 250 ms); calibration: calib_look = holo draws
   the holo checklist in either UI STYLE while its art is decoded (the tech plate was drawn for ui_style = TECH), CUT9
   CALIBRATION START / END lines; the cheat sheet's MJ run line. No new live.txt switch.
+- cut9 (resumed: include/spidy/story077b.hpp StoryRun; sfx.hpp levelDb / levelTargetLufs and the *_user WAVs;
+  hero072.hpp clawIsStab / claw blood; tools/launcher/src/WhatsNew.cs, tools/launcher/tools/make_version_json.py
+  whats_new_history): the game's RT prompt turns the stick run on (off at a web); sounds leveled at -20 LUFS, the
+  player's shield and claw WAVs trimmed; stab or slash by the move along the blades.
+  HQ PUNISHER: tools/suits/convert_suit.py (--only Suit_punisher_1; hi->lo normal bake tools/suits/bpy_bake_normal.py,
+  combine_normals with the agreement test cos > .8, the cavity into the base colour; holster_off with the wrist-ring
+  rule; keep_arms), mesh_model.hpp suitHqTriangles 80000 and slotDrawCap, hero007_visual.hpp modelSinkBudget;
+  hero007_play.hpp hipSuit / ownThighHolsters / PlayInput::suitHolster (kind 0: no drop-leg holster over the suit's);
+  suit_wear WRIST TWIST (the twist chain); apps/wrist_twist_preview.cpp + tools/suits/render_wrist.py (the forearm
+  cross-section at rolls -90/0/+90/180) and tools/suits/bpy_render_compare.py (source vs shipped close-ups, previews).
+  SEAT REACH: van072.hpp seatEye072 (the measured seat) / seatEye / driverReach .56 / carReachEye / carGripReach;
+  vehicle074::seatEye the same; batmobile074::tune eye = carReachEye(layout eye, hub, .185); bike075::riderEye (the
+  lean about the hip, riderTorso .72, mostLean .7 rad) in bike075::tune; vehicle074::seatReach and the rig's level
+  clamp 1 m (game_tracking.hpp). No new live.txt switch.

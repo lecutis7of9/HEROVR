@@ -12,6 +12,7 @@
 //  - step (in the combat block): the hero's weapons (hero007.hpp has the rules).
 //  - draw: the frame's looks (hero007_visual.hpp) in world space.
 // Pure; no game memory, no address.
+#include <string_view>
 #include "spidy/cape_glide.hpp"
 #include "spidy/captain.hpp"
 #include "spidy/hero007.hpp"
@@ -70,7 +71,14 @@ struct PlayInput {
     uint32_t shieldDamage{}; // SHIELD DAMAGE value (0: 35 HP)
     bool beltZones = true;   // 0.0.74 test 10 BELT ZONES ON: BATMAN's left hip grapple, belt front batarang, forearm smoke
     bool throwSwing = true;  // 0.0.74 test 10 THROW BY SWING ON: throws fly along the arm's swing (throw_swing.hpp)
+    // 0.0.78 SUIT HOLSTERS: the worn suit models its own drop-leg holsters (ownThighHolsters: the owner's HQ
+    // PUNISHER): the pistols sit in them (hipSuit) and the built-in drop-leg holster is not drawn over them.
+    bool suitHolster{};
 };
+// 0.0.78 SUIT HOLSTERS: the suits whose mesh has its own thigh holsters (Models\Suits\<folder>).
+inline bool ownThighHolsters(const char* folder) {
+    return folder && std::string_view(folder) == "Suit_punisher_1";
+}
 enum BlowKind : uint32_t { kindBatarang = 0, kindClaw, kindHeat, kindFreeze, kindPistol, kindSawedOff, kindShield, kindShieldBash, blowKinds };
 inline constexpr const char* blowKindNames[blowKinds] = {"BATARANG", "CLAWS",     "HEAT VISION", "COLD BREATH",
                                                          "PISTOL",   "SAWED-OFF", "SHIELD",      "SHIELD BASH"};
@@ -143,7 +151,13 @@ inline uint32_t reloadSoundOf(uint32_t weapon, uint32_t was, uint32_t now) {
 // little inside the 0.0.7 hip spot so it reads as strapped to the leg); hipBelt, BATMAN's grapple gun
 // clipped high on the utility belt, tipped forward (0.0.7's hip spot hung it near the knee: "floating by
 // the foot"). Both stay inside holster::inZone's hip zone, so the draw grab is where it is drawn.
-enum HipStyle : uint32_t { hipClassic = 0, hipThigh, hipBelt };
+// 0.0.78 hipSuit: the HQ PUNISHER's own modelled holsters (tools/suits/convert_suit.py, measured on its 5 cm
+// grids: each pistol grip at x -/+.235, y .84, z .01 of the 1.80 m suit, whose eyes are at y 1.70, z .065;
+// the suit is drawn scaled by standingEye / 1.70, so in standingEye metres below .82, out .224, behind .053),
+// muzzle down along the holster as hipThigh. Inside inZone's hip zone (below .45-.95, out .10-.45, ahead
+// -.16..+.30): the draw grab is where the gun is.
+enum HipStyle : uint32_t { hipClassic = 0, hipThigh, hipBelt, hipSuit };
+inline constexpr float suitBelow = .82f, suitOut = .224f, suitAhead = -.053f;
 // Test build 12 HOLSTERS HIGHER: thighBelow .86 hung the PUNISHER's grips by the knee ("too low"); now .66
 // under the eyes - the hip bone of a standingEye player - and every height scales with body.scale (the
 // calibrated eye height), so a tall or short player finds them at his own hip.
@@ -166,7 +180,10 @@ inline void wornPose(uint32_t zone, Vec3 head, const holster::BodyYaw& body, Vec
     case holster::rightHip: { // muzzle down, the grip up and back, the slide's top facing forward
         const float s = zone == holster::leftHip ? -1.f : 1.f;
         head += down * (hipStyle == hipBelt ? beltDrop : hipDrop) + r * (s * hipOutShift);
-        if (hipStyle == hipThigh) {
+        if (hipStyle == hipSuit) {
+            at = head + down * suitBelow + r * (s * suitOut * k) + f * (suitAhead * k);
+            forward = normalized(dn + f * .08f);
+        } else if (hipStyle == hipThigh) {
             at = head + down * thighBelow + r * (s * thighOut) + f * .03f;
             forward = normalized(dn + f * .08f);
         } else if (hipStyle == hipBelt) {
@@ -766,8 +783,9 @@ class Play {
                 const bool open = g.weapon == sawedOff && (g.state == opened || g.state == seating || g.state == autoLoading);
                 const uint32_t look = g.weapon == sawedOff ? (open ? lookSawedOffOpen : lookSawedOff) : lookPistol;
                 Vec3 at{}, fwd{}, up{};
-                wornPose(slot.zone, in.head.position, guns.body, at, fwd, up, hipThigh);
-                const uint32_t kind = slot.zone == holster::back ? 2u : 4u; // Version 0.0.72: 4 the drop-leg holster
+                wornPose(slot.zone, in.head.position, guns.body, at, fwd, up, in.suitHolster ? hipSuit : hipThigh);
+                // Version 0.0.72: 4 the drop-leg holster; 0.0.78: none over a suit's own (its mesh draws it)
+                const uint32_t kind = slot.zone == holster::back ? 2u : in.suitHolster ? 0u : 4u;
                 if (slot.heldBy < 0) {
                     d.worn[s] = item(look, at, fwd, up, kind);
                 } else {

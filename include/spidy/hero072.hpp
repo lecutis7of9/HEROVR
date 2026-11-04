@@ -1921,7 +1921,8 @@ class SuitCatalog {
         add(makeSuit(hero_modes::wolverine, "CLASSIC", "Stokissout", "CC BY", 0, "Suit_wolverine_1"));
         add(makeSuit(hero_modes::wolverine, "JACKET AND JEANS", "Light.k", "CC BY", 0, "Suit_wolverine_3"));
         add(makeSuit(hero_modes::wolverine, "WEAPON X", "AssetGoat", "CC BY", repMost, "Suit_wolverine_4", true));
-        add(makeSuit(hero_modes::punisher, "VEST", "floh", "CC BY-NC", 0, "Suit_punisher_1"));
+        // 0.0.78: the owner's own HQ PUNISHER (t1882u) replaces build 9's VEST in the same folder (its own leg holsters)
+        add(makeSuit(hero_modes::punisher, "SKULL", "the HERO VR owner", "OWNER'S OWN", 0, "Suit_punisher_1"));
         add(makeSuit(hero_modes::punisher, "CLASSIC", "floh", "CC BY-NC", 0, "Suit_punisher_2"));
         add(makeSuit(hero_modes::thor, "RIGGED", "CAPTAAINR", "CC BY", 0, "Suit_thor_1"));
         add(makeSuit(hero_modes::thor, "CLASSIC", "CAPTAAINR", "CC BY", repMost, "Suit_thor_2", true));

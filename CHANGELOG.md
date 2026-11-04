@@ -23,8 +23,43 @@ From the player's cut8 reports ("prompts and main menu are top priority for 78")
 - **Ghost 2D screen in immersive cutscenes (code path CONFIRMED):** 18-23 immersive frames a session had no stereo pair
   and fell through to the flat screen. Such a frame is now no layer (the flat screen only after 1.5 s with no pair, so
   VR never goes black), and the QTE card shows only once a QTE's freeze has held 250 ms. CUT9 NO GHOST SCREEN line.
-- **MJ in the tunnel run (not fixed in this build):** the game's run for MJ is RT held; VR's RT is the webs and the
-  stick run (story_sprint) is off by default. The cheat sheet now says how to run as MJ with live.txt story_sprint = on.
+- **MJ's run and vault by default (CANDIDATE, untested in the headset):** the game asks for MJ's run itself with a
+  live RT prompt ("Hold R2"); from that prompt the stick run (story_sprint) is on for the segment, sent as the game's
+  own RT, until the game shows a web on the player (Spider-Man swinging), so Spider-Man's controls are unchanged.
+  live.txt story_sprint = on still turns it on everywhere. CUT9 STORY RUN lines count the starts and ends.
+- **Sounds:** the shield's hit (thrown and bash) and WOLVERINE's stab and two slashes are the player's own WAVs, the
+  silence before each trimmed (the transient 1 ms in, no delay added); every hero weapon sound is leveled to -20 LUFS
+  max momentary (none past a -1 dBFS peak; the player's guns and THOR's lightning were -3 to +0.6 LUFS: "incredibly
+  loud"). The game's own punches and gunfire are in its audio banks and not measured (CANDIDATE).
+- **WOLVERINE stab or slash, and more blood:** a claw hit whose move is mostly along the blades (within about 45
+  degrees) plays the stab, anything else a slash (two takes); each claw hit throws 160 drops (EXTREME; NORMAL 54) and
+  bigger pools, the blood caps doubled.
+- **The launcher's What's New:** the update offer and the main screen show what changed in each version
+  (version.json whats_new_history, from the release notes).
+- **The owner's own HQ PUNISHER (SKULL, Models/Suits/Suit_punisher_1, replaces build 9's VEST):** the 592,596
+  triangle model brought to 79,999 (its own cap raised to suitHqTriangles 80,000; every other suit keeps its cap) on the
+  same skeleton, the right way up and to scale, with its own drop-leg holsters (the pistols sit in them; the built-in
+  holster is not drawn over his). Detail kept: a normal map baked from the 592k source onto the 80k mesh, combined
+  with the model's own normal map (texels that disagree with the source's normal by more than about 37 degrees are the
+  model's own: 88.8% come from the bake), and its 4K base colour kept. HONEST LIMIT: HERO VR's model shader is base
+  colour times a per-vertex colour - no normal, roughness or metallic map at draw time - so the normal detail is baked
+  into the colour as shading (cavity), roughness and metallic are not used, and the 4K maps are drawn through 1024 px
+  layers (4 atlas quadrants, about 2048 px effective). Lit close-ups of the source and the shipped mesh (head, torso,
+  holster) match closely; frame time in the headset is not measured (CANDIDATE).
+- **No candy-wrapper wrist (WRIST TWIST, CONFIRMED by apps/wrist_twist_preview on the shipped mesh):** the
+  forearm's roll is spread along a twist chain instead of all at the wrist; the forearm's cross-section by the
+  wrist stays 89-97% of rest at rolls of -90, 0, +90 and 180 degrees on both arms (it was 49-53% at -90 without it).
+  On for the new PUNISHER only; the other heroes' suits were measured but are left unchanged (CANDIDATE).
+- **Seated in a vehicle: the eye at a natural reach of the wheel or bars (CONFIRMED by tests, CANDIDATE in the headset):**
+  "even with 'seated' the view is far too far back from the steering wheel ... and from the motorcycle handlebars".
+  ROOT CAUSE: every vehicle's seat eye was an upright head over the seat or hips with no reach: 0.65-0.81 m from the
+  wheel's 9-and-3 grips or the bar grips (van 0.70, 1989 0.66, ODAMI 0.70, FOREVER 0.65, FOREVER 2 0.69, Cap's bike
+  0.81, Wolverine's bike 0.79 m). Seated mode did apply the offset in all three axes (AUTO SIT; HEIGHT ONLY the height),
+  the vehicle's yaw was handled, and the model scale was right; the level part of the move was also clamped at 0.5 m
+  twice, so a short boarding carry left him further back. Now each car's eye is slid forward at its height to 0.56 m
+  from the grips (van 0.195 m, 1989 0.12, ODAMI 0.19, FOREVER 0.11, FOREVER 2 0.17), head room re-measured on the
+  shipped models (0.13 m or more to the body and the roof); on the bikes the rider leans forward about his hip (Cap 25,
+  Wolverine 28 degrees) to 0.56 m. The seat move's level clamp is 1 m. tests/core_tests SEAT REACH checks every one.
 
 ## 0.0.77 launcher hotfix (tag v0.0.77.1) - special thanks on the main screen
 

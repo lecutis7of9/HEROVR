@@ -90,6 +90,7 @@ struct Skeleton {
     bool heroHands{};  // 0.0.73 HERO HANDS: Tracked::heroHands (moves() takes the rig's own HandProfile)
     bool open[2]{};    // 0.0.73 HERO HANDS: the profile's open hand (Tracked::open) held this frame
     float foreFollow{}; // 0.0.73 HERO HANDS: the profile's forearmFollow (0: the shared forearm), frame() reads it
+    bool twistChain{};  // 0.0.78 WRIST TWIST: the profile's twistChain (moves() and skin() spread the hand's roll)
     bool ok{};
 };
 // 0.0.73 HERO HANDS (test 4: "i feel like you are applying one fix to every heros hand but every hero works
@@ -116,6 +117,13 @@ struct HandProfile {
                                // at the wrist when the palm turns out ahead (the back toward the player)
     bool palmRaise = false;    // IRON MAN: the raised hand (or the repulsor charging / just fired) drawn palm out
                                // along the blast (raisedPalm, blendGrip; game_xr)
+    // 0.0.78 WRIST TWIST (the owner: "no candy-wrapper wrist collapse"): the forearm a twist chain. Its frame is
+    // the body's facing alone (no hand in it, so it never flips), and the hand's roll about the forearm (live
+    // minus rest, -180 .. 180 degrees) is spread along it - each forearm vertex turned about the forearm by that
+    // roll times its share of the way from the elbow (0) to the wrist (1) - so at the wrist the forearm has the
+    // hand's whole roll and the wrist's blend of hand and forearm only bends, never twists (the linear blend's
+    // collapse). forearmFollow is not used with it.
+    bool twistChain = false;
 };
 // A worn suit made ready (once, at load): its unique vertices, each corner's vertex, each triangle's bone.
 struct Rig {
@@ -217,6 +225,10 @@ struct BoneMove {
     Vec3 x0{}, y0{}, z0{};
     float knuckle{}, fingers{}, curl{};
     float depth{}, slope{}; // Version 0.0.73 test 3 FIST: Rig::fingerDepth, fingerSlope (the hands only)
+    // 0.0.78 WRIST TWIST (the forearms only, twistChain): the hand's roll about the forearm (radians, live minus
+    // rest), the live forearm's axis, and the rest forearm's axis and length (rest metres, from a0 the elbow).
+    float twist{}, restLength{};
+    Vec3 axis1{}, axis0{};
 };
 // Test build 12 HANDS. The hand bone's way (wrist -> knuckles) and the wrist from an OpenXR grip pose:
 // the grip's -Y turned tiltDeg toward its -Z (the forearm through a fist round a controller's handle; the grip's

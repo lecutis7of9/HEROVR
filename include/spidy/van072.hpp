@@ -39,7 +39,33 @@ inline constexpr const char* settingHelp = "EXPERIMENTAL, OFF by default: Punish
 // The left-hand-drive cab (a US van): the driver sits left.
 // Version 0.0.72: MEASURED on the shipped model (the door's own handle; the built cab's door card, seat, wheel).
 inline constexpr Vec3 doorHandleOut{-.98f, 1.18f, -.66f}, doorHandleIn{-.855f, 1.08f, -.83f};
-inline constexpr Vec3 seatEye{-.45f, 1.60f, -.55f}, wheelHub{-.45f, 1.18f, -1.08f};
+// 0.0.78 SEAT REACH (owner t1891u: "the view is far too far back from the steering wheel"): ROOT CAUSE - the seat
+// eye was the seat's own measured head spot, 0.53 m behind and 0.42 m over the hub: 0.70 m from the wheel's
+// 9-and-3 grips (an arm's full stretch; a seated driver's hands rest 0.45 - 0.6 m from his eyes). The eye is
+// slid forward at its height (the seat slid up) to driverReach of the grips: z -.55 -> -.762 (0.56 m;
+// carReachEye(seatEye072, wheelHub, .19) - tests/core_tests SEAT REACH). Head room: 0.29 m under the shell's roof.
+inline constexpr Vec3 seatEye072{-.45f, 1.60f, -.55f}; // the measured seat (the cab's seat back is behind it)
+inline constexpr Vec3 seatEye{-.45f, 1.60f, -.762f}, wheelHub{-.45f, 1.18f, -1.08f};
+inline constexpr float driverReach = .56f; // eye -> each grip: a natural seated reach (0.45 - 0.6 m)
+// A car's driver eye slid forward (-z) at its height until the wheel's 9-and-3 grips (hub -+ gripHalf along x)
+// are `reach` away; an eye already that near (or a bad input) is kept. Never ahead of 0.2 m behind the hub.
+inline Vec3 carReachEye(Vec3 eye, Vec3 hub, float gripHalf, float reach = driverReach) {
+    const float dy = eye.y - hub.y, dx = std::abs(eye.x - hub.x) + gripHalf; // the far grip's lateral
+    const float dz = eye.z - hub.z;
+    if (!std::isfinite(dy + dx + dz + reach) || dz <= 0)
+        return eye;
+    const float now = std::sqrt(dx * dx + dy * dy + dz * dz);
+    const float want2 = reach * reach - dx * dx - dy * dy;
+    if (now <= reach || !(want2 > 0))
+        return eye;
+    const float z = std::max(std::sqrt(want2), .2f);
+    return z < dz ? Vec3{eye.x, eye.y, hub.z + z} : eye;
+}
+// The distance from an eye to the far one of a wheel's 9-and-3 grips (the report's number).
+inline float carGripReach(Vec3 eye, Vec3 hub, float gripHalf) {
+    const float dx = std::abs(eye.x - hub.x) + gripHalf, dy = eye.y - hub.y, dz = eye.z - hub.z;
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
 // The wheel faces the driver tilted back 25 degrees: its axis (towards the driver).
 inline Vec3 wheelAxis() { return normalized(Vec3{0, .42f, .91f}); }
 inline constexpr Vec3 exitStep{-1.75f, 0.f, -.55f}; // on the street, 0.75 m out from the driver's side

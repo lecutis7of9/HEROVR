@@ -296,7 +296,7 @@ class GameTrackingRig {
     float seatLiftApplied() const {
         return seatLiftApplied_.y;
     }
-    // 0.0.74 test 10 SEAT CENTRE: the whole offset (world, metres): y as seatLift, the level part at most .5 m
+    // 0.0.74 test 10 SEAT CENTRE: the whole offset (world, metres): y as seatLift, the level part at most 1 m
     // (its way kept) - the seated eye centred on the driver seat too. Any NaN: none. Set every frame.
     void seatOffset(Vec3 metres) {
         if (!std::isfinite(metres.x) || !std::isfinite(metres.y) || !std::isfinite(metres.z)) {
@@ -305,9 +305,9 @@ class GameTrackingRig {
         }
         Vec3 o{metres.x, std::clamp(metres.y, -.9f, .6f), metres.z};
         const float n = std::sqrt(o.x * o.x + o.z * o.z);
-        if (n > .5f) {
-            o.x *= .5f / n;
-            o.z *= .5f / n;
+        if (n > 1.f) { // 0.0.78 SEAT REACH: vehicle074::seatReach (was .5 m)
+            o.x *= 1.f / n;
+            o.z *= 1.f / n;
         }
         seatLift_ = o;
     }

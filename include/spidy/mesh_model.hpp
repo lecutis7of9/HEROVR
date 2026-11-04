@@ -49,6 +49,9 @@ inline constexpr uint32_t drawTriangles = 24000; // the VR cap per model (3 vert
 inline constexpr uint32_t hammerTriangles = 50000, vanTriangles = 150000;
 // Version 0.0.74 test 1 HIDEOUTS: a whole room (the Batcave ships 40,533).
 inline constexpr uint32_t hideoutTriangles = 60000;
+// 0.0.78 PUNISHER HQ (owner, t1889u: "keep the visual quality" of his 592,596-triangle Punisher): that suit's own
+// cap (Suit_punisher_1; every other suit keeps drawTriangles). tools/suits/convert_suit.py ships it at 80,000.
+inline constexpr uint32_t suitHqTriangles = 80000;
 // 0.0.76 HARLEYS (owner: "like a Harley and not low poly"): each bike's body up to 110,000 and its steer part (bars,
 // risers, fork, front wheel) up to 40,000 - the van's 150,000 together. tools/bike076's converter removes what no
 // view sees and collapse-decimates the rest (the rarely seen first) from the sources (431,558 / 405,975 triangles)
@@ -242,7 +245,7 @@ inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, dr
                                                 vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
-                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
+                                                drawTriangles, drawTriangles, suitHqTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, hideoutTriangles, hideoutTriangles,
                                                 vanTriangles, vanTriangles, vanTriangles, vanTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, bikeTriangles, bikeBarsTriangles,
@@ -295,6 +298,8 @@ inline uint32_t suitSlot(const char* folder) {
     return 0;
 }
 inline constexpr bool slotIsHideout(uint32_t slot) { return slot == slotHideoutBatcave || slot == slotHideoutSafehouse; }
+static_assert(slotDrawCap[slotSuitFirst + 16] == suitHqTriangles && suitFolders[16][5] == 'p' && suitFolders[16][14] == '1',
+              "0.0.78: Suit_punisher_1 (suitFolders[16]) has the HQ cap");
 static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slotHideoutBatcave == 44 && slotBatmobileFirst == 46 &&
                   slotBatmobileWheel == 51 && slotBatmobileRoofFirst == 52 && slotBikeBody == 56 && slotBikeBars == 57 &&
                   slotBikeCapBody == 58 && slotBikeWolverineBars == 61 && slots == 62, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");

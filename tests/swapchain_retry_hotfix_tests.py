@@ -15,7 +15,8 @@ CORE = (ROOT/'tests/core_tests.cpp').read_text(encoding='utf-8')
 
 def init_loop():
     start = GAME.index('for (unsigned startTries = 1;; ++startTries)')
-    return GAME[start:GAME.index('D3D12Renderer overlay;', start)]
+    # cut13: the session starts after the models are prepared, just before the frame loop's art clock
+    return GAME[start:GAME.index('const auto artClock = std::chrono::steady_clock::now();', start)]
 
 
 class SwapchainLadder(unittest.TestCase):
@@ -34,7 +35,7 @@ class SwapchainLadder(unittest.TestCase):
     def test_every_try_is_logged_and_said(self):
         self.assertIn('swapchainTries_.push_back(said + ": made")', XR)
         self.assertIn('swapchainTries_.push_back(said + ": " + where + " XrResult="', XR)
-        loop = GAME[GAME.index('const auto sayTries'):GAME.index('D3D12Renderer overlay;')]
+        loop = GAME[GAME.index('const auto sayTries'):GAME.index('const auto artClock = std::chrono::steady_clock::now();')]
         self.assertIn('runtime.swapchainTries()', loop)
         self.assertIn('message(2, 0, text.c_str());', loop)
         self.assertIn('Sleep(150)', loop, 'quick tries would overwrite each other before the launcher reads them')

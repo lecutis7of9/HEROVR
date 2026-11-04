@@ -2052,66 +2052,12 @@ DWORD WINAPI run(void*) {
         if (FAILED(queue->GetDevice(IID_PPV_ARGS(&device))))
             throw std::runtime_error("Game graphics device unavailable");
         XrRuntime runtime;
-        {
-            RuntimeSelection selected(config.runtime);
-            LayerSwitches layers;
-            if (!layers.names.empty()) {
-                const auto text = layers.names + " is switched off for the game: Spidy does not run with it. "
-                                                 "It stays on for your other games";
-                message(1, 0, text.c_str());
-            }
-            // Update 39.0.3: no headset yet (Virtual Desktop not connected) waits for it, up to 2 minutes,
-            // instead of ending VR with the game on its flat screen.
-            // 0.0.6 hotfix (Update 39.1.1, rep0060): any other OpenXR refusal at the start (Virtual Desktop's
-            // "Create eye swapchain XrResult=-2") is tried again too, with a new session every 2 s (5 s after
-            // 2 minutes), for as long as the launcher is there; each eye swapchain try is said in the console.
-            // VR no longer ends on it with the game on its flat screen.
-            const auto sayTries = [&](const char* prefix) {
-                for (const auto& line : runtime.swapchainTries()) {
-                    const auto text = std::string(prefix) + line;
-                    OutputDebugStringA((text + "\n").c_str());
-                    message(2, 0, text.c_str());
-                    Sleep(150); // the launcher reads the message every 50 ms: each line reaches the console
-                }
-            };
-            const uint64_t startedAt = GetTickCount64();
-            for (unsigned startTries = 1;; ++startTries) {
-                try {
-                    runtime.initialize(device.Get(), queue, config.eyeSize, config.renderScale);
-                    if (startTries > 1 || !runtime.swapchainNote().empty()) {
-                        sayTries("");
-                        const auto text = (runtime.swapchainNote().empty()
-                                               ? std::string("VR started")
-                                               : runtime.swapchainNote()) +
-                                          " after " + std::to_string(startTries) + " session tries";
-                        message(2, 0, text.c_str());
-                    }
-                    break;
-                } catch (const XrError& e) {
-                    // 0.0.76 LAUNCHER WATCH: a late keep-alive with the launcher still open waits on.
-                    const bool launcherGone = !config.durationMs && GetTickCount64() >= keepAliveDeadline &&
-                                              (launcherVerdict = launcherCheck()) != launcher_watch::keepRunning;
-                    if (stopRequested || launcherGone)
-                        throw;
-                    const uint64_t waited = GetTickCount64() - startedAt;
-                    if (e.result == XR_ERROR_FORM_FACTOR_UNAVAILABLE) {
-                        if (waited >= 120000)
-                            throw;
-                        message(2, 0, "Headset not connected: open Virtual Desktop in your headset first");
-                        Sleep(2000);
-                        continue;
-                    }
-                    sayTries("");
-                    const auto text = std::string(waited < 120000 ? "VR is starting: the runtime refused (" :
-                                                                    "VR could not start yet (") +
-                                      e.what() + "); trying again, session try " + std::to_string(startTries + 1) +
-                                      (waited < 120000 ? "" : ". If it goes on: restart Virtual Desktop and the game");
-                    OutputDebugStringA((text + "\n").c_str());
-                    message(2, 0, text.c_str());
-                    Sleep(waited < 120000 ? 2000 : 5000);
-                }
-            }
-        }
+        // HERO VR 0.0.78 cut13 BOOT SCREEN: the mod's art and models are read BEFORE the headset's session starts. A
+        // session with no frame is a black headset: cut12 started it first, then spent the models' and the 2048 px PBR
+        // maps' preparation (the console's MODELS lines) before the first frame - black until after the game's main menu
+        // (161552 report: the menu's save slots at 16:16:27, the headset's first BOOT SCREEN frame 16:16:32). Without a
+        // session the headset keeps the runtime's own view (Virtual Desktop: the PC's screen, the game's title and menu).
+        const auto prepareClock = std::chrono::steady_clock::now();
         D3D12Renderer overlay;
         overlay.initialize(device.Get(), queue);
         std::string artMissing;
@@ -2363,6 +2309,72 @@ DWORD WINAPI run(void*) {
                                   (overlay.modelFault().empty() ? std::string("no textures were read") : overlay.modelFault()));
         } catch (...) {
             consoleLine("MODELS: could not be prepared (out of memory?) - the built-in looks are drawn");
+        }
+        {
+            char line[160];
+            sprintf_s(line, "MODELS: prepared in %.1f s, before the headset's session (its view is not black meanwhile)",
+                      std::chrono::duration<double>(std::chrono::steady_clock::now() - prepareClock).count());
+            consoleLine(line);
+        }
+        {
+            RuntimeSelection selected(config.runtime);
+            LayerSwitches layers;
+            if (!layers.names.empty()) {
+                const auto text = layers.names + " is switched off for the game: Spidy does not run with it. "
+                                                 "It stays on for your other games";
+                message(1, 0, text.c_str());
+            }
+            // Update 39.0.3: no headset yet (Virtual Desktop not connected) waits for it, up to 2 minutes,
+            // instead of ending VR with the game on its flat screen.
+            // 0.0.6 hotfix (Update 39.1.1, rep0060): any other OpenXR refusal at the start (Virtual Desktop's
+            // "Create eye swapchain XrResult=-2") is tried again too, with a new session every 2 s (5 s after
+            // 2 minutes), for as long as the launcher is there; each eye swapchain try is said in the console.
+            // VR no longer ends on it with the game on its flat screen.
+            const auto sayTries = [&](const char* prefix) {
+                for (const auto& line : runtime.swapchainTries()) {
+                    const auto text = std::string(prefix) + line;
+                    OutputDebugStringA((text + "\n").c_str());
+                    message(2, 0, text.c_str());
+                    Sleep(150); // the launcher reads the message every 50 ms: each line reaches the console
+                }
+            };
+            const uint64_t startedAt = GetTickCount64();
+            for (unsigned startTries = 1;; ++startTries) {
+                try {
+                    runtime.initialize(device.Get(), queue, config.eyeSize, config.renderScale);
+                    if (startTries > 1 || !runtime.swapchainNote().empty()) {
+                        sayTries("");
+                        const auto text = (runtime.swapchainNote().empty()
+                                               ? std::string("VR started")
+                                               : runtime.swapchainNote()) +
+                                          " after " + std::to_string(startTries) + " session tries";
+                        message(2, 0, text.c_str());
+                    }
+                    break;
+                } catch (const XrError& e) {
+                    // 0.0.76 LAUNCHER WATCH: a late keep-alive with the launcher still open waits on.
+                    const bool launcherGone = !config.durationMs && GetTickCount64() >= keepAliveDeadline &&
+                                              (launcherVerdict = launcherCheck()) != launcher_watch::keepRunning;
+                    if (stopRequested || launcherGone)
+                        throw;
+                    const uint64_t waited = GetTickCount64() - startedAt;
+                    if (e.result == XR_ERROR_FORM_FACTOR_UNAVAILABLE) {
+                        if (waited >= 120000)
+                            throw;
+                        message(2, 0, "Headset not connected: open Virtual Desktop in your headset first");
+                        Sleep(2000);
+                        continue;
+                    }
+                    sayTries("");
+                    const auto text = std::string(waited < 120000 ? "VR is starting: the runtime refused (" :
+                                                                    "VR could not start yet (") +
+                                      e.what() + "); trying again, session try " + std::to_string(startTries + 1) +
+                                      (waited < 120000 ? "" : ". If it goes on: restart Virtual Desktop and the game");
+                    OutputDebugStringA((text + "\n").c_str());
+                    message(2, 0, text.c_str());
+                    Sleep(waited < 120000 ? 2000 : 5000);
+                }
+            }
         }
         const auto artClock = std::chrono::steady_clock::now();
         // Update 24.1: a drawing failure (its shader, its buffers) turns Spidy's

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <iterator>
 #include <d3dcompiler.h>
 #include <stdexcept>
 #include <string>
@@ -555,7 +556,7 @@ bool D3D12Renderer::setArt(std::span<const ArtLevel> levels) noexcept {
         if (!artHeap_) {
             D3D12_DESCRIPTOR_HEAP_DESC h{};
             h.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-            h.NumDescriptors = 1;
+            h.NumDescriptors = artHeapDescriptors;
             h.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             hr(device_->CreateDescriptorHeap(&h, IID_PPV_ARGS(&artHeap_)), "Create art descriptor heap");
         }
@@ -577,34 +578,34 @@ bool D3D12Renderer::setArt(std::span<const ArtLevel> levels) noexcept {
     art_.Reset();
     return false;
 }
+HRESULT serializeArtRoot(ComPtr<ID3DBlob>& signature, ComPtr<ID3DBlob>& error) noexcept {
+    // HERO VR 0.0.78 cut13: the art's own layout (t0 its one atlas, art heap 0) - cut12 had the model's PBR
+    // layout here by mistake (a table reaching heap 3..5 of a 1-descriptor heap), and the model's here.
+    D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0};
+    D3D12_ROOT_PARAMETER parameters[2]{};
+    parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    parameters[0].Constants.Num32BitValues = 16;
+    parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    parameters[1].DescriptorTable = {1, &range};
+    parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_STATIC_SAMPLER_DESC sampler{};
+    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    // The atlas's pictures sit side by side: past a few levels their
+    // texels mix, so smaller levels are not used (nor made).
+    sampler.MaxLOD = 4;
+    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_ROOT_SIGNATURE_DESC rs{static_cast<UINT>(std::size(parameters)), parameters, 1, &sampler,
+                                D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT};
+    signature.Reset();
+    error.Reset();
+    return D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
+}
 void D3D12Renderer::prepareArt(DXGI_FORMAT targetFormat) {
     if (!artRoot_) {
-        // t0 the base colours (heap 0); HERO VR 0.0.78 PBR MATERIALS: t2..t4 the maps and the HQ copies (heap 3..5)
-        D3D12_DESCRIPTOR_RANGE ranges[2]{{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0},
-                                         {D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 2, 0, 3}};
-        D3D12_ROOT_PARAMETER parameters[3]{};
-        parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        parameters[0].Constants.Num32BitValues = 16;
-        parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-        parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        parameters[1].DescriptorTable = {2, ranges};
-        parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        parameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        parameters[2].Constants.ShaderRegister = 2; // the light (model_pbr::LightConstants)
-        parameters[2].Constants.Num32BitValues = 24;
-        parameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        D3D12_STATIC_SAMPLER_DESC sampler{};
-        sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-        sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        // The atlas's pictures sit side by side: past a few levels their
-        // texels mix, so smaller levels are not used (nor made).
-        sampler.MaxLOD = 4;
-        sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        D3D12_ROOT_SIGNATURE_DESC rs{2, parameters, 1, &sampler,
-                                    D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT};
         ComPtr<ID3DBlob> signature, error;
-        hr(D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error),
-           "Serialize art root signature");
+        hr(serializeArtRoot(signature, error), "Serialize art root signature");
         hr(device_->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
                                         IID_PPV_ARGS(&artRoot_)),
            "Create art root signature");
@@ -710,7 +711,7 @@ bool D3D12Renderer::setModelTextures(unsigned size, unsigned levels,
             D3D12_DESCRIPTOR_HEAP_DESC h{};
             h.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
             // the skins; 0.0.74 test 10 SEE-THROUGH: each eye's scene depth; 0.0.78 PBR: the maps, the HQ copies
-            h.NumDescriptors = 6;
+            h.NumDescriptors = modelHeapDescriptors;
             h.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             hr(device_->CreateDescriptorHeap(&h, IID_PPV_ARGS(&modelHeap_)), "Create model descriptor heap");
         }
@@ -942,27 +943,39 @@ std::array<D3D12_INPUT_ELEMENT_DESC, 8> modelLayout() {
     }};
 }
 } // namespace
+HRESULT serializeModelRoot(ComPtr<ID3DBlob>& signature, ComPtr<ID3DBlob>& error) noexcept {
+    // t0 the base colours (heap 0); HERO VR 0.0.78 PBR MATERIALS: t2..t4 the maps and the HQ copies (heap 3..5),
+    // b2 the light (model_pbr::LightConstants). cut13: all three parameters are counted (cut12 said 3 of an array
+    // of 2: E_INVALIDARG, so the models went UNTEXTURED - no portraits, no suits, a flat-lit van).
+    D3D12_DESCRIPTOR_RANGE ranges[2]{{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0},
+                                     {D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 2, 0, 3}};
+    D3D12_ROOT_PARAMETER parameters[3]{};
+    parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    parameters[0].Constants.Num32BitValues = 16;
+    parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    parameters[1].DescriptorTable = {2, ranges};
+    parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    parameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    parameters[2].Constants.ShaderRegister = 2; // the light (model_pbr::LightConstants)
+    parameters[2].Constants.Num32BitValues = 24;
+    parameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_STATIC_SAMPLER_DESC sampler{};
+    sampler.Filter = D3D12_FILTER_ANISOTROPIC;
+    sampler.MaxAnisotropy = 8;
+    sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler.MaxLOD = D3D12_FLOAT32_MAX;
+    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_ROOT_SIGNATURE_DESC rs{static_cast<UINT>(std::size(parameters)), parameters, 1, &sampler,
+                                D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT};
+    signature.Reset();
+    error.Reset();
+    return D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
+}
 void D3D12Renderer::prepareModel(DXGI_FORMAT targetFormat) {
     if (!modelRoot_) {
-        D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0};
-        D3D12_ROOT_PARAMETER parameters[2]{};
-        parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        parameters[0].Constants.Num32BitValues = 16;
-        parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-        parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        parameters[1].DescriptorTable = {1, &range};
-        parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        D3D12_STATIC_SAMPLER_DESC sampler{};
-        sampler.Filter = D3D12_FILTER_ANISOTROPIC;
-        sampler.MaxAnisotropy = 8;
-        sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-        sampler.MaxLOD = D3D12_FLOAT32_MAX;
-        sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        D3D12_ROOT_SIGNATURE_DESC rs{3, parameters, 1, &sampler,
-                                    D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT};
         ComPtr<ID3DBlob> signature, error;
-        hr(D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error),
-           "Serialize model root signature");
+        hr(serializeModelRoot(signature, error), "Serialize model root signature");
         hr(device_->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
                                         IID_PPV_ARGS(&modelRoot_)),
            "Create model root signature");

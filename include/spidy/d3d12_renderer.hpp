@@ -13,6 +13,12 @@
 
 namespace spidy {
 template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
+// HERO VR 0.0.78 cut13: the model's and the calibration art's root signatures, serialized without a device so the
+// tests check them (cut12's model root said 3 parameters of an array of 2: E_INVALIDARG, every model UNTEXTURED).
+// The model heap: 0 the colours, 1-2 the eye depth, 3 the maps, 4 the HQ colours, 5 the HQ maps; the art heap: its atlas.
+inline constexpr unsigned modelHeapDescriptors = 6, artHeapDescriptors = 1;
+HRESULT serializeModelRoot(ComPtr<ID3DBlob>& signature, ComPtr<ID3DBlob>& error) noexcept;
+HRESULT serializeArtRoot(ComPtr<ID3DBlob>& signature, ComPtr<ID3DBlob>& error) noexcept;
 class D3D12Renderer {
   public:
     ~D3D12Renderer();

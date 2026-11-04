@@ -21,7 +21,7 @@ namespace Sm2VrLauncher
         public static List<string> Changes(string text)
         {
             var items = new List<List<string>>(); List<string> cur = null;
-            foreach (var raw in (text ?? "").Replace("\r", "").Split('\n'))
+            foreach (var raw in (text ?? "").Replace("\r", "").Split(new[] { '\n' }))
             {
                 if (raw.StartsWith("- ")) { cur = new List<string> { raw.Substring(2).Trim() }; items.Add(cur); }
                 else if (cur != null && raw.StartsWith("  ") && raw.Trim().Length > 0) cur.Add(raw.Trim());
@@ -40,7 +40,7 @@ namespace Sm2VrLauncher
         static Version Key(string v)
         {
             var m = Regex.Match(v ?? "", @"\d+(\.\d+)+");
-            Version r; return m.Success && Version.TryParse(m.Value.Split('.').Length > 4 ? string.Join(".", m.Value.Split('.').Take(4)) : m.Value, out r) ? r : new Version(0, 0);
+            Version r; return m.Success && Version.TryParse(m.Value.Split(new[] { '.' }).Length > 4 ? string.Join(".", m.Value.Split(new[] { '.' }).Take(4)) : m.Value, out r) ? r : new Version(0, 0);
         }
 
         /// <summary>Every version's changes, newest first.</summary>

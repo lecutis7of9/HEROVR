@@ -49,7 +49,7 @@ inline bool tangentOf(const mesh_model::Mesh& m, size_t c, Vec3& t, float& w) {
 
 // A corner's Surface. `n` the world normal it is shaded with (unit; `turned`: turned round to the side he sees),
 // `tw` its world tangent (any length; zero: none) with sign `w` already in world handedness.
-inline Surface corner(const Material& mat, Vec3 tint, Vec3 n, Vec3 tw, float w, bool turned) {
+inline VertexSurface corner(const Material& mat, Vec3 tint, Vec3 n, Vec3 tw, float w, bool turned) {
     const float l = length(tw);
     const bool has = l > 1e-12f && std::isfinite(l);
     return surface(mat, tint, n, has ? tw * (1.f / l) : Vec3{}, turned ? -w : w, hqReady());

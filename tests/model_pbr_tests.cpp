@@ -65,7 +65,7 @@ int main() {
         check(std::abs(mp::byteOf(p, 0) - .4f) < .003f && mp::byteOf(p, 1) == 1.f && std::abs(mp::byteOf(p, 2) - .5f) < .003f &&
                   std::abs(mp::byteOf(p, 3) - .5f) < .003f,
               "params: roughness, metal, normal scale / 2, occlusion strength");
-        const Surface s = mp::surface(mp::Material{}, {1, 1, 1}, {0, 1, 0}, {}, 1, false);
+        const VertexSurface s = mp::surface(mp::Material{}, {1, 1, 1}, {0, 1, 0}, {}, 1, false);
         check((s.maps & mp::flagOn) && !(s.maps & (mp::flagNormal | mp::flagOrm | mp::flagTangent)) && s.tangent == 0,
               "surface: a model without maps is PBR at its factors, its frame from the shader");
         check(sizeof(Vertex) == 64 && offsetof(Vertex, surface) == 44, "vertex: 64 bytes, the Surface at 44");
@@ -97,12 +97,12 @@ int main() {
     // 3. the mirror
     {
         mp::Material m;
-        Surface s = mp::surface(m, {1, 1, 1}, normalized(Vec3{1, 1, 0}), {0, 0, 1}, 1, false);
+        VertexSurface s = mp::surface(m, {1, 1, 1}, normalized(Vec3{1, 1, 0}), {0, 0, 1}, 1, false);
         mp::reflect(s, {1, 0, 0});
         check(near(mp::octUnpack(s.normal), normalized(Vec3{-1, 1, 0}), 1e-4f) && near(mp::octUnpack(s.tangent), {0, 0, 1}, 1e-4f),
               "mirror: the normal reflected, a tangent in the plane kept");
         check((s.maps & mp::flagFlip) && (s.maps & mp::flagMirrored), "mirror: the hand flipped, marked mirrored");
-        Surface off{};
+        VertexSurface off{};
         mp::reflect(off, {1, 0, 0});
         check(off.maps == 0 && off.normal == 0, "mirror: a non-PBR corner untouched");
         check(mp::handedness({1, 0, 0}, {0, 1, 0}, {0, 0, 1}) == 1 && mp::handedness({-1, 0, 0}, {0, 1, 0}, {0, 0, 1}) == -1,
@@ -197,7 +197,7 @@ int main() {
         mp::setHqReady(true);
         a = mp::material(m, 0);
         check(a.hqNormalLayer == 1 && a.hqBaseLayer == 2, "glue: the HQ layers once bound");
-        const Surface t = mp::corner(a, {1, 1, 1}, {0, 0, 1}, {2, 0, 0}, 1, true);
+        const VertexSurface t = mp::corner(a, {1, 1, 1}, {0, 0, 1}, {2, 0, 0}, 1, true);
         check((t.maps & mp::flagTangent) && (t.maps & mp::flagFlip) && (t.tint >> 24) == 2, "glue: a turned corner's hand flipped, the HQ base");
         mp::setMapsReady(false), mp::setHqReady(false);
         mesh_model::Mesh plain;

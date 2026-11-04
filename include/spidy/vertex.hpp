@@ -16,7 +16,7 @@ struct Shape {
 //   maps    the normal-map layer (bits 0-9), the ORM layer (10-19) and the flags (model_pbr::flag*)
 //   tint    the albedo factor (sqrt-coded rgb, unorm8) and the HQ base layer (a, 255 none)
 //   params  roughness, metallic, normal scale / 2, occlusion strength (unorm8 each)
-struct Surface {
+struct VertexSurface { // not "Surface": game_swing::Surface (an enum) is used unqualified in spidy
     uint32_t normal = 0, tangent = 0, maps = 0, tint = 0, params = 0;
 };
 // Overlay vertex: world position in metres, linear RGB, and opacity (the
@@ -25,6 +25,6 @@ struct Vertex {
     Vec3 position, color;
     float alpha = 1;
     Shape shape{};
-    Surface surface{};
+    VertexSurface surface{};
 };
 } // namespace spidy

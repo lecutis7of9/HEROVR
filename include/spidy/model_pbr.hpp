@@ -132,8 +132,8 @@ inline uint32_t packParams(const Material& m) {
     return pack4(m.roughness, m.metallic, std::clamp(m.normalScale, 0.f, 2.f) * .5f, m.occlusionStrength);
 }
 // A model corner's whole Surface. n, t: world unit normal and tangent (t zero: none); w: the tangent's sign.
-inline Surface surface(const Material& m, Vec3 tint, Vec3 n, Vec3 t, float w, bool hq) {
-    Surface s;
+inline VertexSurface surface(const Material& m, Vec3 tint, Vec3 n, Vec3 t, float w, bool hq) {
+    VertexSurface s;
     const bool tangent = length(t) > .5f;
     s.normal = octPack(n);
     s.tangent = tangent ? octPack(t) : 0u;
@@ -144,7 +144,7 @@ inline Surface surface(const Material& m, Vec3 tint, Vec3 n, Vec3 t, float w, bo
     return s;
 }
 // The VR mirror: a reflected corner's normal and tangent reflected (plane normal `m`, unit), its handedness flipped.
-inline void reflect(Surface& s, Vec3 m) {
+inline void reflect(VertexSurface& s, Vec3 m) {
     if (!(s.maps & flagOn))
         return;
     const auto r = [&](Vec3 d) { return d - m * (2 * dot(d, m)); };

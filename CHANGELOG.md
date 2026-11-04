@@ -14,6 +14,13 @@ smaller, or the pause map on the holo.
   `HERO VR 0.0.77 POI DUMP n ...` lines: its class, position, distance, and the RTTI class / small integer in each of
   its first 64 words (one level deeper too). Lines are split under 240 characters (the console cuts at 256).
   Scan with a mission active and with his own map waypoint set, then send the log.
+- **Frame-rate drops (his report):** from his logs, gameplay ran ~31 fps (eye render ~21 ms) against ~46 fps
+  (eye ~16 ms) in the 0.0.76 visual tests at the same 2688x2880, while the immersive cutscene in the same session
+  ran ~46 fps (eye 16 ms). CONFIRMED: the drop was already in cut2 (33.7 fps median), so it is not cut3's POI scan
+  or cutfix2's camera sample; it is gameplay-only and GPU-side (the eye render time rose). The scan thread's scans
+  stay under 25 ms (it backs off otherwise). Cause CANDIDATE, not proven: heavier gameplay rendering since story8.
+  New: `HERO VR 0.0.77 FRAME (VR loop)` once a second - average and worst loop frame, and ms/s + peak for the cards +
+  waypoint block, the camera sample and the POI dump - so the next log shows which path, if any, costs time.
 - **The game's HUD smaller in VR: not in this build.** On SM2 the game draws its HUD (cohtml) straight into the final
   frame; the eye images never have it, and the mod has no hook on a HUD-only texture yet (the SM1 HUD panel is not
   ported). The only capture that exists is the whole frame, which is ruled out. A probe for a HUD-only render target

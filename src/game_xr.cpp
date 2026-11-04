@@ -150,6 +150,7 @@
 #include "spidy/shared_lod.hpp"
 #include "spidy/native_eye_history.hpp"
 #include "spidy/native_hud.hpp"
+#include "spidy/perf077.hpp"
 #include "spidy/native_webs.hpp"
 #include "spidy/near_clip.hpp"
 #include "spidy/offer_pointing.hpp"
@@ -8367,6 +8368,7 @@ DWORD WINAPI run(void*) {
                         pullCardNear = yCardNear = false;
                         waypointHere = {};
                         try {
+                            perf077::Scope cardsTimed(perf077::cards); // cut4 FRAME TIME
                             const bool vrGameplay = vrPlay && mapping == game_pad::Mapping::gameplay && !flatScreen;
                             const bool cardsWanted = promptCardsNow.load() == story077d::cardsOn && vrGameplay;
                             // HERO VR 0.0.77 WAYPOINT (story077g.hpp, live.txt waypoints): the same scan finds it.
@@ -8383,7 +8385,14 @@ DWORD WINAPI run(void*) {
                             const bool waypointWanted = waypointMode != story077g::waypointsOff && vrGameplay;
                             world_trace::setWaypointMode(waypointMode);
                             world_trace::setPromptsWanted(cardsWanted || waypointWanted);
+                            { // cut4 FRAME TIME (perf077.hpp): once a second, the frame and the new paths.
+                                static perf077::Frames frameTimes;
+                                char perfLine[256];
+                                if (frameTimes.tick(perfLine, sizeof(perfLine)))
+                                    consoleLine(perfLine);
+                            }
                             { // cut4 POI DUMP (diagnostic): the scan's POI component dumps, a line each.
+                                perf077::Scope timed(perf077::poiDrain);
                                 std::vector<std::string> dump;
                                 if (world_trace::drainPoiDump(dump))
                                     for (const auto& l : dump) {

@@ -3048,6 +3048,8 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   small integers) once, max 40 a session, as lines under 240 chars; game_xr drains world_trace::drainPoiDump into
   consoleLine ("HERO VR 0.0.77 POI DUMP n ..."). No HUD-only capture exists on SM2 (native_hud is SM1 Scaleform,
   sm2::hudNotPorted), so game_hud / the holo map are not built: the only capture is the whole presented frame.
+  cut4 FRAME TIME (include/spidy/perf077.hpp): perf077::Frames ticks in game_xr's prompt block and logs once a second;
+  perf077::Scope times cards, cameraSample (stereo_probe renderOffscreen) and poiDrain.
 - HERO VR 0.0.77 X IS THE GAME'S X (include/spidy/story077e.hpp, tests/story077e_tests.cpp): XPulse (a VR X tap
   is the game's X for the spiders; game_pad::Walk::xIsGameX makes X held the game's X, not Back) and MenuHold (the
   menu button in VR play: a tap Start on release, held 0.5 s the 0.1 s Back with a buzz); x_button (game (default),

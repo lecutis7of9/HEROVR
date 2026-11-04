@@ -19,6 +19,7 @@
 #include "spidy/native_eye_frame.hpp"
 #include "spidy/native_eye_gpu.hpp"
 #include "spidy/native_hud.hpp"
+#include "spidy/perf077.hpp"
 #include "spidy/native_view.hpp"
 #include "spidy/native_address_finder.hpp"
 #include "spidy/native_shadow_distance.hpp"
@@ -3407,6 +3408,7 @@ void sampleGameCamera() {
 uint8_t renderOffscreen() {
     ++offscreenPass;
     try {
+        spidy::perf077::Scope timed(spidy::perf077::cameraSample); // cut4 FRAME TIME
         sampleGameCamera(); // HERO VR 0.0.77 CUTFIX2
     } catch (...) {
     }

@@ -13,12 +13,14 @@
 
 namespace spidy {
 template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
-// HERO VR 0.0.78 cut13: the model's and the calibration art's root signatures, serialized without a device so the
-// tests check them (cut12's model root said 3 parameters of an array of 2: E_INVALIDARG, every model UNTEXTURED).
-// The model heap: 0 the colours, 1-2 the eye depth, 3 the maps, 4 the HQ colours, 5 the HQ maps; the art heap: its atlas.
-inline constexpr unsigned modelHeapDescriptors = 6, artHeapDescriptors = 1;
+// HERO VR 0.0.78 cut13/cut14: the model's, the see-through models' and the calibration art's root signatures,
+// serialized without a device so the tests check them (cut12's model root said 3 parameters of an array of 2:
+// E_INVALIDARG, every model UNTEXTURED). cut14 (no PBR): the model heap is 0 the colours, 1-2 each eye's scene depth;
+// the art heap: its atlas.
+inline constexpr unsigned modelHeapDescriptors = 3, artHeapDescriptors = 1;
 HRESULT serializeModelRoot(ComPtr<ID3DBlob>& signature, ComPtr<ID3DBlob>& error) noexcept;
 HRESULT serializeArtRoot(ComPtr<ID3DBlob>& signature, ComPtr<ID3DBlob>& error) noexcept;
+HRESULT serializeOccludedRoot(ComPtr<ID3DBlob>& signature, ComPtr<ID3DBlob>& error) noexcept;
 class D3D12Renderer {
   public:
     ~D3D12Renderer();
@@ -92,36 +94,6 @@ class D3D12Renderer {
     const std::string& modelFault() const {
         return modelFault_;
     }
-    // HERO VR 0.0.78 PBR MATERIALS (model_pbr.hpp): the models' material maps beside the base colours, uploaded
-    // once after setModelTextures (which drops them), waiting for the GPU. `linear` (UNORM: the normal maps and the
-    // ORM layers, `levels` mips of `size`), and the HQ copies (`hqSize`, `hqLevels`; `hq` sRGB base colours,
-    // `hqLinear` normal maps; either may be empty). A set that does not fit is left out, with modelMapsFault() saying
-    // why; the base colours are never touched. True when `linear` is bound.
-    struct ModelMaps {
-        unsigned size{}, levels{};
-        std::span<const std::vector<unsigned char>> linear;
-        unsigned hqSize{}, hqLevels{};
-        std::span<const std::vector<unsigned char>> hq, hqLinear;
-    };
-    bool setModelMaps(const ModelMaps& maps) noexcept;
-    bool modelMapsReady() const {
-        return model_ && modelLinear_;
-    }
-    bool modelHqReady() const {
-        return model_ && (modelHq_ || modelHqLinear_);
-    }
-    const std::string& modelMapsFault() const {
-        return modelMapsFault_;
-    }
-    // Empty, or why the PBR model shaders did not compile (the 0.0.78 shaders draw the models then).
-    const std::string& modelPbrFault() const {
-        return modelPbrFault_;
-    }
-    // The light for the next renderViews' PBR models (model_pbr::LightConstants, 24 floats; its eye is filled per
-    // view from the view's projection). toSun.w 0: the 0.0.78 look for every model.
-    void setModelLight(const float (&constants)[24]) noexcept;
-    // The adapter's free local video memory (its budget minus what this process uses), bytes; 0 when unknown.
-    std::uint64_t videoMemoryFree() const noexcept;
     // 0.0.74 test 10 SEE-THROUGH: the game's scene depth for the next renderViews only. The models
     // textured[first, first + count) (world-placed, whole triangles) are then hidden per pixel
     // where the game's scene is nearer: overlay distance > game * scale + bias metres. `eyes`
@@ -291,16 +263,6 @@ class D3D12Renderer {
     ComPtr<ID3D12PipelineState> modelPipeline_;
     DXGI_FORMAT modelFormat_ = DXGI_FORMAT_UNKNOWN;
     std::string modelFault_;
-    // HERO VR 0.0.78 PBR MATERIALS: the maps (heap 3: linear, 4: HQ sRGB, 5: HQ linear), the frame's light, and
-    // whether the PBR shaders compiled (false: the 0.0.78 shaders).
-    ComPtr<ID3D12Resource> modelLinear_, modelHq_, modelHqLinear_;
-    std::string modelMapsFault_, modelPbrFault_;
-    std::array<float, 24> modelLight_{};
-    bool modelPbr_ = false, occludedPbr_ = false;
-    ComPtr<ID3D12Resource> uploadModelArray(unsigned size, unsigned levels,
-                                            std::span<const std::vector<unsigned char>> layers, DXGI_FORMAT format,
-                                            const char* what);
-    void writeModelViews();
     // 0.0.74 test 10 SEE-THROUGH: the depth for the next frame, the one the last frame read (kept
     // until its work is done), and the pass.
     SceneDepth scene_, sceneKept_;

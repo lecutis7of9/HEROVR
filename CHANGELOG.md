@@ -2,6 +2,29 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut14 - back to the cut10 renderer and the old Punisher suit; pistol and pump only (TEST build, private)
+
+From the player's cut13 report (van, black headset, holo portraits, "still look like spiderman"):
+- **PBR MATERIALS reverted (d8c806d, eba4641) and cut12's HQ layer order / 24 -> 32 cap (a823c99):** the models are
+  drawn by the cut10 renderer again (44-byte vertex, base colour layers at 1024, the per-vertex light). cut13's root
+  signature fix is kept on the pre-PBR roots: each root counts its own parameters (std::size), with tests that the
+  model root is 2 parameters (b0 16 constants, t0 at heap 0, 3 descriptors), the occluded root 4 (b1 20 constants as
+  its draw sets) and the art root 2 (CLAMP, MaxLOD 4); the vertex layout test checks 44 bytes, TEXCOORD at 28 and no
+  TANGENT. cut13's session-after-prep order and its "MODELS: prepared in N s" line are kept.
+- **Old Punisher suit (sha256 e7171bf7, 23,747 triangles, the cut8 suit):** shipped again instead of the 80k HQ suit.
+  Its right drop-leg holster was measured (front and side renders of the glb): the pistol's leg holster moved from
+  .85 / .24 / -.06 (the HQ suit's) to below .80, side .285, ahead -.07 so the gun sits in the slab, not against the
+  thigh. It models no left-thigh holster, so with the arsenal OFF its pistols get cut8's drop-leg holsters again
+  (ownThighHolsters is the HQ suit's only: Suit_punisher_1 with 40,000 triangles or more).
+- **Pistol and pump re-converted without PBR maps (same geometry and points as cut12):** base colour only at 1024,
+  no normal / ORM maps, no TANGENT (tools/models078/convert_guns_078.py). Credits unchanged: "BERETTA M9 W/
+  SUPRESSOR" by drcrazzie and "Remington 870" by White-Horse, both CC BY 4.0.
+- **Sniper and rifle slots off cleanly (68-73):** not loaded, not counted ("MODELS: X of 67"), never MODEL MISSING;
+  the arsenal is the pistol (right leg) and the pump (back middle) only (punisher078::shipped).
+- **Retired live.txt keys:** model_pbr and model_textures_hq from cut11-13's live.txt are read and ignored.
+- **Test marker:** HERO-VR-TEST-BUILD.txt is key=value again (version, build, commit) with `sha256 <file>=<hash>`
+  lines, so the console's MIXED INSTALL check reads it.
+
 ## hero-0.0.78-cut12 - PUNISHER ARSENAL: the suppressed pistol and the pump shotgun (TEST build, private)
 
 From the player's models ("just get the models", "not flat textures, it needs to look realistic in game"); this build

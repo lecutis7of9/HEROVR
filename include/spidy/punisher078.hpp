@@ -37,6 +37,9 @@ namespace spidy::punisher078 {
 
 enum Arm : uint32_t { pumpShotgun = 0, suppressedPistol, sniperRifle, assaultRifle, arms };
 inline constexpr const char* armNames[arms] = {"PUMP SHOTGUN", "SUPPRESSED PISTOL", "SNIPER RIFLE", "ASSAULT RIFLE"};
+// HERO VR 0.0.78 cut14: the guns that ship (their models are in Models\Punisher078): the pump and the pistol. The
+// sniper and the rifle come later - not in the loadout, so no holster, draw or look of theirs.
+inline constexpr bool shipped(uint32_t arm) { return arm == pumpShotgun || arm == suppressedPistol; }
 
 // The shot itself (hero007::shoot's spec: rounds, cooldown, range, pellets, cone, HP a pellet, knock, unused).
 // The pump: 8 pellets of 00 buck in a 4.5 deg cone (a full-length barrel: tighter than the sawed-off's 7).
@@ -164,8 +167,8 @@ struct Carry {
 
 // ---- the off hand's places on the body ------------------------------------------------------------
 // From holster::bodyPoint (below the eyes in standingEye metres, side + right, ahead + front). Measured on the
-// drawn HQ suit (holster.hpp legHolster*, the same frame): the right-leg holster's mouth .85 under the eyes, .24
-// right, .06 behind; the left thigh's pouch panel y .62-.86 of the suit (.80-1.03 under), .16-.26 left; the belt's
+// drawn suit (holster.hpp legHolster*, the same frame; cut14 the shipped 23.7k suit): the right-leg holster's
+// mouth .80 under the eyes, .285 right, .07 behind; the left thigh's pouch panel y .62-.86 of the suit (.80-1.03 under), .16-.26 left; the belt's
 // front pouches y .96-1.08 (.59-.70 under), within .16 of the centre line, ahead.
 using holster::legHolsterAhead;
 using holster::legHolsterBelow;

@@ -52,12 +52,10 @@ VAN_GROUND = .01
 
 
 # ---- atlases --------------------------------------------------------------------------------------------
-def atlas(mats, uv, mat, group, path, size=ATLAS, pad=6, gap=2, maps=()):
+def atlas(mats, uv, mat, group, path, size=ATLAS, pad=6, gap=2):
     """Packs the textures of the materials `group` into one image at `path`: each cropped to its used UVs (+pad
     texels), all at one scale (the largest that fits), the UVs remapped. -> (uv, mat, mats) with the group as one
-    material (its own name list), the others unchanged. maps (0.0.78 PBR): material keys of images in the base
-    colour's own UVs (a normal map, an ORM map) packed the same way beside it (path_<key>.png), when every material
-    of the group has one."""
+    material (its own name list), the others unchanged."""
     cells = []
     for mi in group:
         sel = mat == mi
@@ -97,19 +95,11 @@ def atlas(mats, uv, mat, group, path, size=ATLAS, pad=6, gap=2, maps=()):
     k = lo
     at = pack(k)
     out = Image.new('RGB', (size, size), (0, 0, 0))
-    maps = [key for key in maps if all(mats[c['mi']].get(key) for c in cells)]
-    # a normal map's empty texels: flat (128, 128, 255); an ORM's: unoccluded, fully rough, not metal
-    extra = {key: Image.new('RGB', (size, size), (128, 128, 255) if key == 'normal' else (255, 255, 0)) for key in maps}
     uv = uv.copy()
     for i, c in enumerate(cells):
         x, y, w, h = at[i]
         b = c['box']
         out.paste(c['im'].crop(b).resize((w, h), Image.LANCZOS), (x, y))
-        for key in maps:
-            im = Image.open(mats[c['mi']][key]).convert('RGB')
-            if im.size != (c['W'], c['H']):
-                im = im.resize((c['W'], c['H']), Image.BICUBIC)
-            extra[key].paste(im.crop(b).resize((w, h), Image.LANCZOS), (x, y))
         sel = mat == c['mi']
         q = np.clip(uv[sel], 0, 1)
         sx, sy = w / (b[2] - b[0]), h / (b[3] - b[1])
@@ -120,13 +110,6 @@ def atlas(mats, uv, mat, group, path, size=ATLAS, pad=6, gap=2, maps=()):
     new = len(mats)
     mats = mats + [dict(name='atlas(' + ','.join(mats[i]['name'] for i in group) + ')', image=path, factor=[1, 1, 1, 1],
                         alpha='OPAQUE', cutoff=.5)]
-    for key in maps:
-        kp = os.path.splitext(path)[0] + '_' + key + '.png'
-        extra[key].save(kp, 'PNG')
-        mats[new][key] = kp
-        for f in ('roughness', 'metallic'):
-            if f in mats[group[0]]:
-                mats[new][f] = mats[group[0]][f]
     mat = mat.copy()
     for mi in group:
         mat[mat == mi] = new

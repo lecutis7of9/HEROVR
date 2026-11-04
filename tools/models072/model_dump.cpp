@@ -15,7 +15,6 @@
 #include "spidy/hero007_visual.hpp"
 #include "spidy/mesh_model.hpp"
 
-#include <cstddef>
 #include <cstdio>
 #include <fstream>
 #include <set>
@@ -126,9 +125,7 @@ int main(int argc, char** argv) {
         }
         const auto& v = sink.empty() ? plain : sink;
         std::ofstream f(out + "slot_" + std::to_string(s) + ".bin", std::ios::binary);
-        // 0.0.78 PBR: the dump keeps its 11 floats a vertex (position, colour, alpha, shape), not the Surface
-        for (const auto& x : v)
-            f.write(reinterpret_cast<const char*>(&x), static_cast<std::streamsize>(offsetof(Vertex, surface)));
+        f.write(reinterpret_cast<const char*>(v.data()), static_cast<std::streamsize>(v.size() * sizeof(Vertex)));
         size_t texturedVerts = 0;
         for (const auto& x : v)
             texturedVerts += x.shape.z >= 0 && x.shape.w == 1;

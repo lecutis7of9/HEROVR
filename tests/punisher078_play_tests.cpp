@@ -102,7 +102,11 @@ int main() {
     hero007::PlayHand& R = in.hands[1];
     hero007::PlayHand& L = in.hands[0];
     frame(5);
-    check(p.arsenalOn078 && p.guns.count == 4, "arsenal: four guns on the body");
+    // cut14: only the pistol and the pump ship (punisher078::shipped): the sniper / rifle slots are not worn
+    check(p.arsenalOn078 && p.guns.count == 2, "arsenal: the two shipped guns on the body (pistol, pump)");
+    for (uint32_t s = 0; s < p.guns.count; ++s)
+        check(p.guns.slots[s].zone != holster::backLeft && p.guns.slots[s].zone != holster::backRight,
+              "arsenal: no sniper / rifle over the shoulders");
     check(p.guns.slots[0].zone == holster::rightLeg && p.guns.slots[0].item == hero007::item078 + p78::suppressedPistol,
           "arsenal: the suppressed pistol in the right-leg holster");
     // ---- the pistol: draw, fire, eject, a new magazine, rack ----
@@ -261,18 +265,19 @@ int main() {
     R.position = backMid;
     frame(3);
     check(p.guns.heldIn(1) < 0, "pump: back on the back");
-    // ---- the sniper: the left hand over the left shoulder; the scope for game_xr ----
+    // ---- cut14: nothing over the left shoulder (the sniper is not shipped), so no scope ----
     R.position = aimAt;
     L.position = backL;
     frame(3);
     L.squeeze = 1;
     frame(2);
-    check(p.guns.heldIn(0) == 2, "sniper: drawn over the left shoulder");
+    check(p.guns.heldIn(0) < 0, "no sniper drawn over the left shoulder");
     L.position = aimAt - Vec3{.4f, 0, 0};
     in.scopeZoom = 2;
     frame(2);
-    check(p.optic078[0].kind == hero007::opticScope && p.optic078[0].zoom == 8.f && p.optic078[0].radius > 0,
-          "sniper: the scope for the eye pass (8X)");
+    check(p.optic078[0].kind == hero007::opticNone, "no sniper: no scope in the eye pass");
+    L.squeeze = 0;
+    frame(1);
     check(p.optic078[1].kind == hero007::opticNone, "the other hand: no optic");
     // ---- OFF: the 0.0.77 loadout back ----
     in.arsenal078 = false;

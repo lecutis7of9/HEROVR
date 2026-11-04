@@ -1,6 +1,5 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2), GPLv3; SpidyVR by Ilya Mezerowsky.
 // Version 0.0.7 HERO PROFILES' looks (hero007_visual.hpp).
-#include "spidy/model_pbr_mesh.hpp"
 #include "spidy/hero007_visual.hpp"
 #include "spidy/hero007.hpp"
 #include "spidy/captain.hpp"
@@ -262,10 +261,6 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
     const bool glow = model.cabin && cabin_look::glowOn();
     // Build 7: the place is affine (at + axes), so each corner is o + ex x + ey y + ez z: no call per corner.
     const auto P = [&](Vec3 c) { return o + ex * c.x + ey * c.y + ez * c.z; };
-    // HERO VR 0.0.78 PBR MATERIALS (model_pbr.hpp): world-lit corners lit per pixel by their material (not the car
-    // paint, the cabin's roles or its glow: those keep their own looks); the colour below stays the fallback.
-    const bool pbr = model_pbr::drawsPbr(wl) && ok(viewer);
-    const float handed = model_pbr::handedness(ex, ey, ez);
     for (uint32_t t = 0; t < model.triangles(); ++t) {
         const int16_t im = uvs && t < model.image.size() ? model.image[t] : int16_t{-1};
         const int32_t at = im >= 0 && static_cast<size_t>(im) < model.images.size() ? model.images[static_cast<size_t>(im)].layer : -1;
@@ -284,9 +279,6 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
         // World light: the face's side he sees (its middle toward the eye); corner normals turned to that side.
         const bool eye = ok(viewer);
         const Vec3 faceSeen = world_light::seenSide(fn * (1.f / fl), eye ? viewer - (a + b + c) * (1.f / 3) : Vec3{});
-        const bool painted = paint && model.paint[t * 2] != 0;
-        const bool pbrHere = pbr && !painted && !glow && role == 0;
-        const model_pbr::Material mat = pbrHere ? model_pbr::material(model, t) : model_pbr::Material{};
         for (uint32_t k = 0; k < 3; ++k) {
             Vec3 n = fn * (1.f / fl);
             if (smooth) {
@@ -315,14 +307,6 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
             if (glow)
                 colour = cabin_look::relit(colour, tint, n.y, role);
             sink.push_back(Vertex{p[k], colour, world_light::shadowAlpha(wl, share), {u, v, layer, 1.f}});
-            if (pbrHere) {
-                const bool turned = dot(n, faceSeen) < 0;
-                Vec3 tm{}, tw{};
-                float w = 1;
-                if (model_pbr::tangentOf(model, size_t{t} * 3 + k, tm, w))
-                    tw = ex * tm.x + ey * tm.y + ez * tm.z;
-                sink.back().surface = model_pbr::corner(mat, tint, turned ? n * -1.f : n, tw, w * handed, turned);
-            }
         }
     }
     for (size_t i = from; i < sink.size(); ++i) {

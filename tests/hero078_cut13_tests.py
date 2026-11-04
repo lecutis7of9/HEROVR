@@ -6,7 +6,8 @@
    HRESULT=2147942487)" - so the van was the flat untextured stand-in, the holo roster showed initials discs and the
    suits never went on (all gated on overlay.modelReady()). Every root signature's count must be its array's own size
    and the model root's slots must be the ones its draw binds (the Windows ctest cut13_root serializes both).
-2. The black headset until the main menu: the OpenXR session must start AFTER the models and maps are prepared.
+2. The black headset until the main menu: the OpenXR session must start AFTER the models are prepared.
+cut14: the PBR change is reverted - the roots are cut8's again (still counted by their arrays).
 3. The shipped van pack (when present on this machine): every primitive's vertex streams sized and strided right."""
 import json
 import os
@@ -55,24 +56,42 @@ class RootSignatures(unittest.TestCase):
         self.assertGreaterEqual(found, 5)
 
     def test_model_root_matches_its_draw(self):
+        # cut14: the roots as before the PBR change (cut8's), each counted by its own array
         s = src('src/d3d12_renderer.cpp')
         model = function_body(s, 'HRESULT serializeModelRoot(')
         art = function_body(s, 'HRESULT serializeArtRoot(')
-        self.assertIn('D3D12_ROOT_PARAMETER parameters[3]', model)
+        occluded = function_body(s, 'HRESULT serializeOccludedRoot(')
+        self.assertIn('D3D12_ROOT_PARAMETER parameters[2]', model)
         self.assertIn('D3D12_ROOT_PARAMETER parameters[2]', art)
-        self.assertIn('ShaderRegister = 2', model)  # the Light constants, b2
-        self.assertIn('Constants.Num32BitValues = 24;', model)  # the 6 float4 of model_pbr::LightConstants
-        self.assertNotIn('LightConstants', art)
-        self.assertIn('{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 2, 0, 3}', model)  # t2-t4 from slot 3 (maps, HQ, HQ linear)
+        self.assertIn('D3D12_ROOT_PARAMETER parameters[4]', occluded)
+        self.assertIn('{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0}', model)  # t0 the colours at heap 0
+        self.assertNotIn('ShaderRegister = 2', model)  # no PBR light (b2)
+        self.assertIn('Constants.Num32BitValues = 20;', occluded)  # the depth match and WORLD SHADOW's sun
+        for body in (model, art, occluded):
+            self.assertIn('static_cast<UINT>(std::size(parameters))', body)
         self.assertIn('hr(serializeModelRoot(signature, error), "Serialize model root signature")', s)
         self.assertIn('hr(serializeArtRoot(signature, error), "Serialize art root signature")', s)
+        self.assertIn('hr(serializeOccludedRoot(signature, error), "Serialize occluded model root signature")', s)
         self.assertIn('NumDescriptors = modelHeapDescriptors', s)
         self.assertIn('NumDescriptors = artHeapDescriptors', s)
-        self.assertIn('list_->SetGraphicsRoot32BitConstants(2, 24, light, 0);', s)
+        self.assertIn('list_->SetGraphicsRoot32BitConstants(3, 20, constants, 0);', s)
+        self.assertNotIn('SetGraphicsRoot32BitConstants(2, 24', s)
         h = src('include/spidy/d3d12_renderer.hpp')
-        self.assertIn('modelHeapDescriptors = 6, artHeapDescriptors = 1', h)
+        self.assertIn('modelHeapDescriptors = 3, artHeapDescriptors = 1', h)
         cm = src('CMakeLists.txt')
         self.assertIn('add_test(NAME cut13_root COMMAND spidy_cut13_root_tests)', cm)
+
+    def test_vertex_layout(self):
+        # the three model-drawing layouts read POSITION @0, COLOR @12, TEXCOORD @28 of the 44-byte Vertex (no tangent)
+        s = src('src/d3d12_renderer.cpp')
+        self.assertEqual(s.count('{"TEXCOORD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 28,'), 4)
+        self.assertNotIn('TANGENT', s)
+        v = src('include/spidy/vertex.hpp')
+        self.assertIn('Vec3 position, color;', v)
+        self.assertNotIn('tangent', v.lower())
+        t = src('tests/cut13_root_tests.cpp')
+        self.assertIn('sizeof(Vertex) == 44', t)
+        self.assertIn('offsetof(Vertex, shape) == 28', t)
 
     def test_what_the_report_lost_is_gated_on_the_pipeline(self):
         # replay: the failure came while the menu and holo were up; everything it took away waits on modelReady()
@@ -93,8 +112,8 @@ class BootScreen(unittest.TestCase):
         run = g[g.index('DWORD WINAPI run(void*) {'):]
         start = run.index('runtime.initialize(device.Get(), queue, config.eyeSize, config.renderScale);')
         self.assertEqual(run.count('runtime.initialize('), 1)
-        for prep in ('overlay.initialize(device.Get(), queue);', 'prepareTextures(models, &wicDecode, size, levels, mapOptions)',
-                     'overlay.setModelMaps(maps)', 'MODELS: prepared in %.1f s'):
+        for prep in ('overlay.initialize(device.Get(), queue);', 'prepareTextures(models, &wicDecode, size, levels)',
+                     'MODELS: TEXTURED - the real models are drawn', 'MODELS: prepared in %.1f s'):
             self.assertLess(run.index(prep), start, prep)
         self.assertLess(start, run.index('message(2, 0, "Waiting for the headset");'))
         self.assertLess(run.index('XrRuntime runtime;'), run.index('D3D12Renderer overlay;'))  # torn down after the overlay

@@ -3,7 +3,6 @@
 #include "spidy/car_paint.hpp"
 #include "spidy/cabin_look074.hpp"
 #include "spidy/world_light.hpp"
-#include "spidy/model_pbr_mesh.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -143,11 +142,6 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
     // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (cabin_look074.hpp): the cabin's dark light and glow; the baked marker.
     const bool roles = model.role.size() == size_t{n};
     const bool glow = model.cabin && cabin_look::glowOn();
-    // HERO VR 0.0.78 PBR MATERIALS (model_pbr.hpp): world-lit corners lit per pixel by their material (not the car
-    // paint, the cabin's roles or its glow); a model normal or tangent m is R m in the world (R = the axes over s).
-    const bool pbr = model_pbr::drawsPbr(wl) && eye;
-    const float handed = model_pbr::handedness(ex, ey, ez), over = 1.f / s;
-    const auto R = [&](Vec3 m) { return (ex * m.x + ey * m.y + ez * m.z) * over; };
     for (uint32_t t = 0; t < n; ++t) {
         if (!(k->area[t] > sliver))
             continue; // the old path's sliver (world |cross| <= 1e-14): nothing drawn
@@ -177,8 +171,6 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
             const Vec3 mid = (model.corners[t * 3] + model.corners[t * 3 + 1] + model.corners[t * 3 + 2]) * (1.f / 3);
             faceSeen = world_light::seenSide(k->face[t], em - mid);
         }
-        const bool pbrHere = pbr && !painted && !glow && role == 0;
-        const model_pbr::Material pm = pbrHere ? model_pbr::material(model, t) : model_pbr::Material{};
         for (uint32_t i = 0; i < 3; ++i) {
             const size_t c = size_t{t} * 3 + i;
             const bool cornerNormal = smooth && k->length[c] > flat;
@@ -207,15 +199,6 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
             if (glow)
                 colour = cabin_look::relit(colour, tint, dot(smooth && k->length[c] > flat ? k->corner[c] : k->face[t], um), role);
             sink.push_back(Vertex{P(model.corners[c]), colour, world_light::shadowAlpha(wl, share), {u, v, layer, 1.f}});
-            if (pbrHere) {
-                const Vec3 given = cornerNormal ? k->corner[c] : k->face[t];
-                const bool turned = dot(given, faceSeen) < 0;
-                Vec3 tm{}, tw{};
-                float w = 1;
-                if (model_pbr::tangentOf(model, c, tm, w))
-                    tw = R(tm);
-                sink.back().surface = model_pbr::corner(pm, tint, normalized(R(turned ? given * -1.f : given)), tw, w * handed, turned);
-            }
         }
     }
     if (relightAll)

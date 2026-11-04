@@ -32214,8 +32214,9 @@ int main() {
                       std::fabs(dot(sf, su)) < 1e-3f,
                   "the suit's own holster: in its draw zone, on its side, barrel down");
         }
-        check(ownThighHolsters("Suit_punisher_1") && !ownThighHolsters("Suit_punisher_2") && !ownThighHolsters(nullptr),
-              "only the HQ PUNISHER models its own holsters");
+        check(ownThighHolsters("Suit_punisher_1", 79999) && !ownThighHolsters("Suit_punisher_1", 23747) &&
+                  !ownThighHolsters("Suit_punisher_2", 79999) && !ownThighHolsters(nullptr, 79999),
+              "only the HQ PUNISHER models both holsters (the shipped 23.7k suit gets the drop-leg holsters)");
         // The drop-leg holster draws, finite, in its budget.
         Item it{lookPistol, {.19f, .84f, 0}, {0, -1, 0}, {0, 0, -1}, 0, 4, 1, false};
         std::vector<spidy::Vertex> v;

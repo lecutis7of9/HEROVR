@@ -611,14 +611,6 @@ SETTINGS = {
                      "- live, no restart needed"),
     'world_light_gain': ((25, 400), 'SpidyWorldLightGain', "WORLD LIGHT GAIN {} (how bright the game's light makes "
                          "the models, percent 25-400, default 100) - live, no restart needed"),
-    # HERO VR 0.0.78 PBR MATERIALS (include/spidy/model_pbr.hpp, the model pixel shaders in d3d12_renderer.cpp)
-    'model_pbr': ((0, 1), 'SpidyModelPbr', "MODEL PBR {} (0 on, the default: the mod's suits, arsenal, props and "
-                  "vehicles are lit per pixel from their normal, roughness, metal and occlusion maps with the game's "
-                  "sun, sky reflections and sun shadow; 1 off: the smooth per-vertex look) - live, no restart needed"),
-    'model_textures_hq': ((0, 1), 'SpidyModelTexturesHq', "MODEL TEXTURES HQ {} (0 on, the default: the Punisher "
-                          "suit, the arsenal, the hammers and the shield get 2048 px maps when the graphics card has "
-                          "the memory to spare; 1 off: 512 px like the rest) - read when the models load, so a change "
-                          "shows at the next start"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
                     "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
@@ -817,8 +809,6 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'throw_watch': ('on', 'off'),  # HERO VR 0.0.77 CUT8
                 'world_light': ('game', 'game_soft', 'studio'),  # HERO VR 0.0.78 WORLD LIGHT
                 'world_shadow': ('on', 'vehicles', 'off'),  # HERO VR 0.0.78 WORLD LIGHT
-                'model_pbr': ('on', 'off'),  # HERO VR 0.0.78 PBR MATERIALS
-                'model_textures_hq': ('on', 'off'),  # HERO VR 0.0.78 PBR MATERIALS
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
                 'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
                 'fly_classic': ('off', 'on'),  # HERO VR 0.0.76 FLIGHT (off: the reworked flight)
@@ -1104,8 +1094,6 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'throw_watch': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT8
            'world_light': {'game': 0, 'game_soft': 1, 'studio': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'world_shadow': {'on': 0, 'vehicles': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
-           'model_pbr': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 PBR MATERIALS
-           'model_textures_hq': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 PBR MATERIALS
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
            'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
            'fly_classic': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.76 FLIGHT
@@ -1255,7 +1243,7 @@ def parse(text):
         if name in NOT_LIVE:
             problems.append(f'line {number}: {NOT_LIVE[name]}')
             continue
-        if name in RETIRED_074 or name in RETIRED_073:  # 0.0.74 test 10: a retired picture setting, skipped
+        if name in RETIRED_074 or name in RETIRED_073 or name in RETIRED_078:  # 0.0.74 test 10: a retired picture setting, skipped
             continue                                       # (migrate_074t10, migrate_074t10_72)
         if name not in SETTINGS:
             problems.append(f'line {number}: unknown setting "{name}" (live: {", ".join(SETTINGS)})')
@@ -1458,7 +1446,6 @@ START_ONLY = START_ONLY + ('wrist_map_source', 'wrist_map_holo', 'see_through_de
                            'cut_note', 'wall_view', 'ledge_jump', 'punch_web')  # HERO VR 0.0.77 CUT7: kept between sessions
 START_ONLY = START_ONLY + ('throw_watch',)  # HERO VR 0.0.77 CUT8: kept between sessions
 START_ONLY = START_ONLY + ('world_light', 'world_shadow', 'world_light_gain')  # HERO VR 0.0.78 WORLD LIGHT: kept
-START_ONLY = START_ONLY + ('model_pbr', 'model_textures_hq')  # HERO VR 0.0.78 PBR MATERIALS: kept
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',
@@ -2210,6 +2197,9 @@ HEADER += MIGRATED_074T10_SEAT + '\n'
 # out once (migrate_074t10_72). 0.0.73's IMAGE SPIDYVR wrote aa 0 / sharpen 0 (migrate_073t4 and its defaults, the
 # hologram kept them): in a live.txt that carries that build's marker they go back to 0.0.72's aa 1 / sharpen 140
 # once. Any other value (one the player set) stays.
+# HERO VR 0.0.78 cut14: the PBR change is reverted - an old live.txt's model_pbr / model_textures_hq lines (cut11-13)
+# are skipped silently (no 'unknown setting').
+RETIRED_078 = ('model_pbr', 'model_textures_hq')
 RETIRED_073 = ('image', 'image_style', 'sharpen_match', 'streamer_mode', 'streamer_smooth', 'streamer_eye',
                'window_pop', 'sl_watch', 'glow_check')
 OLD_MARKER_073T4 = "# Version 0.0.73 IMAGE: test 2/3 AA values"

@@ -83,9 +83,12 @@ struct PlayInput {
     bool bloodExtreme{};
     uint32_t scopeZoom{};    // HERO VR 0.0.78 live.txt scope_zoom (0 4X, 1 6X, 2 8X, 3 2.5X)
 };
-// 0.0.78 SUIT HOLSTERS: the suits whose mesh has its own thigh holsters (Models\Suits\<folder>).
-inline bool ownThighHolsters(const char* folder) {
-    return folder && std::string_view(folder) == "Suit_punisher_1";
+// 0.0.78 SUIT HOLSTERS: the suits whose mesh has its own thigh holsters (Models\Suits\<folder>, its triangles).
+// cut14: only the HQ PUNISHER (80k triangles) models both; the 23.7k PUNISHER shipped again (sha256 e7171bf7)
+// models the right one only, so its pistols get cut8's drop-leg holsters (hipThigh) again, none floating.
+inline constexpr uint32_t hqSuitTriangles = 40000;
+inline bool ownThighHolsters(const char* folder, uint32_t triangles) {
+    return folder && std::string_view(folder) == "Suit_punisher_1" && triangles >= hqSuitTriangles;
 }
 // HERO VR 0.0.78: the rack's item numbers of the arsenal (item078 + punisher078::Arm), beside hero007::pistol / sawedOff.
 inline constexpr uint32_t item078 = 16;
@@ -441,8 +444,11 @@ class Play {
         if (arsenal) {
             guns.add(holster::rightLeg, item078 + punisher078::suppressedPistol);
             guns.add(holster::backMiddle, item078 + punisher078::pumpShotgun); // before backLeft: the spine is the pump's
-            guns.add(holster::backLeft, item078 + punisher078::sniperRifle);
-            guns.add(holster::backRight, item078 + punisher078::assaultRifle);
+            // cut14: the sniper (backLeft) and the rifle (backRight) come later (punisher078::shipped)
+            if (punisher078::shipped(punisher078::sniperRifle))
+                guns.add(holster::backLeft, item078 + punisher078::sniperRifle);
+            if (punisher078::shipped(punisher078::assaultRifle))
+                guns.add(holster::backRight, item078 + punisher078::assaultRifle);
         } else {
             guns.add(holster::leftHip, pistol);
             guns.add(holster::rightHip, pistol);

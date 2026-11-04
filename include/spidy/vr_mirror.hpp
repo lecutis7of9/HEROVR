@@ -36,7 +36,6 @@
 // picture-in-picture look, easier to read against a bright city).
 #include "soft_shapes.hpp"
 #include "math.hpp"
-#include "model_pbr.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -165,8 +164,6 @@ inline bool reflectVertices(const Plane& m, std::vector<V>& v, size_t from) {
         v[i].position = reflect(m, v[i].position);
         if (!finite(v[i].position))
             return v.resize(from), false;
-        if constexpr (requires { v[i].surface; }) // HERO VR 0.0.78 PBR: its normal, tangent and sun reflected too
-            model_pbr::reflect(v[i].surface, m.normal);
     }
     return true;
 }

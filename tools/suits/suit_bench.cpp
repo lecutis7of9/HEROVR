@@ -10,7 +10,6 @@
 #include "spidy/mesh_model.hpp"
 #include "spidy/suit_wear.hpp"
 
-#include <cstddef>
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
@@ -54,9 +53,7 @@ static bool cacheDecoder(const uint8_t* data, size_t size, mm::Picture& out) {
 }
 static void save(const std::string& path, const std::vector<Vertex>& v) {
     std::ofstream f(path, std::ios::binary);
-    // 0.0.78 PBR: the dump keeps its 11 floats a vertex (position, colour, alpha, shape), not the Surface
-    for (const auto& x : v)
-        f.write(reinterpret_cast<const char*>(&x), static_cast<std::streamsize>(offsetof(Vertex, surface)));
+    f.write(reinterpret_cast<const char*>(v.data()), static_cast<std::streamsize>(v.size() * sizeof(Vertex)));
 }
 using Clock = std::chrono::steady_clock;
 static double us(Clock::time_point a, Clock::time_point b) { return std::chrono::duration<double, std::micro>(b - a).count(); }

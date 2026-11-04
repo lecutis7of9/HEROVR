@@ -112,25 +112,11 @@ struct Mesh {
     // cabin: the Batmobile cockpit or its steering wheel (darkened and lit by COCKPIT GLOW).
     std::vector<uint8_t> role;
     bool cabin{};
-    // HERO VR 0.0.78 PBR MATERIALS (model_pbr.hpp): each material's maps and factors (glTF normalTexture,
-    // metallicRoughnessTexture, occlusionTexture; images indexes, -1 none) and the layers prepareTextures gave them
-    // (normalLayer, ormLayer in the linear array; hqNormalLayer in the HQ linear one). surface: 1 a triangle (index into
-    // surfaces), empty when no material has a map or a factor. tangents: 4 a corner (glTF TANGENT, else made by
-    // finish(): xyz unit model space, w +-1; all 0 where the uvs give none), empty when no triangle has a normal map.
-    struct Surface {
-        int16_t normalImage = -1, mrImage = -1, occlusionImage = -1;
-        float roughness = 1, metallic = 0, normalScale = 1, occlusionStrength = 1;
-        int32_t normalLayer = -1, ormLayer = -1, hqNormalLayer = -1;
-    };
-    std::vector<Surface> surfaces;
-    std::vector<uint16_t> surface;
-    std::vector<float> tangents;
     struct Image {
         std::string uri;            // a file beside the .gltf (read by loadFolder), or empty
         std::vector<uint8_t> bytes; // the encoded image (PNG / JPEG / QOI)
         bool cutout = false;        // alphaMode MASK / BLEND: alpha under .5 is cut
         int32_t layer = -1;         // its layer in the overlay's texture array (Library::prepareTextures)
-        int32_t hqLayer = -1;       // 0.0.78 PBR: its layer in the HQ (2048 px) sRGB array, -1 none
     };
     std::vector<Image> images;
     // Build 9 SUITS (suit_wear.hpp; tools/suits/convert_suit.py): JOINTS_0 / WEIGHTS_0, 4 a corner (12 a triangle):
@@ -147,8 +133,6 @@ struct Mesh {
     bool ok() const { return !colors.empty() && corners.size() == colors.size() * 3; }
     bool hasUvs() const { return uvs.size() == colors.size() * 6 && !uvs.empty(); }
     bool hasNormals() const { return normals.size() == colors.size() * 3 && !normals.empty(); }
-    bool hasSurfaces() const { return !surfaces.empty() && surface.size() == colors.size(); }
-    bool hasTangents() const { return !tangents.empty() && tangents.size() == colors.size() * 12; }
     bool hasSkin() const {
         return !skinJoints.empty() && skinJoints.size() == colors.size() * 12 && skinWeights.size() == skinJoints.size();
     }
@@ -287,6 +271,19 @@ inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, dr
                                                 arsenalTriangles, arsenalPartTriangles, arsenalPartTriangles};
 // HERO VR 0.0.78 PUNISHER ARSENAL: a gun's slot (hero007::Part078 p).
 inline constexpr bool slotIsArsenal078(uint32_t slot) { return slot >= slotArsenal078First && slot < slotArsenal078End; }
+// HERO VR 0.0.78 cut14: the arsenal's guns that ship - the pump (and its forend, shell) and the pistol (and its slide,
+// magazine). The sniper's and the rifle's six slots stay in the list (the slot numbers are the files' and the
+// tests'), but come later: they are not read, not counted, never MODEL MISSING, and not in the Punisher's loadout.
+inline constexpr bool slotShipped(uint32_t slot) { return !slotIsArsenal078(slot) || slot < slotArsenal078First + 6; }
+inline constexpr uint32_t slotsShipped() {
+    uint32_t n = 0;
+    for (uint32_t s = 1; s < slots; ++s)
+        n += slotShipped(s) ? 1u : 0u;
+    return n;
+}
+static_assert(slotShipped(slotArsenal078First) && slotShipped(slotArsenal078First + 5) && !slotShipped(slotArsenal078First + 6) &&
+                  !slotShipped(slotArsenal078End - 1) && slotsShipped() == slots - 1 - 6,
+              "cut14: the pump's and the pistol's 6 slots ship, the sniper's and the rifle's 6 come later");
 // THOR HAMMER's choice (combat38::thorHammer: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE+THUNDER, 3 FCCOOPER) -> its slot.
 inline constexpr uint32_t hammers = 4;
 inline constexpr uint32_t hammerSlot(uint32_t choice) {
@@ -368,52 +365,12 @@ struct TextureArray {
     uint32_t size = textureSize, levels = textureLevels;
     std::vector<std::vector<uint8_t>> layers; // each: its mips, level 0 first, size >> level square, RGBA8 sRGB
     std::vector<std::string> notes;           // one line an image: its slot, name, layer or why it was not read
-    // HERO VR 0.0.78 PBR MATERIALS (maps asked): the normal maps and the packed ORM layers (R occlusion, G roughness,
-    // B metal), RGBA8 UNORM (linear), size x size with the same mips; and the HQ arrays (hqSize, 2048 in game): the
-    // HQ slots' (slotHasHqTextures) base colours (sRGB) and normal maps (linear) whose image is larger than size.
-    std::vector<std::vector<uint8_t>> linear;
-    uint32_t hqSize = 0, hqLevels = 0;
-    std::vector<std::vector<uint8_t>> hq, hqLinear;
-};
-// The PBR options: maps (the linear array), the HQ size (0 none) and the most HQ layers (both arrays together).
-struct MapOptions {
-    bool maps = false;
-    uint32_t hqSize = 0, hqMost = 0;
 };
 // Every loaded slot's images, decoded (equal bytes once), scaled, mipped, given a layer (Image::layer);
 // each textured triangle's colors[] becomes its texture's mean (linear) x tint, the look used when the
 // overlay cannot texture. An image that fails leaves its triangles in their tint (never a crash).
 // `size` and `levels` (tests use small ones) must satisfy size >> (levels - 1) >= 1.
-TextureArray prepareTextures(Library& library, Decoder decoder, uint32_t size = textureSize, uint32_t levels = textureLevels,
-                             MapOptions options = {});
-// HERO VR 0.0.78 PBR: the slots whose maps get HQ copies: Suit_punisher_1 (the 80k suit), the arsenal, the four
-// hammers and the shield (the models held at arm's length).
-inline constexpr bool slotHasHqTextures(uint32_t slot) {
-    return slot == slotSuitFirst + 16 || slotIsArsenal078(slot) || slot == slotHammer || slot == slotHammerDevilsEye ||
-           slot == slotHammerLoveThunder || slot == slotHammerFccooper || slot == slotShield;
-}
-static_assert(slotHasHqTextures(35) && slotHasHqTextures(9) && slotHasHqTextures(11) && slotHasHqTextures(15) &&
-                  slotHasHqTextures(17) && slotHasHqTextures(62) && slotHasHqTextures(73) && !slotHasHqTextures(36),
-              "0.0.78 PBR: the HQ slots");
-// HERO VR 0.0.78 PUNISHER ARSENAL: the order prepareTextures reads the slots 1..slots-1 in - the arsenal first, then
-// Suit_punisher_1, then the rest in slot order - so the HQ layers (first come, as long as hqMost allows) go to the
-// held guns and the suit before the hammers and the shield when the GPU's memory gives fewer than all of them.
-inline std::vector<uint32_t> textureOrder(uint32_t slots) {
-    std::vector<uint32_t> order;
-    for (uint32_t s = 1; s < slots; ++s)
-        if (slotIsArsenal078(s))
-            order.push_back(s);
-    if (slotSuitFirst + 16 < slots && !slotIsArsenal078(slotSuitFirst + 16))
-        order.push_back(slotSuitFirst + 16);
-    for (uint32_t s = 1; s < slots; ++s)
-        if (!slotIsArsenal078(s) && s != slotSuitFirst + 16)
-            order.push_back(s);
-    return order;
-}
-// The most HQ layers (both arrays): 2048 px with mips is about 22.4 MB a layer, so 16 about 358 MB of VRAM.
-inline constexpr uint32_t hqTextureSize = 2048, hqMostLayers = 16;
-// Tangents for a mesh's normal-mapped triangles where the file gave none (model_pbr::generateTangents).
-void ensureTangents(Mesh& m);
+TextureArray prepareTextures(Library& library, Decoder decoder, uint32_t size = textureSize, uint32_t levels = textureLevels);
 
 // Where the model sits on a hand-held / thrown batarang: centred on its bounds, its longest side
 // across (right), its thinnest side up (the blade's normal), scaled so the span is `span` metres.

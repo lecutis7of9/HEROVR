@@ -107,8 +107,13 @@ inline constexpr float backAbove = .10f, backBelow = .50f, backSide = .35f, back
 // eyes, .24 right, .06 behind them. (cut10: the arsenal branch's .735 / .165, read off renders of the source
 // against its visual eyes, put the grab at the belt line, 12 cm above the holster.) The grab box runs from .22
 // above the mouth to .16 below it, as generous as a hip; from .06 inside it, clear of the front belt.
+// cut14 OLD SUIT: the 23.7k PUNISHER shipped again (sha256 e7171bf7; suit extras head y 1.593, top 1.80, so
+// restEye y 1.6965, z .087) models its right drop-leg holster as a slab x -.245..-.326, z -.067..+.097, from
+// y .77 to its sloped top (.97 in front, .86 behind): its mouth at y .90, x -.285, z .015, so in standingEye
+// metres .80 under the eyes, .285 right, .07 behind them (the HQ values .85 / .24 / .06 hung the pistol 4.5 cm
+// inside it, against the thigh). The grab box keeps its size: .225 out at the least, clear of the front belt.
 // backMiddle: within backMiddleSide of the spine (backLeft / backRight are the rest of the back).
-inline constexpr float legHolsterBelow = .85f, legHolsterSide = .24f, legHolsterAhead = -.06f, backMiddleSide = .08f;
+inline constexpr float legHolsterBelow = .80f, legHolsterSide = .285f, legHolsterAhead = -.07f, backMiddleSide = .08f;
 // Version 0.0.73 test 2 HOLO CALIBRATION (fix 25): where the player touched his belt, back and hips, as
 // shifts from the standing average (standingEye metres, the body frame; 0 with no calibration: the zones and
 // the worn places are exactly as before). Set on the game thread by the calibration, read there; each shift

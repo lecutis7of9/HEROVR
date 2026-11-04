@@ -12,8 +12,8 @@ Per gun:
      here); nothing is decimated (both are far under mesh_model's 60,000 / 20,000 caps);
   3. into the arsenal frame: metres, real scale, the grip point (the middle of the grip, half way down it) at the
      origin, -z along the barrel, +y up, +x right; every corner normal turned with it;
-  4. the model's own PBR maps (base colour, normal, its packed occlusion-roughness-metal map) from 4096 to 2048 px
-     JPEG (mesh_model's HQ size), TANGENT per vertex (convert_suit.corner_tangents);
+  4. cut14 (the PBR renderer reverted): the model's base colour only, from 4096 to 1024 px JPEG (mesh_model's
+     textureSize); no normal / occlusion-roughness-metal maps and no TANGENT (the renderer's 44-byte vertex has none);
   5. scene.glb + license.txt per folder, and conversion-report078.json with the measured points (pointsOf) and
      the triangle counts."""
 import argparse, io, json, math, os, struct, subprocess, sys
@@ -22,10 +22,7 @@ from PIL import Image
 
 Image.MAX_IMAGE_PIXELS = None
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, '..', 'suits'))
-from convert_suit import corner_tangents  # noqa: E402
-
-HQ = 2048
+HQ = 1024  # mesh_model::textureSize (cut14: no HQ maps)
 BODY_CAP, PART_CAP = 60000, 20000  # mesh_model::arsenalTriangles, arsenalPartTriangles
 
 PISTOL = dict(
@@ -70,18 +67,10 @@ def jpeg(img, quality, size=HQ):
 
 
 def source_materials(path):
-    """The file's materials -> [{name, base, normal, orm}] (JPEG bytes at 2048; its MR map is already the packed
-    ORM: R its occlusion (the same image is its occlusionTexture), G roughness, B metal)."""
+    """The file's materials -> [{name, base}] (cut14: the base colour only, JPEG at mesh_model's 1024)."""
     g, binb = read_glb(path)
-    out = []
-    for m in g['materials']:
-        p = m['pbrMetallicRoughness']
-        mr = p['metallicRoughnessTexture']['index']
-        assert m.get('occlusionTexture', {}).get('index', mr) == mr, 'a separate occlusion map'
-        out.append(dict(name=m['name'], base=jpeg(glb_image(g, binb, p['baseColorTexture']['index']), 90),
-                        normal=jpeg(glb_image(g, binb, m['normalTexture']['index']), 95),
-                        orm=jpeg(glb_image(g, binb, mr), 92)))
-    return out
+    return [dict(name=m['name'], base=jpeg(glb_image(g, binb, m['pbrMetallicRoughness']['baseColorTexture']['index']), 90))
+            for m in g['materials']]
 
 
 # ---- meshes: corners (C,3) P / N, (C,2) U, a material per triangle ----------------------------------------------
@@ -101,10 +90,9 @@ class Part:
 
 
 def write_glb(path, part, mats, extras):
-    """mats: [{name, base, normal, orm}] JPEG bytes (shared bytes give the game one layer)."""
+    """mats: [{name, base, ...}] JPEG bytes (shared bytes give the game one layer); cut14: the base colour only."""
     P_all, N_all, U_all, mat = part.arrays()
     N_all = N_all / np.maximum(np.linalg.norm(N_all, axis=1, keepdims=True), 1e-12)
-    T_all = corner_tangents(P_all.astype(np.float32), N_all.astype(np.float32), U_all.astype(np.float32))
     binb = bytearray()
     g = {'asset': {'version': '2.0', 'generator': 'HERO VR 0.0.78 tools/models078/convert_guns_078.py', 'extras': extras},
          'scene': 0, 'scenes': [{'nodes': [0]}], 'nodes': [{'mesh': 0}], 'meshes': [{'primitives': []}], 'buffers': [{}],
@@ -127,33 +115,23 @@ def write_glb(path, part, mats, extras):
     cm = np.repeat(mat, 3)
     for mi in sorted(set(mat.tolist())):
         m = mats[mi]
-        o = texture(m['orm'])
         g['materials'].append({'name': m['name'], 'doubleSided': False,
                                'pbrMetallicRoughness': {'baseColorTexture': {'index': texture(m['base'])},
-                                                        'metallicRoughnessTexture': {'index': o}, 'metallicFactor': 1, 'roughnessFactor': 1},
-                               'normalTexture': {'index': texture(m['normal'])}, 'occlusionTexture': {'index': o}})
+                                                        'metallicFactor': 0, 'roughnessFactor': 1}})
         sel = cm == mi
-        P, N, U, Tc = P_all[sel].astype(np.float32), N_all[sel].astype(np.float32), U_all[sel].astype(np.float32), T_all[sel]
-        key = np.c_[np.round(P, 6), np.round(N, 4), np.round(U, 6), Tc[:, 3]]
+        P, N, U = P_all[sel].astype(np.float32), N_all[sel].astype(np.float32), U_all[sel].astype(np.float32)
+        key = np.c_[np.round(P, 6), np.round(N, 4), np.round(U, 6)]
         _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
         inv = inv.ravel().astype(np.uint32)
-        T = np.zeros((len(first), 3))
-        np.add.at(T, inv, Tc[:, :3])
-        Nf = N[first].astype(np.float64)
-        T -= Nf * (Nf * T).sum(1, keepdims=True)
-        ln = np.linalg.norm(T, axis=1, keepdims=True)
-        Tw = np.c_[np.where(ln > 1e-9, T / np.maximum(ln, 1e-9), [1, 0, 0]), np.where(ln[:, 0] > 1e-9, Tc[first, 3], 1)].astype(np.float32)
-        Tw[Tw[:, 3] == 0, 3] = 1
         P, N, U = P[first], N[first], U[first]
         acc = len(g['accessors'])
         g['accessors'] += [
             {'bufferView': view(P.tobytes()), 'componentType': 5126, 'count': len(P), 'type': 'VEC3', 'min': P.min(0).tolist(), 'max': P.max(0).tolist()},
             {'bufferView': view(N.tobytes()), 'componentType': 5126, 'count': len(N), 'type': 'VEC3'},
             {'bufferView': view(U.tobytes()), 'componentType': 5126, 'count': len(U), 'type': 'VEC2'},
-            {'bufferView': view(Tw.tobytes()), 'componentType': 5126, 'count': len(Tw), 'type': 'VEC4'},
             {'bufferView': view(inv.tobytes()), 'componentType': 5125, 'count': len(inv), 'type': 'SCALAR'}]
-        g['meshes'][0]['primitives'].append({'attributes': {'POSITION': acc, 'NORMAL': acc + 1, 'TEXCOORD_0': acc + 2, 'TANGENT': acc + 3},
-                                             'indices': acc + 4, 'material': len(g['materials']) - 1})
+        g['meshes'][0]['primitives'].append({'attributes': {'POSITION': acc, 'NORMAL': acc + 1, 'TEXCOORD_0': acc + 2},
+                                             'indices': acc + 3, 'material': len(g['materials']) - 1})
     g['buffers'][0]['byteLength'] = len(binb)
     j = json.dumps(g, separators=(',', ':')).encode()
     j += b' ' * (-len(j) % 4)
@@ -510,10 +488,10 @@ def main():
     for key, fn, src, info, changes in (
             ('pistol', pistol, a.pistol, PISTOL, 'split into the frame (barrel, suppressor, controls), the slide (with its safety '
              'lever and extractor) and the magazine (the floor plate on a magazine and 9 mm round modelled for HERO VR); turned '
-             'into the game\'s frame (grip point at the origin, -z the barrel); textures 4096 -> 2048 px JPEG; tangents added.'),
+             'into the game\'s frame (grip point at the origin, -z the barrel); base colour 4096 -> 1024 px JPEG (no PBR maps, no tangents).'),
             ('pump', pump, a.pump, PUMP, 'split into the body and the forend (with the bolt it drives), plus a 12-gauge shell '
              'modelled for HERO VR; scaled 1.12 mm a unit (48 cm), turned into the game\'s frame (grip point at the origin, -z '
-             'the barrel); textures 4096 -> 2048 px JPEG; tangents added.')):
+             'the barrel); base colour 4096 -> 1024 px JPEG (no PBR maps, no tangents).')):
         parts, pts = fn(src, a.work, a.bpy, rng)
         report[key] = dict(points=pts, parts={})
         for name, (part, mats) in parts.items():

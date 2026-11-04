@@ -36,7 +36,6 @@
 #include "spidy/seated_lock074.hpp"
 #include "spidy/car_paint.hpp"
 #include "spidy/world_light.hpp" // HERO VR 0.0.78 WORLD LIGHT
-#include "spidy/model_pbr.hpp"   // HERO VR 0.0.78 PBR MATERIALS
 #include "spidy/hideout074.hpp"  // 0.0.74 test 1 HIDEOUTS
 #include "spidy/batcave074.hpp"   // 0.0.74 test 2b BATCAVE
 #include "spidy/crime_gps074.hpp"  // 0.0.74 test 2b CRIME GPS
@@ -894,7 +893,10 @@ bool suitShownNow() { return suit_wear::shownNow(GetTickCount64(), suitShownAtMs
 // 0.0.78 SUIT HOLSTERS: the suit drawn now has its own thigh holsters (hero007::ownThighHolsters).
 bool suitOwnHolsters() {
     const uint32_t ws = wornSuitSlot.load();
-    return mesh_model::slotIsSuit(ws) && suitShownNow() && hero007::ownThighHolsters(mesh_model::suitFolders[ws - mesh_model::slotSuitFirst]);
+    if (!mesh_model::slotIsSuit(ws) || !suitShownNow() || !suitsRigged.load())
+        return false;
+    const uint32_t k = ws - mesh_model::slotSuitFirst; // cut14: the drawn mesh's triangles say which PUNISHER
+    return hero007::ownThighHolsters(mesh_model::suitFolders[k], static_cast<uint32_t>(suitRigs[k].corner.size() / 3));
 }
 // Version 0.0.72 REAL MODELS: a model texture (PNG, JPEG, anything Windows reads) to RGBA8 with WIC, its
 // sRGB values kept; false (that image left untextured) on any failure. COM is set up by the caller.
@@ -1435,12 +1437,6 @@ inline uint64_t diagEveryMs() { return diagLogsNow.load() == 1 ? 10000u : 30000u
 std::atomic<uint32_t> worldLightNow{spidy::world_light::modeGame};
 std::atomic<uint32_t> worldShadowNow{spidy::world_light::shadowOn};
 std::atomic<uint32_t> worldLightGainNow{100};
-// HERO VR 0.0.78 PBR MATERIALS (model_pbr.hpp): live.txt model_pbr (0 on: the mod's models lit per pixel by their
-// normal, roughness / metal and occlusion maps in the game's light; 1 off: the 0.0.78 per-vertex look) and
-// model_textures_hq (0 on: the Punisher's suit, the arsenal, the hammers and the shield get 2048 px maps when the
-// GPU has the memory; 1 off; read when the models load).
-std::atomic<uint32_t> modelPbrNow{0};
-std::atomic<uint32_t> modelTexturesHqNow{0};
 // HERO VR 0.0.77 CUT7 LEDGE: live.txt wall_view (0 level: the horizon stays world-up while a wall or the game's crawl
 // holds him; 1 turned: the view turns onto the wall, as cut6) and ledge_jump (0 all: the leave-the-crawl RT + A also
 // on the game's floor crawl - a ledge, a roof's edge - and Spidy's own wall, and a web that holds there takes him off;
@@ -2052,11 +2048,10 @@ DWORD WINAPI run(void*) {
         if (FAILED(queue->GetDevice(IID_PPV_ARGS(&device))))
             throw std::runtime_error("Game graphics device unavailable");
         XrRuntime runtime;
-        // HERO VR 0.0.78 cut13 BOOT SCREEN: the mod's art and models are read BEFORE the headset's session starts. A
-        // session with no frame is a black headset: cut12 started it first, then spent the models' and the 2048 px PBR
-        // maps' preparation (the console's MODELS lines) before the first frame - black until after the game's main menu
-        // (161552 report: the menu's save slots at 16:16:27, the headset's first BOOT SCREEN frame 16:16:32). Without a
-        // session the headset keeps the runtime's own view (Virtual Desktop: the PC's screen, the game's title and menu).
+        // HERO VR 0.0.78 cut13 BOOT SCREEN (kept in cut14): the mod's art and models are read BEFORE the headset's session
+        // starts. A session with no frame is a black headset: cut12 started it first, then spent the models' preparation
+        // (the console's MODELS lines) before the first frame - black until after the game's main menu (161552 report).
+        // Without a session the headset keeps the runtime's own view (Virtual Desktop: the PC's screen, the title and menu).
         const auto prepareClock = std::chrono::steady_clock::now();
         D3D12Renderer overlay;
         overlay.initialize(device.Get(), queue);
@@ -2106,6 +2101,11 @@ DWORD WINAPI run(void*) {
                     models.status[slot] = mesh_model::missing; // never read later either (slotModel loads notTried only)
                     models.error[slot] = "no override.txt: the player's own bike is not used";
                     game_prompts::note((std::string("0.0.76 HARLEYS: ") + mesh_model::slotFolders[slot] + " not read (no override.txt)").c_str());
+                    continue;
+                }
+                if (!mesh_model::slotShipped(slot)) { // HERO VR 0.0.78 cut14: the sniper and the rifle come later (not counted)
+                    models.meshes[slot] = {};
+                    models.status[slot] = mesh_model::notTried;
                     continue;
                 }
                 if (mesh_model::slotIsHideout(slot) && c38(combat38::hideouts) != 0) { // 0.0.74 test 1 HIDEOUTS OFF: not loaded
@@ -2194,7 +2194,7 @@ DWORD WINAPI run(void*) {
                 consoleLine(std::string("MOTORCYCLE: ") + bike075::folders[which] +
                             (bikeLayoutOk[which] ? " ready" : " - MODEL MISSING (" + bikeLayoutError[which] + ")"));
             }
-            consoleLine("MODELS: " + std::to_string(loadedCount) + " of " + std::to_string(mesh_model::slots - 1) + " loaded" +
+            consoleLine("MODELS: " + std::to_string(loadedCount) + " of " + std::to_string(mesh_model::slotsShipped()) + " loaded" +
                         (missingSlots.empty() ? "" : " (MODEL MISSING: " + missingSlots + ")"));
             // Build 9 SUITS: each loaded suit made ready to wear (its skin welded, each triangle's bone).
             {
@@ -2228,30 +2228,11 @@ DWORD WINAPI run(void*) {
             while ((size >> levels) >= 1)
                 ++levels;
             mesh_model::TextureArray textures;
-            // HERO VR 0.0.78 PBR MATERIALS: the normal and ORM maps as their own (linear) array, and 2048 px copies of
-            // the HQ slots' maps (mesh_model::slotHasHqTextures) - as many as the GPU's free memory keeps 1.5 GB
-            // spare for (about 22.4 MB a layer, at most 32: 0.0.78 arsenal - the guns' 8 beside the suit's 8, the hammers' and
-            // shield's 13); unknown memory: 16 from 3 GB of free commit, else none (mesh_model::textureOrder: guns and suit first).
-            mesh_model::MapOptions mapOptions;
-            mapOptions.maps = commitFree >= (768ull << 20);
-            {
-                const uint64_t vramFree = overlay.videoMemoryFree(), spare = 1536ull << 20, perLayer = 22400ull << 10;
-                uint64_t most = vramFree ? (vramFree > spare ? (vramFree - spare) / perLayer : 0) : commitFree >= (3ull << 30) ? 16 : 0;
-                most = std::min<uint64_t>(most, 32);
-                if (modelTexturesHqNow.load() == 0 && mapOptions.maps && most > 0) {
-                    mapOptions.hqSize = mesh_model::hqTextureSize;
-                    mapOptions.hqMost = static_cast<uint32_t>(most);
-                }
-                char line[200];
-                sprintf_s(line, "MODELS: PBR maps %s, HQ %u layers at %u px (GPU free %llu MB)", mapOptions.maps ? "on" : "off",
-                          mapOptions.hqMost, mapOptions.hqSize, static_cast<unsigned long long>(vramFree >> 20));
-                consoleLine(line);
-            }
             try {
                 std::thread decode([&] {
                     const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
                     try {
-                        textures = mesh_model::prepareTextures(models, &wicDecode, size, levels, mapOptions);
+                        textures = mesh_model::prepareTextures(models, &wicDecode, size, levels);
                     } catch (...) {
                         textures = {};
                         textures.notes.push_back("the textures could not be prepared (out of memory?)");
@@ -2285,23 +2266,6 @@ DWORD WINAPI run(void*) {
                     OutputDebugStringA(overlay.modelFault().c_str());
                 }
             }
-            // HERO VR 0.0.78 PBR MATERIALS: the maps after the colours (they share the colours' heap); a set the GPU
-            // refuses leaves its maps unused (the emitters ask mapsReady / hqReady), never the models.
-            if (texturedOk && overlay.modelReady() && (!textures.linear.empty() || !textures.hq.empty() || !textures.hqLinear.empty())) {
-                spidy::D3D12Renderer::ModelMaps maps{textures.size, textures.levels, textures.linear,
-                                                     textures.hqSize, textures.hqLevels, textures.hq, textures.hqLinear};
-                const bool mapsOk = overlay.setModelMaps(maps);
-                const bool hqWanted = !textures.hq.empty() || !textures.hqLinear.empty();
-                spidy::model_pbr::setMapsReady(mapsOk && overlay.modelMapsReady());
-                spidy::model_pbr::setHqReady(hqWanted && overlay.modelHqReady() && overlay.modelMapsFault().empty());
-                char line[240];
-                sprintf_s(line, "MODELS: PBR maps %zu layers, HQ %zu + %zu layers at %u px: %s", textures.linear.size(),
-                          textures.hq.size(), textures.hqLinear.size(), textures.hqSize,
-                          overlay.modelMapsFault().empty() ? "uploaded" : overlay.modelMapsFault().c_str());
-                consoleLine(line);
-            }
-            if (!overlay.modelPbrFault().empty())
-                consoleLine("MODELS: PBR shader refused, the per-vertex look kept: " + overlay.modelPbrFault());
             textures = {}; // the CPU copies: uploaded (or refused); freed now
             consoleLine(texturedOk && overlay.modelReady()
                             ? std::string("MODELS: TEXTURED - the real models are drawn")
@@ -13816,8 +13780,10 @@ DWORD WINAPI run(void*) {
                             // HERO VR 0.0.78 PUNISHER ARSENAL (live.txt punisher_arsenal ON): the four guns' models, their
                             // moving parts and magazines (Models\Punisher078); missing: MODEL MISSING, never a stand-in.
                             if (hero007In.arsenal078 && hero007In.hero == hero_modes::punisher)
-                                for (uint32_t p = 0; p < hero007::parts078; ++p)
-                                    saved.hero007.arsenal078[p] = slotModel(mesh_model::slotArsenal078First + p, "PUNISHER ARSENAL");
+                                for (uint32_t p = 0; p < hero007::parts078; ++p) // cut14: the pump's and the pistol's (slotShipped)
+                                    saved.hero007.arsenal078[p] = mesh_model::slotShipped(mesh_model::slotArsenal078First + p)
+                                                                      ? slotModel(mesh_model::slotArsenal078First + p, "PUNISHER ARSENAL")
+                                                                      : nullptr;
                             // Version 0.0.73 (fix 10) RETRACTABLE CLAWS: the JACKET AND JEANS claws for every Wolverine suit
                             // (Models\Claws; 0.0.72's built-in claws when missing). The worn suit carries none (no double claws).
                             // 0.0.73 test 5 CLAW LOOK ON (the default): out between the knuckles, along the fist, steel.
@@ -14686,7 +14652,6 @@ DWORD WINAPI run(void*) {
                                                            : wl::studio(wl::stale);
                             light.shadow = wl::shadowStrength(light, worldShadowNow.load());
                             wl::setCurrent(light);
-                            spidy::model_pbr::setEnabled(modelPbrNow.load() == 0); // HERO VR 0.0.78 PBR MATERIALS
                             const uint64_t lightNowMs = GetTickCount64();
                             if (!lightLogMs || lightNowMs - lightLogMs >= diagEveryMs()) {
                                 if (!lightLogMs)
@@ -14700,7 +14665,6 @@ DWORD WINAPI run(void*) {
                         static thread_local std::vector<Vertex> modelVerticesKept;
                         modelVerticesKept.clear();
                         std::vector<Vertex>& modelVertices = modelVerticesKept;
-                        Vec3 pbrMirror{}; // HERO VR 0.0.78 PBR: the VR mirror's plane normal this frame (0: none drawn)
                         hero007::setModelSink(overlay.modelReady() ? &modelVertices : nullptr);
                         struct EndModelSink {
                             ~EndModelSink() {
@@ -16380,8 +16344,6 @@ DWORD WINAPI run(void*) {
                                         if (!vr_mirror::reflectVertices(plane, modelVertices, modelFrom) ||
                                             !vr_mirror::reflectVertices(plane, mirrorProps, 0))
                                             modelVertices.resize(modelFrom), mirrorProps.clear();
-                                        else
-                                            pbrMirror = plane.normal;
                                     } catch (...) {
                                         modelVertices.resize(std::min(modelFrom, modelVertices.size()));
                                         mirrorProps.clear();
@@ -17313,15 +17275,6 @@ DWORD WINAPI run(void*) {
                             } catch (...) {
                                 overlay.setSceneDepth({});
                             }
-                            {
-                                // HERO VR 0.0.78 PBR MATERIALS: the light the model pixel shader shades with (b2).
-                                auto c = spidy::model_pbr::constants(spidy::world_light::current(), spidy::model_pbr::enabled());
-                                if (length(pbrMirror) > .5f)
-                                    c.mirror[0] = pbrMirror.x, c.mirror[1] = pbrMirror.y, c.mirror[2] = pbrMirror.z, c.mirror[3] = 1;
-                                float packed[24];
-                                std::memcpy(packed, &c, sizeof packed);
-                                overlay.setModelLight(packed);
-                            }
                             try {
                                 overlay.renderViews(overlayViews, vertices, true, false, translucent, &grade, art, modelVertices);
                             } catch (const std::exception& e) {
@@ -17911,9 +17864,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyThrowWatch(void* v) { return 
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldLight(void* v) { return setLive(v, 0, 2, 5640, worldLightNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldShadow(void* v) { return setLive(v, 0, 2, 5641, worldShadowNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldLightGain(void* v) { return setLive(v, 25, 400, 5642, worldLightGainNow, asU32); }
-// HERO VR 0.0.78 PBR MATERIALS: model_pbr (0 on, 1 off), model_textures_hq (0 on, 1 off; read when the models load).
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyModelPbr(void* v) { return setLive(v, 0, 1, 5643, modelPbrNow, asU32); }
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyModelTexturesHq(void* v) { return setLive(v, 0, 1, 5644, modelTexturesHqNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
 }

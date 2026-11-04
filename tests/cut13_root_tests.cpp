@@ -2,8 +2,11 @@
 // GPU. cut12 (a823c99) said 3 parameters of an array of 2 in the model's root: "Serialize model root signature
 // HRESULT=2147942487" (console line 325 of the 161552 report) the first time the holo opened, and every model went
 // UNTEXTURED for the session (initials for the portraits, no suits, the flat-lit van). This fails on that build.
+// cut14: the roots as before the PBR change (cut8's model root: 2 parameters, the 3-descriptor heap), the see-through
+// models' root (4 parameters, WORLD SHADOW's 20 constants at b1) and the vertex the three model pipelines read.
 #include "spidy/d3d12_renderer.hpp"
-#include "spidy/model_pbr.hpp"
+#include "spidy/vertex.hpp"
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -43,31 +46,53 @@ static bool tablesFit(const D3D12_ROOT_SIGNATURE_DESC& rs, unsigned heap) {
     return true;
 }
 int main() {
-    ComPtr<ID3D12RootSignatureDeserializer> modelReader, artReader;
+    // The vertex the overlay, model and see-through model pipelines read (their input layouts: POSITION float3 at 0,
+    // COLOR float4 at 12 - the colour and the opacity -, TEXCOORD0 float4 at 28 - the texture's u, v, layer, w - in a
+    // 44-byte stride). cut11's PBR vertex carried a tangent: the old layout must read every byte of this one.
+    check(sizeof(Vertex) == 44, "vertex: 44 bytes (the model pipelines' stride)");
+    check(offsetof(Vertex, position) == 0, "vertex: POSITION float3 at 0");
+    check(offsetof(Vertex, color) == 12 && offsetof(Vertex, alpha) == 24, "vertex: COLOR float4 at 12 (rgb, then the opacity at 24)");
+    check(offsetof(Vertex, shape) == 28 && sizeof(Shape) == 16, "vertex: TEXCOORD0 float4 at 28 (u, v, layer, w)");
+    ComPtr<ID3D12RootSignatureDeserializer> modelReader, artReader, occludedReader;
     if (const auto* rs = readBack(&serializeModelRoot, "model", modelReader)) {
-        check(rs->NumParameters == 3, "model root: 3 parameters (the draw sets 0 the eye, 1 the textures, 2 the light)");
-        if (rs->NumParameters == 3) {
+        check(rs->NumParameters == 2, "model root: 2 parameters (the draw sets 0 the eye, 1 the textures)");
+        if (rs->NumParameters == 2) {
             const auto& eye = rs->pParameters[0];
             check(eye.ParameterType == D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS && eye.Constants.Num32BitValues == 16 &&
                       eye.Constants.ShaderRegister == 0,
                   "model root 0: 16 constants at b0 (the eye's view-projection)");
             const auto& table = rs->pParameters[1];
-            bool t0 = false, maps = false;
-            if (table.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
-                for (UINT k = 0; k < table.DescriptorTable.NumDescriptorRanges; ++k) {
-                    const auto& r = table.DescriptorTable.pDescriptorRanges[k];
-                    t0 = t0 || (r.BaseShaderRegister == 0 && r.NumDescriptors >= 1 && r.OffsetInDescriptorsFromTableStart == 0);
-                    maps = maps || (r.BaseShaderRegister == 2 && r.NumDescriptors == 3 && r.OffsetInDescriptorsFromTableStart == 3);
-                }
-            check(t0 && maps, "model root 1: t0 the colours (heap 0) and t2..t4 the maps and HQ copies (heap 3..5)");
-            const auto& light = rs->pParameters[2];
-            check(light.ParameterType == D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS && light.Constants.ShaderRegister == 2 &&
-                      light.Constants.Num32BitValues == sizeof(model_pbr::LightConstants) / 4 && light.Constants.Num32BitValues == 24,
-                  "model root 2: the light, 24 constants at b2 (model_pbr::LightConstants)");
+            const bool t0 = table.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE &&
+                            table.DescriptorTable.NumDescriptorRanges == 1 &&
+                            table.DescriptorTable.pDescriptorRanges[0].BaseShaderRegister == 0 &&
+                            table.DescriptorTable.pDescriptorRanges[0].NumDescriptors == 1 &&
+                            table.DescriptorTable.pDescriptorRanges[0].OffsetInDescriptorsFromTableStart == 0;
+            check(t0, "model root 1: t0 the colours' array at model heap 0");
         }
-        check(tablesFit(*rs, modelHeapDescriptors), "model root: its table fits the model heap (6 descriptors)");
+        check(modelHeapDescriptors == 3, "model heap: 3 descriptors (the colours, each eye's scene depth)");
+        check(tablesFit(*rs, modelHeapDescriptors), "model root: its table fits the model heap");
         check(rs->NumStaticSamplers == 1 && rs->pStaticSamplers[0].AddressU == D3D12_TEXTURE_ADDRESS_MODE_WRAP,
               "model root: the wrapping sampler (the models' UVs tile)");
+    }
+    if (const auto* rs = readBack(&serializeOccludedRoot, "see-through model", occludedReader)) {
+        check(rs->NumParameters == 4, "see-through root: 4 parameters (the eye, the colours, the scene depth, the match + sun)");
+        if (rs->NumParameters == 4) {
+            check(rs->pParameters[0].ParameterType == D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS &&
+                      rs->pParameters[0].Constants.Num32BitValues == 16 && rs->pParameters[0].Constants.ShaderRegister == 0,
+                  "see-through root 0: 16 constants at b0");
+            const auto& skins = rs->pParameters[1], &scene = rs->pParameters[2], &sun = rs->pParameters[3];
+            check(skins.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE && skins.DescriptorTable.NumDescriptorRanges == 1 &&
+                      skins.DescriptorTable.pDescriptorRanges[0].BaseShaderRegister == 0,
+                  "see-through root 1: t0 the colours");
+            check(scene.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE && scene.DescriptorTable.NumDescriptorRanges == 1 &&
+                      scene.DescriptorTable.pDescriptorRanges[0].BaseShaderRegister == 1 &&
+                      scene.DescriptorTable.pDescriptorRanges[0].NumDescriptors == 1,
+                  "see-through root 2: t1 one eye's scene depth (set at model heap 1 or 2)");
+            check(sun.ParameterType == D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS && sun.Constants.ShaderRegister == 1 &&
+                      sun.Constants.Num32BitValues == 20,
+                  "see-through root 3: 20 constants at b1 (the depth match and WORLD SHADOW's sun; the draw sets 20)");
+        }
+        check(tablesFit(*rs, modelHeapDescriptors), "see-through root: its tables fit the model heap");
     }
     if (const auto* rs = readBack(&serializeArtRoot, "art", artReader)) {
         check(rs->NumParameters == 2, "art root: 2 parameters (the eye, the atlas)");

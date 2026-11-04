@@ -2,6 +2,25 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-cutscene (4) - waypoint findings, POI dump, HUD panel answer (TEST build)
+
+From the player's report on cut3: immersive mode worked; the waypoint never appeared; he asks for the game's HUD,
+smaller, or the pause map on the holo.
+- **Waypoint (CONFIRMED from his log):** 20 scans, every one "no objective POI found". The scan saw 7-11 game POI
+  components each time (POIGame 7, PointOfInterest 4, SyncedPOIObject 1) but none had a POI type the reader could find
+  (typed 0): the type is not a pointer in the component's first 64 words. So the diamond's source does not work and
+  it shows nothing (no guesses). It stays as is (invisible) only to drive the new dump.
+- **POI DUMP (new diagnostic):** each POI component the scan meets (up to 40 a session) is written to the console as
+  `HERO VR 0.0.77 POI DUMP n ...` lines: its class, position, distance, and the RTTI class / small integer in each of
+  its first 64 words (one level deeper too). Lines are split under 240 characters (the console cuts at 256).
+  Scan with a mission active and with his own map waypoint set, then send the log.
+- **The game's HUD smaller in VR: not in this build.** On SM2 the game draws its HUD (cohtml) straight into the final
+  frame; the eye images never have it, and the mod has no hook on a HUD-only texture yet (the SM1 HUD panel is not
+  ported). The only capture that exists is the whole frame, which is ruled out. A probe for a HUD-only render target
+  is the next step.
+- **Pause map on the holo: not in this build.** It needs the objective's position (the same missing source) or a
+  capture of the map screen (whole frame again).
+
 ## hero-0.0.77-cutscene (3) - the WAYPOINT is the game's own objective, shown after a scan (TEST build)
 
 From the player's report on cut2: the diamond showed but did not lead to his missions, and should be the game's own.

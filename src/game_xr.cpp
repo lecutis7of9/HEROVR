@@ -8336,6 +8336,14 @@ DWORD WINAPI run(void*) {
                             const bool waypointWanted = waypointMode != story077g::waypointsOff && vrGameplay;
                             world_trace::setWaypointMode(waypointMode);
                             world_trace::setPromptsWanted(cardsWanted || waypointWanted);
+                            { // cut4 POI DUMP (diagnostic): the scan's POI component dumps, a line each.
+                                std::vector<std::string> dump;
+                                if (world_trace::drainPoiDump(dump))
+                                    for (const auto& l : dump) {
+                                        const std::string line = "HERO VR 0.0.77 " + l;
+                                        consoleLine(line.c_str());
+                                    }
+                            }
                             if (waypointWanted) {
                                 ++waypointFrames;
                                 story077g::Mark mark;

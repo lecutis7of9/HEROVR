@@ -37,6 +37,8 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <string>
+#include <vector>
 
 #include "story077d.hpp"
 #include "story077g.hpp"
@@ -276,6 +278,8 @@ struct PromptStats {
     uint32_t objectiveCandidates[story077g::sources]{};
 };
 PromptStats promptStats();
+// cut4 POI DUMP (diagnostic): the POI components' word dumps since the last call, each line under 240 characters.
+uint32_t drainPoiDump(std::vector<std::string>& out);
 // HERO VR 0.0.77 WAYPOINT (story077g.hpp, CANDIDATE): the live.txt waypoints mode the scan picks for (story077g::
 // Waypoints), and the mark it picked (its place re-read at 10 Hz); false: none, or stale.
 void setWaypointMode(uint32_t mode);

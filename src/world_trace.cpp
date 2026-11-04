@@ -48,6 +48,8 @@ bool promptsWanted() {
     return at != 0 && steadyMs() - at < 2000;
 }
 std::mutex promptLock;
+// cut4 POI DUMP: lines (each under 240 characters) for the console, drained by game_xr.
+std::vector<std::string> poiDumpLines;
 std::array<story077d::Seen, promptSlots> promptPub{};
 std::array<uintptr_t, promptSlots> promptPubRecord{};
 uint32_t promptPubCount{};
@@ -278,6 +280,65 @@ void run() {
         }
         (void)holders;
         return nullptr;
+    };
+    // cut4 POI DUMP (diagnostic): a POI component's first 64 words - the RTTI class of every object one points to
+    // (and, one level in, of the objects that one points to), and small integers - plus where it is and how far.
+    // Each component once, at most 40 a session. Lines stay under 240 characters (the console cuts at 256).
+    uint32_t poiDumped = 0;
+    const auto poiDump = [&](uintptr_t component, const char* kindName, Vec3 at, float metres) {
+        if (poiDumped >= 40)
+            return;
+        ++poiDumped;
+        uint64_t words[64]{};
+        if (!read(component, words, sizeof(words)))
+            return;
+        std::vector<std::string> out;
+        char head[200];
+        sprintf_s(head, "POI DUMP %u %s at %.1f %.1f %.1f %.0f m:", poiDumped, kindName ? kindName : "?", at.x, at.y,
+                  at.z, metres);
+        std::string line = head;
+        const auto add = [&](const char* piece) {
+            if (line.size() + std::strlen(piece) > 230) {
+                out.push_back(line);
+                line = "POI DUMP ";
+                line += std::to_string(poiDumped);
+                line += " +";
+            }
+            line += ' ';
+            line += piece;
+        };
+        for (uint32_t i = 1; i < 64; ++i) {
+            const uint64_t w = words[i];
+            char piece[120];
+            uintptr_t vt{};
+            const char* n = vtableName(static_cast<uintptr_t>(w), vt);
+            if (n) {
+                const char* shortName = std::strncmp(n, ".?AV", 4) ? n : n + 4;
+                sprintf_s(piece, "%x=%.40s", i * 8, shortName);
+                add(piece);
+                uint64_t inner[16]{};
+                if (read(static_cast<uintptr_t>(w), inner, sizeof(inner)))
+                    for (uint32_t j = 1; j < 16; ++j) {
+                        uintptr_t vt2{};
+                        const char* n2 = vtableName(static_cast<uintptr_t>(inner[j]), vt2);
+                        if (!n2)
+                            continue;
+                        sprintf_s(piece, "%x.%x=%.40s", i * 8, j * 8, std::strncmp(n2, ".?AV", 4) ? n2 : n2 + 4);
+                        add(piece);
+                    }
+            } else if (w && w < 0x10000) {
+                sprintf_s(piece, "%x:%llu", i * 8, static_cast<unsigned long long>(w));
+                add(piece);
+            } else if (w && (w >> 32) == 0) {
+                sprintf_s(piece, "%x:%08llx", i * 8, static_cast<unsigned long long>(w));
+                add(piece);
+            }
+        }
+        out.push_back(line);
+        std::lock_guard<std::mutex> lock(promptLock);
+        for (auto& l : out)
+            if (poiDumpLines.size() < 400)
+                poiDumpLines.push_back(std::move(l));
     };
     const auto botStep = [&](uintptr_t nearest) {
         if (!botOn.load(std::memory_order_relaxed))
@@ -801,6 +862,7 @@ void run() {
                         if (t == poiTypeOf.end() && poiNewReads < 64) {
                             ++poiNewReads;
                             t = poiTypeOf.emplace(address, poiTypeName(address)).first;
+                            poiDump(address, k->cls, at, heroKnown ? length(at - heroAt) : -1.f);
                         }
                         if (t == poiTypeOf.end())
                             continue;
@@ -1007,6 +1069,14 @@ bool waypoint(story077g::Mark& out) {
         return false;
     out = waypointPub;
     return true;
+}
+uint32_t drainPoiDump(std::vector<std::string>& out) {
+    std::lock_guard<std::mutex> lock(promptLock);
+    const uint32_t n = static_cast<uint32_t>(poiDumpLines.size());
+    for (auto& l : poiDumpLines)
+        out.push_back(std::move(l));
+    poiDumpLines.clear();
+    return n;
 }
 PromptStats promptStats() {
     std::lock_guard<std::mutex> lock(promptLock);

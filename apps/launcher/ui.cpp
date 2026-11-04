@@ -2478,7 +2478,7 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                                     "card over it says so"},
           {"Hold Y", "Use, grab or carry what a card over it names; held, you walk to it"},
           {"Scan, then yellow diamond", "Scan (hand to temple + trigger): for about 8 s a diamond over the game's own "
-                                        "objective marker, with its distance. live.txt waypoints = always / off"},
+                                        "objective marker, with its distance (cut4: no source found yet, shows nothing; scans write POI DUMP lines). live.txt waypoints = always / off"},
           {"Right stick down", "Heal: the game's D-pad down. Push it down and hold it a moment; on a game card too while hurt (close the card with A)"},
           {"Right stick up", "The game's LT + RT: zip to a point, enter a vent, where the game shows the "
                              "two; while you swing too. No point? Keep holding (time slows as the game "

@@ -25,6 +25,22 @@ From the player's cut8 reports ("prompts and main menu are top priority for 78")
   VR never goes black), and the QTE card shows only once a QTE's freeze has held 250 ms. CUT9 NO GHOST SCREEN line.
 - **MJ in the tunnel run (not fixed in this build):** the game's run for MJ is RT held; VR's RT is the webs and the
   stick run (story_sprint) is off by default. The cheat sheet now says how to run as MJ with live.txt story_sprint = on.
+## 0.0.77 launcher hotfix (tag v0.0.77.1) - special thanks on the main screen
+
+Launcher 0.0.77.2, build 20; the mod is unchanged (VERSION 0.0.77, PORT-VERSION Update 39.10). The main screen shows a
+small SPECIAL THANKS TO: block under the subtitle (immersive cutscenes; voice acting and testing); the Credits sheet's
+cutscene credit line moved there, so it is not doubled. version.json carries "launcher_build": 20, which offers it once to
+0.0.77 players (the installed build is 20 afterwards, so no loop).
+
+## 0.0.77 (tag v0.0.77) - cutscenes, story moves, Sandman, the flat front end (EXPERIMENTAL release)
+
+The cut8 build (f686fe4) released with the stamps moved: VERSION 0.0.77, PORT-VERSION Update 39.10, launcher 0.0.77.1
+build 19 (HERO_TEST_BUILD stays OFF). Cutscenes flat / 3d / immersive (live.txt `cutscenes`, flat the default), story
+moves and the phone's STORY MOVES cheat sheet, Sandman, boss damage read for every hero, the flat front end, the wrist
+minimap (in progress), the ledge fix. Known issues: the game's Y zip prompt and the objective waypoint do not show in
+VR yet. Every launcher on 0.0.76 or older offers it once; after the update the versions match, so it is not offered
+again. Still EXPERIMENTAL, 0.0.63 the most recent STABLE build; Revert unchanged. The launcher's Credits page carries the
+immersive cutscenes credit.
 
 ## hero-0.0.77-cutscene (8) - Sandman's HP read, a log for every throw, the objective marker's source (TEST build)
 
@@ -368,6 +384,12 @@ game's own pad button; timings and the PC FNSM button are CANDIDATE until a head
 - **DIAGNOSTICS.** The timeline and console say each step: SWITCH HERO asked (phone / head), each phase, the result
   (switched / no new hero / cancelled), each throw (yank or click, ground or air). The new STRY record
   (SpidyStoryData) puts the counts in update37.json and one line in the report.
+## 0.0.76 in the launcher (tag v0.0.76.1) - the v0.0.76 files, version stamps only
+
+The published v0.0.76 (HV076.zip) still said VERSION 0.0.75, so no launcher could offer it. v0.0.76.1 is the same
+code with only the stamps moved: VERSION 0.0.76, PORT-VERSION Update 39.9, launcher 0.0.76.1 build 18. Every
+launcher on 0.0.75 or older (0.0.63 included) now offers 0.0.76 once; after the update the versions match, so it is
+not offered again. Still EXPERIMENTAL, 0.0.63 the most recent STABLE build; Revert unchanged.
 
 ## hero-0.0.76-bikes - a Harley for each hero, Cap's chest-draw grapple, Punisher holo guard (TEST build, not released)
 

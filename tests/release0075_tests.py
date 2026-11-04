@@ -11,13 +11,13 @@ def src(p):
 
 class ReleaseLabels0075(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(src('VERSION').strip(), '0.0.75')
-        self.assertEqual(src('PORT-VERSION').strip(), 'Update 39.8.1')
+        # v0.0.76.1 moved VERSION to 0.0.76 and PORT-VERSION to Update 39.9 (release00761_tests pins them)
+        self.assertGreaterEqual(tuple(int(x) for x in src('VERSION').strip().split('.')), (0, 0, 75))
+        self.assertTrue(src('PORT-VERSION').strip().startswith('Update 39.'))
         c = src('CMakeLists.txt')
-        self.assertRegex(c, r'project\(Spidy VERSION 0\.0\.75 ')
+        self.assertRegex(c, r'project\(Spidy VERSION 0\.0\.7[5-9] ')
         self.assertRegex(c, r'option\(HERO_TEST_BUILD "[^"]*" OFF\)')
-        self.assertIn('#define SPIDY_PUBLIC_VERSION "0.0.75"', src('include/spidy/version.hpp'))
-        self.assertIn('build = "39.8.1";', src('include/spidy/version.hpp'))
+        self.assertRegex(src('include/spidy/version.hpp'), r'#define SPIDY_PUBLIC_VERSION "0\.0\.7[5-9]"')
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'RELEASE-NOTES-v0.0.75.md')))
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'docs/HERO-0.0.75.md')))
 

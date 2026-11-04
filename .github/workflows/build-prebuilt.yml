@@ -178,6 +178,34 @@ jobs:
             ${{ steps.pkg.outputs.zip }}.sha256
           retention-days: 30
 
+      - name: Launcher screenshot (preview mode, informational)
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          $ws = $env:GITHUB_WORKSPACE
+          $env:SM2VR_LAUNCHER_PREVIEW = '1'
+          $env:SM2VR_LAUNCHER_SCREENSHOT = "$ws/out/ci/launcher-main.png"
+          $p = Start-Process -FilePath "$ws/out/ci/SM2VRLauncher.exe" -PassThru
+          if (-not $p.WaitForExit(90000)) { $p.Kill(); throw 'the launcher did not close' }
+          if (-not (Test-Path -LiteralPath "$ws/out/ci/launcher-main.png")) { throw 'no screenshot' }
+
+      - name: Keep the launcher screenshot with this run
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: launcher-screenshot
+          path: out/ci/launcher-main.png
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Keep the compiled launcher with this run (the release's launcher zip carries it)
+        uses: actions/upload-artifact@v7
+        with:
+          name: launcher-exe
+          path: out/ci/SM2VRLauncher.exe
+          retention-days: 30
+
       - name: Upload to the release
         if: ${{ inputs.upload && !startsWith(github.ref_name, 'hero-0.0.73') && !startsWith(github.ref_name, 'hero-0.0.74') && !startsWith(github.ref_name, 'hero-0.0.75') && !startsWith(github.ref_name, 'hero-0.0.76') && !startsWith(github.ref_name, 'hero-0.0.77') && !startsWith(github.ref_name, 'mp-solo-test') }}
         env:

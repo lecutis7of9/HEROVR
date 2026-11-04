@@ -2,6 +2,25 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-cutscene (6) - the swing starts after the title, leave the ledge, no stick menu (TEST build, 0.0.77 RC)
+
+From the player's report on cut5 ("Still stuck in that spot on that save. Still cant swing or even do a charged jump
+after getting out of immersive cutscene"), session 234713:
+- **Native swing start (CONFIRMED):** the swing was started on the title screen's one VR-play frame (sample 402),
+  that player record was gone a frame later, the start was refused 1002 (mover not live) and stayed off for the
+  whole session: no RT web swing, no charged jump, the swing's ground 0 in every JUMP line, and none of what starts
+  with the swing (the game's wall crawl and wall interactions). The start now waits for one player record held in VR
+  play for 0.5 s, tries a "not now" refusal (1000/1002/1004) again a second later or at once on the next player, and
+  only a refusal of its bytes or hooks turns it off (as before). A swing that cannot follow a new player no longer
+  drops him: it stops and starts again on him. CUT6 SWING START / CUT6 SWING lines.
+- **The ledge save (CANDIDATE):** both stuck sessions (cut4, cut5) ran without the swing; both that left the spot
+  ran with it. It now starts there (replay: 0.5 s after VR play begins on that save).
+- **Menu screen:** the left stick is no menu signal any more (it ended two scenes as "menu"); the title, no player
+  record or the menu button, and only while the game's screen is up - never in VR gameplay.
+- **Charged jump:** unchanged from 0.0.76 (the swing's ground; without the swing A is the game's plain jump).
+- **Replay test:** tests/cut6_replay_tests.cpp runs the 234713 session through the real decisions (swing start,
+  menu screen, pad mapping, charged jump) and fails the build if he could not swing or leave the ledge.
+
 ## hero-0.0.77-cutscene (5) - free movement after scenes, cine prompts, the wrist minimap (TEST build, 0.0.77 RC)
 
 From the player's report on cut4: after the new-game scene he could not steer his walk or his swing (zips, veers),

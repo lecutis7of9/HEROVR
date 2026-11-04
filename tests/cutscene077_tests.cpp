@@ -211,17 +211,17 @@ int main() {
         check(h.frozen(), "frozen");
         h.release();
         check(!h.frozen() && !h.menu() && !h.update(true, false, false, 30), "release lets go");
-        // CUT5 MENU SCREEN.
+        // CUT5 MENU SCREEN, CUT6: the menu button, never the stick.
         MenuScreen ms;
-        check(ms.update(true, 0, false, false), "session start: the title is on the screen");
-        check(ms.update(true, 0x100, false, false) && ms.update(true, 0x100, false, false), "title record adopted");
-        check(ms.update(true, 0, false, false), "load: still the screen");
-        check(!ms.update(true, 0x200, false, false), "a new game's record: immersive again");
-        check(!ms.update(true, 0x200, true, true), "QTE stick: no menu");
-        check(ms.update(true, 0x200, true, false) && ms.count() == 1, "steered: the screen");
-        check(ms.update(true, 0x200, false, false), "held to the stretch's end");
-        check(!ms.update(false, 0x200, false, false) && !ms.update(true, 0x200, false, false), "gameplay ends it");
-        check(ms.update(true, 0, false, false) && !ms.update(true, 0x300, false, false),
+        check(ms.update(true, 0, false), "session start: the title is on the screen");
+        check(ms.update(true, 0x100, false) && ms.update(true, 0x100, false), "title record adopted");
+        check(ms.update(true, 0, false), "load: still the screen");
+        check(!ms.update(true, 0x200, false), "a new game's record: immersive again");
+        check(!ms.update(true, 0x200, false) && ms.count() == 0, "no signal, no screen");
+        check(ms.update(true, 0x200, true) && ms.count() == 1, "menu button: the screen");
+        check(ms.update(true, 0x200, false), "held to the stretch's end");
+        check(!ms.update(false, 0x200, true) && !ms.update(true, 0x200, false), "gameplay ends it, menu in play too");
+        check(ms.update(true, 0, false) && !ms.update(true, 0x300, false),
               "a load's no-record: the screen, then the next record's scene immersive");
     }
 

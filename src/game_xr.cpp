@@ -177,6 +177,7 @@
 #include "spidy/web_cocoon.hpp"
 #include "spidy/version.hpp"
 #include "spidy/cutscene077.hpp"
+#include "spidy/swing077.hpp"
 #include "spidy/cutscene077_gate.hpp" // HERO VR 0.0.77 CUTFIX
 #include "spidy/cutscene077_note.hpp" // HERO VR 0.0.77 CUTFIX2
 #include <algorithm>
@@ -3109,6 +3110,10 @@ DWORD WINAPI run(void*) {
             InterlockedIncrement64(&SpidyXrData.sequence);
         }
         game_swing::Data swingState;
+        // HERO VR 0.0.77 CUT6 SWING START (swing077.hpp): one player record held in VR play before the start, a
+        // "not now" refusal tried again, only a real one off for the session.
+        swing077::StartGate swingGate;
+        uint64_t swingGateLines{};
         // Version 0.0.62 REAL ANCHORS: the swing's misses seen, the hands' shoot input last step, misses buzzed.
         uint32_t anchorMissesSeen{};
         bool anchorShootWas[2]{};
@@ -3123,12 +3128,16 @@ DWORD WINAPI run(void*) {
             if (swingStarted && stopSwing)
                 stopSwing(nullptr);
             swingStarted = false;
-            swingFailed = true;
+            // CUT6: a "not now" code starts it again on the next stable player; anything else is off as before.
+            swingFailed = swingGate.stopped(code);
             swingState = {};
             swingBends = {};
-            const auto text = std::string("Native swinging is off: ") + where + " (" + std::to_string(code) +
-                              "); VR continues";
-            message(3, code, text.c_str());
+            const auto text = std::string(swingFailed ? "Native swinging is off: " : "Native swinging restarts: ") +
+                              where + " (" + std::to_string(code) + "); VR continues";
+            if (swingFailed)
+                message(3, code, text.c_str());
+            else
+                consoleLine(("HERO VR 0.0.77 CUT6 SWING: " + text).c_str());
         };
         const auto raysOff = [&](uint32_t code, const char* where) {
             if (swingStarted)
@@ -3604,7 +3613,22 @@ DWORD WINAPI run(void*) {
                 swing.base = config.base;
                 swing.record = p.record;
                 swing.mover = p.mover;
-                return !retargetSwing(&swing);
+                // CUT6: a swing that cannot follow (the new mover not live yet) no longer drops the player (and
+                // with him VR play): the swing stops and the start gate starts it again on him once he is held.
+                if (const auto code = retargetSwing(&swing)) {
+                    if (stopSwing)
+                        stopSwing(nullptr);
+                    swingStarted = false;
+                    swingState = {};
+                    swingBends = {};
+                    swingGate.restart();
+                    char line[160];
+                    sprintf_s(line, "HERO VR 0.0.77 CUT6 SWING: retarget refused (%u) - stopped, starts again on the "
+                                    "new player",
+                              static_cast<unsigned>(code));
+                    consoleLine(line);
+                }
+                return true;
             };
             const uint64_t heroBefore = player.hero ? player.hero : lastAttachedHero;
             player = follow(next) ? next : game_player::Player{};
@@ -5505,18 +5529,18 @@ DWORD WINAPI run(void*) {
                     const bool cutHeroOk = cutHero.present(player.hero != 0, cutWasShown, cutNowMs);
                     // HERO VR 0.0.77 CUT5 MENU SCREEN: a menu goes to the normal VR screen (never the game's whole
                     // frame pasted over the immersive world).
-                    const bool cutSteering = std::isfinite(frame.hands[0].stickX) &&
-                                             std::isfinite(frame.hands[0].stickY) &&
-                                             std::hypot(frame.hands[0].stickX, frame.hands[0].stickY) > .5f;
+                    // CUT6: the signals are the title (the first screen), no player record, or the menu button -
+                    // never the left stick (cut5's stick push ended two scenes of report 234713), and only while
+                    // the game's screen is up (never in VR gameplay).
                     const uint64_t menuScreensBefore = cutMenuScreen.count();
                     const bool menuScreen = cutMenuScreen.update(screen && cutMode == cutscene077::immersive,
-                                                                 player.record, cutSteering, immersiveHold.frozen());
+                                                                 player.record, (frame.buttons & buttonMenu) != 0);
                     if (cutMenuScreen.count() != menuScreensBefore) {
                         char line[200];
-                        sprintf_s(line, "HERO VR 0.0.77 CUT5 MENU SCREEN #%llu: %s; the menu is on the VR screen until "
+                        sprintf_s(line, "HERO VR 0.0.77 CUT6 MENU SCREEN #%llu: %s; the menu is on the VR screen until "
                                         "gameplay or another player record",
                                   static_cast<unsigned long long>(cutMenuScreen.count()),
-                                  player.record ? "the left stick steering it" : "no player record");
+                                  player.record ? "the menu button (pause)" : "no player record");
                         consoleLine(line);
                     }
                     const bool immersiveScene = immersiveHold.update(
@@ -6334,8 +6358,12 @@ DWORD WINAPI run(void*) {
                             }
                         }
                     }
-                    if (SM2_PORT_GAMEPLAY && raysStarted && motion.active && !flatScreen && controlsVisible &&
-                        !swingStarted && !swingFailed) {
+                    // CUT6 SWING START (swing077::StartGate): the same player record in VR play for settleSeconds;
+                    // 1000/1002/1004 tried again retrySeconds later (or at once on another record), never latched.
+                    const double swingClock = static_cast<double>(GetTickCount64()) / 1000.0;
+                    if (SM2_PORT_GAMEPLAY && !swingStarted && !swingFailed &&
+                        swingGate.update(swingClock, raysStarted && motion.active && !flatScreen && controlsVisible,
+                                         player.record, player.mover)) {
                         game_swing::Config swing;
                         swing.pid = config.pid;
                         swing.base = config.base;
@@ -6348,12 +6376,23 @@ DWORD WINAPI run(void*) {
                         swing.grabKinds = !values.webGrab || !sampleGrab ? 0 : game_grab::movableKinds;
                         // Fail safe as the rays: the movement bridge's bytes or
                         // hooks refused, swinging stays off and VR goes on.
-                        if (const auto code = startSwing ? startSwing(&swing) : 1u) {
+                        const uint32_t code = startSwing ? startSwing(&swing) : 1u;
+                        const bool off = swingGate.result(swingClock, code);
+                        if (swingGateLines < 40) {
+                            ++swingGateLines;
+                            char line[220];
+                            sprintf_s(line, "HERO VR 0.0.77 CUT6 SWING START: record %llx - %s (%u), refusals %llu",
+                                      static_cast<unsigned long long>(player.record),
+                                      swingGate.started() ? "started" : off ? "off for the session" : "not yet, again in 1 s",
+                                      code, static_cast<unsigned long long>(swingGate.refusals()));
+                            consoleLine(line);
+                        }
+                        if (off) {
                             swingFailed = true;
                             const auto text = "Native swinging is off: " + gameplayRefusal(code) + " (" +
                                               std::to_string(code) + "); VR continues";
                             message(3, code, text.c_str());
-                        } else {
+                        } else if (swingGate.started()) {
                             swingStarted = true;
                             // Fists and the web shooter take the swing's input samples;
                             // both are optional and, like the grab, can be switched on later.
@@ -7436,10 +7475,10 @@ DWORD WINAPI run(void*) {
                     // go of with A. A tap is the jump as before, made as it is
                     // let go. The swing's own jumps (a takeoff, a wall, the
                     // leap's) are the game's A as they are.
-                    const bool standing = steering && padInstalled && swingState.status && swingState.grounded &&
-                                          !swingState.owned && !mounting && !swingState.takeoff &&
-                                          !swingState.takeoffPhase && !swingState.webs[0].attached &&
-                                          !swingState.webs[1].attached && !calibrationInput;
+                    const bool standing = swing077::standing(
+                        {steering, padInstalled, swingState.status, swingState.grounded != 0, swingState.owned != 0,
+                         mounting, swingState.takeoff != 0, swingState.takeoffPhase != 0,
+                         swingState.webs[0].attached != 0, swingState.webs[1].attached != 0, calibrationInput});
                     // HERO VR 0.0.76 FLIGHT: while a hero flies, A is the flight's (A held comes down): never the
                     // game's jump. A flyer's A on the ground is a plain jump (its hold is the takeoff, not a charge).
                     if (fly076Flying)

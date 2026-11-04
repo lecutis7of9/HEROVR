@@ -3060,6 +3060,14 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   wrist_map_at 5583, wrist_map_hud 5584. cut5 also: story_sprint off by default with swingState.grounded, StuckWatch
   replaced by cutscene077::MenuScreen (a menu to the normal VR screen), story077d cine kinds (cineCardSeconds),
   waypoints off by default.
+- cut6 SWING START (include/spidy/swing077.hpp, tests/cut6_replay_tests.cpp, tests/data/cut6_234713_samples.txt,
+  tests/hero077_cut6_tests.py): swing077::StartGate in front of startSwing (settleSeconds 0.5 on one record and
+  mover in VR play, transient 1000/1002/1004 retried after retrySeconds 1 or on another record, anything else latches
+  swingFailed); swingOff goes through StartGate::stopped; attach's follow no longer returns !retargetSwing (a refusal
+  stops the swing and StartGate::restart). swing077::standing is 0.0.76's standing expression. cutscene077::MenuScreen
+  ::update(screen, record, menuPressed): the left stick and the frozen flag are gone. The replay feeds the 2095
+  samples of report 234713 (presentation, player record, menu button, tracked) and models SpidySwingStart's 1002
+  from the record dying within 0.3 s.
 - HERO VR 0.0.77 X IS THE GAME'S X (include/spidy/story077e.hpp, tests/story077e_tests.cpp): XPulse (a VR X tap
   is the game's X for the spiders; game_pad::Walk::xIsGameX makes X held the game's X, not Back) and MenuHold (the
   menu button in VR play: a tap Start on release, held 0.5 s the 0.1 s Back with a buzz); x_button (game (default),

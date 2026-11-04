@@ -231,14 +231,15 @@ class MenuPanel {
 // HERO VR 0.0.77 CUT5 MENU SCREEN (the owner on cut4: "the main menu fix just put a 2d flatscreen in the immersive
 // not just the option boxes"). A menu over a scene is no longer copied whole onto the immersive world: the stretch
 // goes to the normal VR screen, as cutscenes = flat shows it, until the screen is gone (gameplay) or another player
-// record is up (a new game or a save loaded). Signals (CANDIDATE): the session's first screen (the title screen and
-// its menus: no gameplay yet, the first player record seen there is the title's), no player record, or the left
-// stick pushed past half while the scene's clock is not frozen (a QTE's stick is no menu). Pure; the record is
-// only compared.
+// record is up (a new game or a save loaded). Signals: the session's first screen (the title screen and its menus:
+// no gameplay yet, the first player record seen there is the title's), no player record, or the menu button pressed
+// in the stretch (the pause menu). CUT6: never the left stick (cut5 ended two immersive scenes of report 234713 as
+// "menu (VR screen)" on a stick push: MENU SCREEN #4/#5 "the left stick steering it"), and only while the game's
+// screen is up: in VR gameplay (screen false) it is off and resets. Pure; the record is only compared.
 class MenuScreen {
   public:
     // True while the stretch stays on the VR screen.
-    bool update(bool screen, uint64_t record, bool steering, bool frozen) {
+    bool update(bool screen, uint64_t record, bool menuPressed) {
         if (!screen) {
             on_ = initial_ = false;
             return false;
@@ -247,7 +248,7 @@ class MenuScreen {
             record_ = record; // the title's own record
         else if (on_ && record != 0 && record != record_)
             on_ = initial_ = false;
-        if (!on_ && (record == 0 || (steering && !frozen))) {
+        if (!on_ && (record == 0 || menuPressed)) {
             on_ = true;
             record_ = record;
             ++count_;

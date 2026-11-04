@@ -2004,6 +2004,10 @@ cbuffer Frame : register(b0) {
     float vibrance; float mono; float vignette; float unused;
     float4 balance; float4 shadowTone; float4 highTone;
     float4 fovea; float4 foveaView; // Update 37.2: FOVEATED DEBUG (centre u, v, inner, outer; on, aspect)
+    // HERO VR 0.0.78 PUNISHER ARSENAL optics (punisher078::opticConstants, this eye): the lens's disk (centre u, v;
+    // radius u, v), the source (scope: the axis's far point u, v, zoom; red dot: the dot u, v), mode (0 none,
+    // 1 scope, 2 red dot), then the eye box shade and the dot's radius (u, v).
+    float4 scopeLens; float4 scopeSrc; float4 scopeMisc;
 };
 float4 vs(uint id : SV_VertexID) : SV_POSITION {
     const float2 corner = float2((id << 1) & 2, id & 2);
@@ -2041,6 +2045,50 @@ float3 grade(float3 c, float2 uv) {
     const float d2 = dot(d, d) * 2.0;
     return saturate(c * saturate(1.0 - vignette * 0.7 * d2));
 }
+// HERO VR 0.0.78: the source at uv, bilinear (the root has no sampler: four Loads).
+float3 fetch(float2 uv, uint w, uint h) {
+    const float2 t = clamp(uv, 0.0, 1.0) * float2(w, h) - 0.5;
+    const int2 b = int2(floor(t));
+    const float2 f = t - floor(t);
+    const int2 hi = int2(w, h) - 1;
+    const float3 c00 = source.Load(int3(clamp(b, int2(0, 0), hi), 0)).rgb;
+    const float3 c10 = source.Load(int3(clamp(b + int2(1, 0), int2(0, 0), hi), 0)).rgb;
+    const float3 c01 = source.Load(int3(clamp(b + int2(0, 1), int2(0, 0), hi), 0)).rgb;
+    const float3 c11 = source.Load(int3(clamp(b + int2(1, 1), int2(0, 0), hi), 0)).rgb;
+    return lerp(lerp(c00, c10, f.x), lerp(c01, c11, f.x), f.y);
+}
+// HERO VR 0.0.78 PUNISHER ARSENAL: the sniper scope's picture (the patch along its axis, magnified, behind a
+// duplex reticle; black outside the exit pupil, so an eye off the axis sees the scope's shadow close in) or the
+// rifle's red dot (collimated: where the eye's ray parallel to the sight's axis meets the window), on the lens.
+// The gun model (no lens glass) is drawn over this pass by the overlay.
+float3 optic(float3 o, float2 uv, uint w, uint h) {
+    if (scopeSrc.w < 0.5)
+        return o;
+    const float2 n = (uv - scopeLens.xy) / max(scopeLens.zw, 1e-6);
+    const float r = length(n);
+    if (r > 1.0)
+        return o;
+    if (scopeSrc.w < 1.5) {
+        // The picture centred on the axis (far away), magnified into the lens's disk; the reticle at the disk's centre
+        // (the eye off the axis sees the same picture, the exit pupil's shadow closing in - as a real scope).
+        const float2 m = n; // from the lens centre, in lens radii
+        float3 c = grade(fetch(scopeSrc.xy + (uv - scopeLens.xy) / max(scopeSrc.z, 1.0), w, h), uv);
+        const float ax = abs(m.x), ay = abs(m.y);
+        const float thinT = 0.010, thickT = 0.032;
+        const float hair = max(step(ay, lerp(thinT, thickT, step(0.45, ax))), step(ax, lerp(thinT, thickT, step(0.45, ay))));
+        c = lerp(c, float3(0.015, 0.015, 0.015), hair);
+        c = lerp(c, float3(0.95, 0.06, 0.03), step(length(m), 0.018)); // the lit centre
+        const float pupil = 1.0 - 0.8 * saturate(scopeMisc.x);
+        c *= saturate((pupil - length(m)) / 0.08) * (1.0 - 0.5 * saturate(scopeMisc.x));
+        c *= 1.0 - 0.55 * saturate((r - 0.82) / 0.18); // the tube's edge
+        return c;
+    }
+    const float2 dd = (uv - scopeSrc.xy) / max(scopeMisc.yz, 1e-6);
+    const float inside = 1.0 - step(1.0, length((scopeSrc.xy - scopeLens.xy) / max(scopeLens.zw, 1e-6)));
+    const float dotK = saturate(1.6 - length(dd)) * inside;
+    const float3 tinted = o * float3(0.97, 1.0, 0.99); // the window's faint coating
+    return lerp(tinted, float3(1.0, 0.10, 0.06), dotK);
+}
 float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     uint w, h;
     source.GetDimensions(w, h);
@@ -2068,6 +2116,7 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     const float3 s = saturate((b * wt + d * wt + f * wt + hh * wt + e) / (1.0 + 4.0 * wt));
     const float2 uv = position.xy / float2(w, h);
     float3 o = grade(s, uv); // Update 37.2: COLOR, both eyes alike
+    o = optic(o, uv, w, h);  // HERO VR 0.0.78 PUNISHER ARSENAL
     if (foveaView.x > 0.5) { // FOVEATED DEBUG: green full detail, yellow half, red quarter
         const float2 d = (uv - fovea.xy) * float2(2.0 * foveaView.y, 2.0);
         const float r = length(d);
@@ -2218,6 +2267,7 @@ float4 toon(float4 position : SV_POSITION) : SV_TARGET {
     }
     const float pp = 0.025 * paint;
     col = saturate(pp + col * (1.0 - pp) * (1.0 - 0.06 * paint + 0.06 * paint * float3(1.0, 0.97, 0.90)));
+    col = optic(col, uv, w, h); // HERO VR 0.0.78 PUNISHER ARSENAL
     return float4(lerp(col, toLinear(col), linearOut), alpha);
 }
 )";
@@ -2256,7 +2306,7 @@ bool prepareSharpen() {
     parameters[0].DescriptorTable = {1, &range};
     parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    parameters[1].Constants.Num32BitValues = 32; // Update 37.2: 4 sharpening + 20 COLOR + 8 FOVEATED DEBUG
+    parameters[1].Constants.Num32BitValues = 44; // Update 37.2: 4 sharpening + 20 COLOR + 8 FOVEATED DEBUG; 0.0.78: + 12 OPTICS
     parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     D3D12_ROOT_SIGNATURE_DESC rs{2, parameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_NONE};
     ComPtr<ID3DBlob> signature, error;
@@ -2405,6 +2455,22 @@ std::array<float, 8> foveaTint(unsigned eye) {
          0, 0};
     return t;
 }
+// HERO VR 0.0.78 PUNISHER ARSENAL: each eye's optics (punisher078::opticConstants; setEyeOptics), fresh for
+// opticsFreshMs after they were set (then none: a stale scope is never drawn where the gun no longer is).
+std::mutex opticsLock;
+std::array<float, 12> opticsNow[2]{}; // opticsLock
+uint64_t opticsAtMs{};                // opticsLock
+constexpr uint64_t opticsFreshMs = 100;
+bool opticsLive() {
+    std::lock_guard lock(opticsLock);
+    return opticsAtMs && GetTickCount64() - opticsAtMs <= opticsFreshMs && (opticsNow[0][7] > .5f || opticsNow[1][7] > .5f);
+}
+std::array<float, 12> eyeOptics(unsigned eye) {
+    std::lock_guard lock(opticsLock);
+    if (!opticsAtMs || GetTickCount64() - opticsAtMs > opticsFreshMs || eye > 1)
+        return {};
+    return opticsNow[eye];
+}
 // Both staged eyes, sharpened, into the headset's images (RENDER_TARGET, as
 // the copy leaves them). stagedEyes leave and re-enter COPY_SOURCE. False
 // (nothing recorded) when an image cannot be drawn to: then the copy.
@@ -2483,6 +2549,8 @@ bool drawSharpen(ID3D12GraphicsCommandList* list, size_t slot, ID3D12Resource* c
         auto tint = foveaTint(i);
         tint[6] = sonarPhase; // Version 0.0.6 DAREDEVIL SONAR
         list->SetGraphicsRoot32BitConstants(1, 8, tint.data(), 24); // Update 37.2
+        const auto optics = eyeOptics(i); // HERO VR 0.0.78 PUNISHER ARSENAL (zero: none)
+        list->SetGraphicsRoot32BitConstants(1, 12, optics.data(), 32);
         list->OMSetRenderTargets(1, &target, FALSE, nullptr);
         list->DrawInstanced(3, 1, 0, 0);
     }
@@ -6106,6 +6174,17 @@ bool setEyeColor(const eye_color::Config& c) {
 uint32_t eyeToonFault() {
     return toonFault.load();
 }
+bool setEyeOptics(const float left[12], const float right[12]) {
+    if (sharpenFault)
+        return false;
+    std::lock_guard lock(opticsLock);
+    for (unsigned k = 0; k < 12; ++k) {
+        opticsNow[0][k] = left && std::isfinite(left[k]) ? left[k] : 0.f;
+        opticsNow[1][k] = right && std::isfinite(right[k]) ? right[k] : 0.f;
+    }
+    opticsAtMs = GetTickCount64();
+    return true;
+}
 eye_color::Config eyeColor() {
     std::lock_guard lock(colorLock);
     return colorConfig;
@@ -6520,8 +6599,9 @@ bool copyLatest(ID3D12Resource* left, ID3D12Resource* right, uint64_t& serial, u
     // Update 24: read once, so both images of this pair follow the same mode.
     const uint32_t debug = eyeDebugMode.load();
     // Update 37.2: the pass also runs for COLOR alone (sharpening 0).
+    // HERO VR 0.0.78 PUNISHER ARSENAL: the pass also runs for a scope or red dot in view.
     const bool graded = staged && (colorOn.load() || // not in the screen-copy mode (as sharpening)
-                                   (foveaDebug.load() && foveaLevel.load() != foveation::off));
+                                   (foveaDebug.load() && foveaLevel.load() != foveation::off) || opticsLive());
     const bool sharpened = (percent || graded) && prepareSharpen() &&
                            drawSharpen(slot->list.Get(), slotIndex, incoming, percent, debug);
     for (unsigned i = 0; i < 2; ++i) {
@@ -6538,7 +6618,7 @@ bool copyLatest(ID3D12Resource* left, ID3D12Resource* right, uint64_t& serial, u
     }
     sharpening = sharpened;
     sharpenPairs += sharpened;
-    colorPairs += sharpened && graded;
+    colorPairs += sharpened && graded && colorOn.load(); // 0.0.78: not the optics alone
     if (pendingCount == pendingCopies.size()) { // not seen finishing: drop the oldest
         std::move(pendingCopies.begin() + 1, pendingCopies.end(), pendingCopies.begin());
         --pendingCount;

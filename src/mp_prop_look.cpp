@@ -554,6 +554,8 @@ void FxInbox::apply(RemoteProps& r, double now) const {
             if (impacts < hero007::drawImpacts && age < hero007::impactLife) {
                 r.h007.impactAt[impacts] = e.at;
                 r.h007.impactWay[impacts] = e.way;
+                r.h007.impactWound[impacts] = e.at; // HERO VR 0.0.78 GUN BLOOD: where it went in (no floor sent)
+                r.h007.impactSeed[impacts] = static_cast<uint32_t>(impacts * 2654435761u) ^ 0x51u;
                 r.h007.impactAge[impacts++] = age;
                 r.h007.any = true;
             }

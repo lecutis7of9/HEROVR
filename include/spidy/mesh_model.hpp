@@ -58,6 +58,10 @@ inline constexpr uint32_t suitHqTriangles = 80000;
 // to these; a file over them is refused (OVER BUDGET), never cut at load.
 inline constexpr uint32_t bikeTriangles = 110000, bikeBarsTriangles = 40000;
 static_assert(bikeTriangles <= vanTriangles && bikeBarsTriangles <= vanTriangles, "loadFolder keeps caps up to vanTriangles");
+// HERO VR 0.0.78 PUNISHER ARSENAL (owner: "AAA-level, like a modern shooter": 15k-60k triangles): a gun's body up to
+// 60,000, a moving part or magazine up to 20,000; never decimated (slotMayDecimate false): over budget is refused.
+inline constexpr uint32_t arsenalTriangles = 60000, arsenalPartTriangles = 20000;
+static_assert(arsenalTriangles <= vanTriangles, "loadFolder keeps caps up to vanTriangles");
 // Untextured (the overlay could not make its texture array), each model is drawn sorted far to near
 // in the overlay's own vertices: then its light copy (Mesh::lite, vertex clustering to liteTriangles).
 inline constexpr uint32_t liteTriangles = 2400;
@@ -219,7 +223,14 @@ enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarre
                        // (game_xr). Missing body or layout: no bike (MODEL MISSING); missing bars: the bike without them.
                        slotBikeBody = slotBatmobileRoofFirst + 4, slotBikeBars,
                        slotBikeCapBody, slotBikeCapBars, slotBikeWolverineBody, slotBikeWolverineBars,
-                       slots };
+                       // HERO VR 0.0.78 PUNISHER ARSENAL (punisher078.hpp; hero007::Part078's order): Models\Punisher078\<gun> the
+                       // body (grip at the origin, metres, -z the barrel, y the top; no lens glass: the eye pass draws the
+                       // scope / red dot there), <gun>\<part> the moving part (the pump's forend, the slide, the bolt, the
+                       // charging handle; drawn moved back along the barrel by the rack's travel) and the magazine (the top
+                       // of the magazine at the origin when loose). tools/models078/README.md. Missing: MODEL MISSING, never a
+                       // stand-in.
+                       slotArsenal078First, slotArsenal078End = slotArsenal078First + 12,
+                       slots = slotArsenal078End };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
                                                    "Baton/Right", "Shield",           "GrappleGun",       "Hammer/BOOOOP",
@@ -239,7 +250,11 @@ inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",   
                                                    "Vehicle/Batmobile/FOREVER2/Roof", "Vehicle/Motorcycle",
                                                    "Vehicle/Motorcycle/Handlebars", "Vehicle/Motorcycle/Cap",
                                                    "Vehicle/Motorcycle/Cap/Handlebars", "Vehicle/Motorcycle/Wolverine",
-                                                   "Vehicle/Motorcycle/Wolverine/Handlebars"};
+                                                   "Vehicle/Motorcycle/Wolverine/Handlebars",
+                                                   "Punisher078/Pump", "Punisher078/Pump/Forend", "Punisher078/Pump/Shell",
+                                                   "Punisher078/Pistol", "Punisher078/Pistol/Slide", "Punisher078/Pistol/Mag",
+                                                   "Punisher078/Sniper", "Punisher078/Sniper/Bolt", "Punisher078/Sniper/Mag",
+                                                   "Punisher078/Rifle", "Punisher078/Rifle/Handle", "Punisher078/Rifle/Mag"};
 inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, hammerTriangles,
                                                 vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles, drawTriangles,
@@ -249,7 +264,13 @@ inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, dr
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, hideoutTriangles, hideoutTriangles,
                                                 vanTriangles, vanTriangles, vanTriangles, vanTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, bikeTriangles, bikeBarsTriangles,
-                                                bikeTriangles, bikeBarsTriangles, bikeTriangles, bikeBarsTriangles};
+                                                bikeTriangles, bikeBarsTriangles, bikeTriangles, bikeBarsTriangles,
+                                                arsenalTriangles, arsenalPartTriangles, arsenalPartTriangles,
+                                                arsenalTriangles, arsenalPartTriangles, arsenalPartTriangles,
+                                                arsenalTriangles, arsenalPartTriangles, arsenalPartTriangles,
+                                                arsenalTriangles, arsenalPartTriangles, arsenalPartTriangles};
+// HERO VR 0.0.78 PUNISHER ARSENAL: a gun's slot (hero007::Part078 p).
+inline constexpr bool slotIsArsenal078(uint32_t slot) { return slot >= slotArsenal078First && slot < slotArsenal078End; }
 // THOR HAMMER's choice (combat38::thorHammer: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE+THUNDER, 3 FCCOOPER) -> its slot.
 inline constexpr uint32_t hammers = 4;
 inline constexpr uint32_t hammerSlot(uint32_t choice) {
@@ -302,7 +323,7 @@ static_assert(slotDrawCap[slotSuitFirst + 16] == suitHqTriangles && suitFolders[
               "0.0.78: Suit_punisher_1 (suitFolders[16]) has the HQ cap");
 static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slotHideoutBatcave == 44 && slotBatmobileFirst == 46 &&
                   slotBatmobileWheel == 51 && slotBatmobileRoofFirst == 52 && slotBikeBody == 56 && slotBikeBars == 57 &&
-                  slotBikeCapBody == 58 && slotBikeWolverineBars == 61 && slots == 62, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
+                  slotBikeCapBody == 58 && slotBikeWolverineBars == 61 && slotArsenal078First == 62 && slots == 74, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

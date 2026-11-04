@@ -19275,7 +19275,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 160, "0.0.76 MP WORLD: + PLAYER 2 PLACE; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (9); 0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 163, "HERO VR 0.0.78: + PUNISHER ARSENAL, SCOPE ZOOM, MAG EJECT; 0.0.76 MP WORLD: + PLAYER 2 PLACE; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (9); 0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -19309,7 +19309,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 160, "0.0.76 MP WORLD: + PLAYER 2 PLACE; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (9); 0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; 0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 163, "HERO VR 0.0.78: + PUNISHER ARSENAL, SCOPE ZOOM, MAG EJECT; 0.0.76 MP WORLD: + PLAYER 2 PLACE; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (9); 0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; 0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -24066,13 +24066,16 @@ int main() {
                                       .6f,  1.462f, .45f, 1.462f, // CAPTAIN AMERICA's shield: throw, ricochet, catch, clang (0.0.78: both the player's hit)
                                       1.752f, 4.389f, 6.699f, // 0.0.72 pistol_reload, THOR's two lightnings
                                       3.25f, 11.519f, .26f, // 0.0.73 the PUNISHER VAN: start-up, engine loop, door slam
-                                      .415f, .602f, .825f}; // 0.0.78 WOLVERINE's claws: stab, slash 1, slash 2 (the player's, trimmed)
-        static_assert(sounds == 29);
+                                      .415f, .602f, .825f, // 0.0.78 WOLVERINE's claws: stab, slash 1, slash 2 (the player's, trimmed)
+                                      .9f, 1.2f, .7f}; // 0.0.78 PUNISHER ARSENAL: suppressed shot, rifle shot, pump rack
+        static_assert(sounds == 32);
         for (uint32_t i = 0; i < sounds; ++i) {
             const Pcm& p = sound(static_cast<Id>(i));
             const bool van = i == vanStart || i == vanEngine || i == vanDoorSlam; // 0.0.73: the player's quiet recording
-            const bool user = van || i == pistolShot || i == shotgunBlast || i == pistolReload || i == thorLightning1 || i == thorLightning2;
-            const uint32_t rate = i == thorLightning1 ? 44100u : i == shotgunBlast || i == thorLightning2 ? 48000u : user ? 24000u : 48000u;
+            // 0.0.78 PUNISHER ARSENAL (tools/sfx/arsenal_0078.py): made from the player's sounds, 48 kHz stereo, levelled
+            const bool arsenal = i == suppressedShot || i == rifleShot || i == pumpRack;
+            const bool user = arsenal || van || i == pistolShot || i == shotgunBlast || i == pistolReload || i == thorLightning1 || i == thorLightning2;
+            const uint32_t rate = i == thorLightning1 ? 44100u : arsenal || i == shotgunBlast || i == thorLightning2 ? 48000u : user ? 24000u : 48000u;
             check(p.ok && p.rate == rate && p.channels == (user ? 2u : 1u) && p.bits == 16 && p.data && p.bytes % 2 == 0,
                   std::string(names[i]) + " is not its rate, channels and 16-bit PCM");
             check(std::fabs(p.seconds() - expect[i]) < .02f, std::string(names[i]) + " has the wrong length");
@@ -24086,6 +24089,8 @@ int main() {
             const float lift = i == vanDoorSlam ? slamGain : i == vanEngine ? engineFullGain : engineIdleGain;
             if (van)
                 check(peak > 800 && peak * lift > 8000.f && peak * lift < 32768.f, std::string(names[i]) + " is silent or clips at its gain");
+            else if (arsenal) // written at -20 LUFS max momentary, the peak capped at -1 dBFS (29204)
+                check(peak > 3000 && peak <= 29204, std::string(names[i]) + " is silent or past -1 dBFS");
             else
                 check(peak > 10000 && peak <= (user ? 32768 : 32767), std::string(names[i]) + " is silent or clipped");
         }
@@ -27837,7 +27842,7 @@ int main() {
     test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
         namespace mm = spidy::mesh_model;
         check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slotSuitEnd == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23 &&
-                  mm::slots == mm::slotSuitEnd + 14 + 2 + 4 /* 0.0.75 MOTORCYCLE body + bars, 0.0.76 HARLEYS two pairs */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
+                  mm::slots == mm::slotSuitEnd + 14 + 2 + 4 + 12 /* 0.0.75 MOTORCYCLE body + bars, 0.0.76 HARLEYS two pairs, 0.0.78 PUNISHER ARSENAL */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
               "the suits follow the roster");
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;
@@ -28821,7 +28826,7 @@ int main() {
         check(v.empty(), "a NaN item draws nothing");
     });
     test("Version 0.0.7: the new sounds and defaults", [] {
-        check(spidy::sfx::sounds == 29, "twenty-nine sounds (0.0.7: + 9, CAPTAIN AMERICA + 4, 0.0.72 pistol_reload + THOR's 2, 0.0.73 the van's 3, 0.0.78 WOLVERINE's stab + 2 slashes)");
+        check(spidy::sfx::sounds == 32, "thirty-two sounds (0.0.7: + 9, CAPTAIN AMERICA + 4, 0.0.72 pistol_reload + THOR's 2, 0.0.73 the van's 3, 0.0.78 WOLVERINE's stab + 2 slashes, the PUNISHER ARSENAL's 3)");
         using namespace spidy::combat38;
         for (uint32_t o = batman; o <= shieldLook; ++o) { // CAPTAIN AMERICA: through SHIELD LOOK
             const std::string help = optionInfo[o].help;
@@ -32403,8 +32408,37 @@ int main() {
         v.clear();
         appendMuzzleFlash(v, {0, 1.4f, -.5f}, {0, 0, -1}, false, flashLife + .01f, {0, 1.6f, 0}, .002f);
         check(v.empty(), "an old flash drew");
-        appendImpact(v, {0, 1.4f, -6}, {0, 0, 1}, .05f, {0, 1.6f, 0}, .002f);
-        check(!v.empty() && v.size() <= budget::impact, "the hit puff: " + std::to_string(v.size()));
+        // HERO VR 0.0.78 GUN BLOOD: the hit is blood now - the spray along the shot and the wound on him; no grey
+        // dust puff, no hot spark, no grey lines back (the 0.0.72 hit puff is gone).
+        const auto allRed = [](const std::vector<spidy::Vertex>& w) {
+            for (const auto& x : w)
+                if (!(x.color.x > 2 * x.color.y && x.color.x > 2 * x.color.z))
+                    return false;
+            return !w.empty();
+        };
+        for (const float at : {.02f, .05f, .3f, 1.f, 3.f, 7.f}) {
+            v.clear();
+            appendImpact(v, {0, 1.4f, -6}, {0, 1.4f, -6}, {0, 0, -1}, at, .2f, 7u, false, {0, 1.6f, 0}, .002f);
+            check(allRed(v) && v.size() <= budget::impact, "the gun blood at " + std::to_string(at) + "s: " + std::to_string(v.size()));
+        }
+        {
+            std::vector<spidy::Vertex> wild, early, late;
+            appendImpact(wild, {0, 1.4f, -6}, {0, 1.4f, -6}, {0, 0, -1}, .3f, .2f, 7u, true, {0, 1.6f, 0}, .002f);
+            check(allRed(wild) && wild.size() <= budget::impact, "the EXTREME gun blood");
+            appendImpact(early, {0, 1.4f, -6}, {0, 1.4f, -6}, {0, 0, -1}, .08f, .2f, 7u, false, {0, 1.6f, 0}, .002f);
+            appendImpact(late, {0, 1.4f, -6}, {0, 1.4f, -6}, {0, 0, -1}, .08f, .2f, 7u, false, {0, 1.6f, 0}, .002f);
+            check(early.size() == late.size(), "the gun blood is not steady for a seed");
+            // the spray goes on along the shot (-z, away from the shooter), not back at him
+            float zSum = 0;
+            for (const auto& x : wild)
+                zSum += x.position.z;
+            check(zSum / wild.size() < -6.f, "the spray goes back at the shooter");
+            v.clear();
+            appendImpact(v, {0, 1.4f, -6}, {0, 1.4f, -6}, {0, 0, -1}, impactLife + .01f, .2f, 7u, false, {0, 1.6f, 0}, .002f);
+            appendImpact(v, {NAN, 1.4f, -6}, {0, 1.4f, -6}, {0, 0, -1}, .1f, .2f, 7u, false, {0, 1.6f, 0}, .002f);
+            check(v.empty(), "an old / bad gun blood drew");
+        }
+        v.clear();
         // Shooting him: a flash at the muzzle, a hit puff on him.
         Play g;
         PlayInput in;
@@ -32438,7 +32472,7 @@ int main() {
             puffs += a < impactLife;
         check(blows > 0 && d.flashAge[1] < 1 && puffs > 0, "no flash / hit puff: " + std::to_string(blows));
         check(d.held[1].look == lookPistol && std::strlen(d.ammo[1]) > 0, "the ammo counter went");
-        for (int f = 0; f < 90; ++f)
+        for (int f = 0; f < int(impactLife * 90) + 10; ++f) // HERO VR 0.0.78: the blood stays its life on him
             hand(outR, 1, 0);
         g.draw(d, Pose{}, in, 0);
         puffs = 0;

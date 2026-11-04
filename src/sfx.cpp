@@ -37,6 +37,9 @@ SPIDY_SFX(van_door_slam)
 SPIDY_SFX(claw_stab) // 0.0.78: WOLVERINE's stab and slashes, the player's own (claw_*_user.wav)
 SPIDY_SFX(claw_slash_1)
 SPIDY_SFX(claw_slash_2)
+SPIDY_SFX(suppressed_shot) // HERO VR 0.0.78 PUNISHER ARSENAL (tools/sfx/arsenal_0078.py)
+SPIDY_SFX(rifle_shot)
+SPIDY_SFX(pump_rack)
 #undef SPIDY_SFX
 } // namespace spidy::sfx_data
 
@@ -110,7 +113,10 @@ const Pcm& sound(Id id) {
         parseWav(sfx_data::van_door_slam, sfx_data::van_door_slamSize),
         parseWav(sfx_data::claw_stab, sfx_data::claw_stabSize),
         parseWav(sfx_data::claw_slash_1, sfx_data::claw_slash_1Size),
-        parseWav(sfx_data::claw_slash_2, sfx_data::claw_slash_2Size)};
+        parseWav(sfx_data::claw_slash_2, sfx_data::claw_slash_2Size),
+        parseWav(sfx_data::suppressed_shot, sfx_data::suppressed_shotSize), // HERO VR 0.0.78
+        parseWav(sfx_data::rifle_shot, sfx_data::rifle_shotSize),
+        parseWav(sfx_data::pump_rack, sfx_data::pump_rackSize)};
     static const Pcm none{};
     return id < sounds ? table[id] : none;
 }

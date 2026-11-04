@@ -23,13 +23,15 @@ namespace spidy::sfx {
 enum Id : uint32_t { sonicBoom, repulsorFire, chestBeam, beamReady, batonWhoosh, batonHit, repulsorCharge,
                      pistolShot, shotgunBlast, dryClick, magDrop, magSeat, holsterTick, clawSnikt, heatVision, freezeBreath,
                      shieldThrow, shieldRicochet, shieldCatch, shieldClang, pistolReload, thorLightning1, thorLightning2,
-                     vanStart, vanEngine, vanDoorSlam, clawStab, clawSlash1, clawSlash2, sounds };
+                     vanStart, vanEngine, vanDoorSlam, clawStab, clawSlash1, clawSlash2,
+                     suppressedShot, rifleShot, pumpRack, sounds }; // HERO VR 0.0.78 PUNISHER ARSENAL: the last three
 inline constexpr const char* names[sounds] = {"sonic_boom", "repulsor_fire", "chest_beam",
                                               "beam_ready", "baton_whoosh", "baton_hit", "repulsor_charge",
                                               "pistol_shot", "shotgun_blast", "dry_click", "mag_drop", "mag_seat", "holster", "claw_snikt", "heat_vision", "freeze_breath",
                                               "shield_throw", "shield_ricochet", "shield_catch", "shield_clang", "pistol_reload", "thor_lightning_1", "thor_lightning_2",
                                               "van_start", "van_engine", "van_door_slam",
-                                              "claw_stab", "claw_slash_1", "claw_slash_2"};
+                                              "claw_stab", "claw_slash_1", "claw_slash_2",
+                                              "suppressed_shot", "rifle_shot", "pump_rack"};
 // HERO VR 0.0.78 CUT9 SOUND LEVELS (the owner t1872u: "all the new heroes' weapon sounds are incredibly loud").
 // Each sound's voice volume in dB, measured with tools/sfx/level_0078.py (EBU R128 max momentary loudness of
 // the embedded WAV): every hero weapon sound brought to levelTargetLufs (-20 LUFS max momentary), none raised
@@ -52,6 +54,9 @@ inline constexpr float levelDb[] = {
     0.f,    /* van_start */             0.f,   /* van_engine */          0.f,   /* van_door_slam (slamGain) */
     4.4f,   /* claw_stab_user -26.8, peak -5.4: capped at -1 dBFS */ 4.1f, /* claw_slash_user_1 -24.1 */
     -0.3f,  /* claw_slash_user_2 -19.7 */
+    // HERO VR 0.0.78 PUNISHER ARSENAL (tools/sfx/arsenal_0078.py): made from the player's own pistol, shotgun and
+    // reload recordings and written already at -20 LUFS max momentary (peaks at most -1 dBFS, silence trimmed): 0 dB.
+    0.f,    /* suppressed_shot */       0.f,   /* rifle_shot */          0.f,   /* pump_rack */
 };
 static_assert(sizeof(levelDb) / sizeof(levelDb[0]) == sounds, "a level for every sound");
 inline float levelGain(uint32_t id) { return id < sounds ? std::pow(10.f, levelDb[id] / 20.f) : 1.f; }
@@ -66,6 +71,8 @@ inline constexpr uint32_t voicesFor(uint32_t id) {
     return id == pistolShot ? 28u : id == shotgunBlast ? 12u : id == pistolReload ? 12u
          : id == thorLightning1 || id == thorLightning2 ? 24u // THOR: a strike each stormEvery (.35 s) over 6.7 s
          : id == vanStart || id == vanEngine ? 1u // 0.0.73: played on the engine's own voice (sfx_win.cpp)
+         // HERO VR 0.0.78: the rifle at punisher078::autoInterval (.08 s) with a 1.2 s tail; the can at .16 s, .9 s
+         : id == rifleShot ? 16u : id == suppressedShot ? 8u
                                                         : voicesPerSound;
 }
 

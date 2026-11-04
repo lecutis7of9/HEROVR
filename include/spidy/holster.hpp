@@ -89,13 +89,26 @@ inline BodyPoint bodyPoint(Vec3 hand, Vec3 head, const BodyYaw& body) {
 
 // ---- zones --------------------------------------------------------------------------------------
 // backLeft / backRight: the back split at the spine (DAREDEVIL's two batons over the shoulders).
-enum Zone : uint32_t { leftHip = 0, rightHip, back, backLeft, backRight, zones };
-inline constexpr const char* zoneNames[zones] = {"LEFT HIP", "RIGHT HIP", "BACK", "BACK LEFT", "BACK RIGHT"};
+// HERO VR 0.0.78 PUNISHER ARSENAL (punisher078.hpp): rightLeg, the PUNISHER model's own right-leg holster
+// (the suppressed pistol); backMiddle, the centre of the back between the shoulder blades (the pump
+// shotgun), so the sniper rifle (backLeft) and the assault rifle (backRight) are either side of it.
+enum Zone : uint32_t { leftHip = 0, rightHip, back, backLeft, backRight, rightLeg, backMiddle, zones };
+inline constexpr const char* zoneNames[zones] = {"LEFT HIP", "RIGHT HIP", "BACK", "BACK LEFT", "BACK RIGHT", "RIGHT LEG",
+                                                 "BACK MIDDLE"};
 // Test build 12 HOLSTERS HIGHER (the user: the PUNISHER's holsters "too low"): the hip zone runs from the
 // waist (.45 under the eyes) to mid-thigh (.95), generous to the side and ahead (the pistols' grips now sit
 // at hipGrip, the hip bone, not .86 m down by the knee).
 inline constexpr float hipBelow = .45f, hipLow = .95f, hipSide = .10f, hipOut = .45f, hipBack = .16f, hipFront = .30f;
 inline constexpr float backAbove = .10f, backBelow = .50f, backSide = .35f, backBehind = .10f;
+// HERO VR 0.0.78: the PUNISHER model's right-leg holster, measured on the mesh the game draws
+// (Models\Suits\Suit_punisher_1\scene.glb, the 80k HQ suit; tools/suits 5 cm grids, front and side): the mouth
+// at y .81, x -.25 (his right), z 0 of the 1.80 m suit whose eyes (suit_wear's restEye) are at y 1.70, z .065;
+// suit_wear draws it scaled by standingEye / 1.70 (.953), so in standingEye metres the mouth is .85 under the
+// eyes, .24 right, .06 behind them. (cut10: the arsenal branch's .735 / .165, read off renders of the source
+// against its visual eyes, put the grab at the belt line, 12 cm above the holster.) The grab box runs from .22
+// above the mouth to .16 below it, as generous as a hip; from .06 inside it, clear of the front belt.
+// backMiddle: within backMiddleSide of the spine (backLeft / backRight are the rest of the back).
+inline constexpr float legHolsterBelow = .85f, legHolsterSide = .24f, legHolsterAhead = -.06f, backMiddleSide = .08f;
 // Version 0.0.73 test 2 HOLO CALIBRATION (fix 25): where the player touched his belt, back and hips, as
 // shifts from the standing average (standingEye metres, the body frame; 0 with no calibration: the zones and
 // the worn places are exactly as before). Set on the game thread by the calibration, read there; each shift
@@ -129,13 +142,23 @@ inline bool inZone(uint32_t zone, BodyPoint p) {
             p.below >= -backAbove && p.below <= backBelow && std::abs(p.side) <= backSide && p.ahead <= -backBehind;
         return backOk && (zone == back || (zone == backLeft ? p.side <= .02f : p.side >= -.02f));
     }
+    case rightLeg: {
+        p.below -= fitShift(fitted().hipBelow, fitLimit);
+        const float side = p.side - fitShift(fitted().hipSide, fitSideLimit);
+        return p.below >= legHolsterBelow - .22f && p.below <= legHolsterBelow + .16f && side >= legHolsterSide - .06f &&
+               side <= legHolsterSide + .22f && std::abs(p.ahead - legHolsterAhead) <= .22f;
+    }
+    case backMiddle: {
+        p.below -= fitShift(fitted().backBelow, fitLimit);
+        return p.below >= -backAbove && p.below <= backBelow && std::abs(p.side) <= backMiddleSide && p.ahead <= -backBehind;
+    }
     default:
         return false;
     }
 }
 // The hands (bit 1 << hand: 1 left, 2 right) that may draw from a zone.
 inline uint32_t handsFor(uint32_t zone, bool crossDraw) {
-    if (zone == back || crossDraw)
+    if (zone == back || zone == backMiddle || crossDraw)
         return 3u;
     return zone == leftHip || zone == backLeft ? 1u : 2u;
 }

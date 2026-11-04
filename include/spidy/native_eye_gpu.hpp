@@ -172,6 +172,10 @@ uint64_t eyeColorPairs();  // pairs drawn graded
 // Update 38.5: 0, or why 90s ANIMATED's shader is off for the session (1 compile, 2 pipeline);
 // the pass and the other looks carry on.
 uint32_t eyeToonFault();
+// HERO VR 0.0.78 PUNISHER ARSENAL: this frame's optics for each eye (punisher078::opticConstants: the sniper's
+// scope or the rifle's red dot on its lens; all zero: none), drawn by the sharpening pass (it runs for them alone).
+// Each call is good for 100 ms (a stale scope is never drawn). False once the pass has failed. Any thread.
+bool setEyeOptics(const float left[12], const float right[12]);
 // Update 37.2: FOVEATED (foveation.hpp), D3D12 VRS tier 2 on the eye views' G-buffer passes.
 struct FoveaStatus {
     uint32_t level{}, inner{}, fault{}, tier{}, tile{};

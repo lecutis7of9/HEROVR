@@ -142,6 +142,41 @@ int main() {
         check(std::string_view(refusalName(99)) == "unknown", "unknown name");
     }
     check(std::string_view(videoNote).find("flat screen") != std::string_view::npos, "the video note");
+
+    // CUTFIX2: the headset's one-line note.
+    {
+        char line[160];
+        noteLine(immersive, refuseStill, line, sizeof(line));
+        check(std::string_view(line) == "IMMERSIVE NOT SHOWN: CAMERA STILL (PAUSE, CARD OR VIDEO)", line);
+        noteLine(screen3d, refuseNoPlayer | refuseStill | refuseMenu, line, sizeof(line));
+        check(std::string_view(line) == "3D NOT SHOWN: NO PLAYER +2", line);
+        noteLine(immersive, 0, line, sizeof(line));
+        check(line[0] == 0, "no refusal, no note");
+        noteLine(flat, refuseStill, line, sizeof(line));
+        check(line[0] == 0, "flat, no note");
+        for (unsigned b = 0; b < refusalCount; ++b)
+            for (const char* c = refusalLabel(b); *c; ++c)
+                check(*c != '_', "labels drawable (no underscore)");
+        RefusalNote n;
+        check(!n.update(true, refuseStill, 1000), "not at once");
+        check(!n.update(true, refuseStill, 1000 + noteSettleMs - 1), "settling");
+        check(n.update(true, refuseStill, 1000 + noteSettleMs), "shown after the settle");
+        check(!n.update(true, 0, 2000), "gone when the scene shows");
+        check(!n.update(true, refuseStill, 2001), "settles again");
+        check(!n.update(false, refuseStill, 5000), "gone with the screen");
+    }
+    // CUTFIX2: a shown scene rides a short gap in the player record; nothing starts without one.
+    {
+        HeroGrace g;
+        check(!g.present(false, false, 100), "no player, nothing shown");
+        check(g.present(true, false, 200), "a player");
+        check(g.present(false, true, 200 + heroGraceMs), "a shown scene, a gap within the grace");
+        check(!g.present(false, true, 201 + heroGraceMs), "past the grace");
+        check(!g.present(false, false, 300 + heroGraceMs), "not shown: no grace");
+        check(g.present(true, true, 9000) && g.present(false, true, 9500), "again");
+        check(!g.present(false, false, 9600), "the scene ended");
+        check(!g.present(false, true, 9700), "no grace once it ended");
+    }
     if (failures)
         return 1;
     std::printf("cutscene077_gate: all passed\n");

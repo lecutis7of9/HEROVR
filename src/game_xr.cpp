@@ -176,6 +176,7 @@
 #include "spidy/version.hpp"
 #include "spidy/cutscene077.hpp"
 #include "spidy/cutscene077_gate.hpp" // HERO VR 0.0.77 CUTFIX
+#include "spidy/cutscene077_note.hpp" // HERO VR 0.0.77 CUTFIX2
 #include <algorithm>
 #include <cctype>
 #include <atomic>
@@ -212,6 +213,7 @@ using namespace spidy;
 namespace spidy::cutscene077 {
 extern std::atomic<uint64_t> eyesPlaced;
 extern std::atomic<uint64_t> cameraMoves; // HERO VR 0.0.77 CUTFIX: render frames whose game camera moved
+extern std::atomic<uint64_t> cameraSamples; // HERO VR 0.0.77 CUTFIX2: frames the game camera was read
 }
 struct XrConfig {
     uint32_t magic = 0x53585243, version = 24, bytes = sizeof(XrConfig), pid{};
@@ -3063,6 +3065,13 @@ DWORD WINAPI run(void*) {
         cutscene077::RefusalLog cutRefusals, cutStretch;
         uint64_t cutStretchMs{}, cutMovesSeen{};
         bool cutWasScreen{}, cutVideoNoted{}, cutStretchShown{};
+        // HERO VR 0.0.77 CUTFIX2: the refusal as one line on the headset's screen (for testing), and the player
+        // gap a shown scene rides through (cutscene077_gate.hpp RefusalNote, HeroGrace).
+        cutscene077::RefusalNote cutNote;
+        cutscene077::HeroGrace cutHero;
+        bool cutNoteShow{}, cutWasShown{};
+        char cutNoteText[160]{};
+        uint64_t cutSamplesSeen{};
         bool cutImmersiveFault{}, cutPanelFault{}, cutStripFault{};
         bool flatScreen{};
         Pose screenPose{};
@@ -5428,8 +5437,10 @@ DWORD WINAPI run(void*) {
                     // Immersive: a scene the game plays on its own camera (the screen is up, a player, the bridge,
                     // not gameplay, not VIEW: GAME SCREEN, a tracked head), its clock running to start; a frozen
                     // clock (a QTE) holds it unless the menu button went with it (a pause: the screen).
+                    // HERO VR 0.0.77 CUTFIX2: a player, or a scene already shown riding a short gap in its record.
+                    const bool cutHeroOk = cutHero.present(player.hero != 0, cutWasShown, cutNowMs);
                     const bool immersiveScene = immersiveHold.update(
-                        cutMode == cutscene077::immersive && !cutImmersiveFault && screen && player.hero &&
+                        cutMode == cutscene077::immersive && !cutImmersiveFault && screen && cutHeroOk &&
                             bridgeRunning && !gameplay && !flatScreen && validTrackedPose(frame.head) &&
                             !(gpuStarted && native_gpu::eyesLost()),
                         timeRuns, (frame.buttons & buttonMenu) != 0, cutNowMs);
@@ -5438,6 +5449,7 @@ DWORD WINAPI run(void*) {
                         ++cutCounts.starts;
                     }
                     cutCounts.immersiveFrames += immersiveScene;
+                    cutWasShown = immersiveScene;
                     cutCounts.promptFrames += immersiveScene && immersiveHold.frozen();
                     // HERO VR 0.0.77 CUTFIX: each screen frame not shown 3d or immersive, and why (per gate).
                     if (cutMode != cutscene077::flat) {
@@ -5452,7 +5464,7 @@ DWORD WINAPI run(void*) {
                             cutscene077::GateInput gate;
                             gate.mode = cutMode;
                             gate.screen = screen;
-                            gate.hero = player.hero != 0;
+                            gate.hero = cutMode == cutscene077::immersive ? cutHeroOk : player.hero != 0;
                             gate.bridge = bridgeRunning;
                             gate.gameplay = gameplay;
                             gate.viewScreen = flatScreen;
@@ -5469,6 +5481,10 @@ DWORD WINAPI run(void*) {
                                 refused = cutscene077::refuseNoPanel;
                             cutRefusals.add(refused);
                             cutStretch.add(refused);
+                            // HERO VR 0.0.77 CUTFIX2: the reason, on the headset's screen.
+                            cutNoteShow = cutNote.update(true, refused, cutNowMs);
+                            if (cutNoteShow)
+                                cutscene077::noteLine(cutMode, refused, cutNoteText, sizeof(cutNoteText));
                         } else if (cutWasScreen && cutNowMs - cutStretchMs >= 1000) {
                             char reasons[400];
                             cutStretch.reasons(reasons, sizeof(reasons));
@@ -5491,6 +5507,10 @@ DWORD WINAPI run(void*) {
                         }
                     }
                     cutWasScreen = screen && cutMode != cutscene077::flat;
+                    if (!cutWasScreen) {
+                        cutNote.update(false, 0, cutNowMs);
+                        cutNoteShow = false;
+                    }
                     if (cutMode != cutscene077::flat && (!cutLogMs || cutNowMs - cutLogMs >= 10000)) {
                         cutLogMs = cutNowMs;
                         char line[640];
@@ -5525,15 +5545,18 @@ DWORD WINAPI run(void*) {
                         cutRefusals.reasons(reasons, sizeof(reasons));
                         char why[640];
                         sprintf_s(why,
-                                  "HERO VR 0.0.77 CUTFIX: scene clock %s, camera moves %llu (+%llu); screen frames "
-                                  "%llu refused %llu: %s",
+                                  "HERO VR 0.0.77 CUTFIX: scene clock %s, camera moves %llu (+%llu) of %llu frames "
+                                  "read (+%llu); screen frames %llu refused %llu: %s",
                                   cutscene077::clockName(cutMotion.source()),
                                   static_cast<unsigned long long>(cameraMovesNow),
                                   static_cast<unsigned long long>(cameraMovesNow - cutMovesSeen),
+                                  static_cast<unsigned long long>(cutscene077::cameraSamples.load()),
+                                  static_cast<unsigned long long>(cutscene077::cameraSamples.load() - cutSamplesSeen),
                                   static_cast<unsigned long long>(cutRefusals.frames()),
                                   static_cast<unsigned long long>(cutRefusals.refused()), reasons);
                         message(3, 0, why);
                         cutMovesSeen = cameraMovesNow;
+                        cutSamplesSeen = cutscene077::cameraSamples.load();
                         cutRefusals.reset();
                     }
                     // On the screen the controllers are the game's Xbox
@@ -13455,6 +13478,21 @@ DWORD WINAPI run(void*) {
                                 const auto text = std::string("VR continues; Spidy's drawings are off this session: ") +
                                                   e.what();
                                 message(3, 0, text.c_str());
+                            }
+                        }
+                        // HERO VR 0.0.77 CUTFIX2: why this scene is on the flat screen, one line along its top.
+                        else if (cutNoteShow && cutNoteText[0] && !overlayFault) {
+                            try {
+                                const float aspect = static_cast<float>(left.width) / static_cast<float>(left.height);
+                                std::vector<Vertex> note, backing;
+                                cutscene077_note::append(note, backing, cutNoteText, aspect);
+                                const std::array<D3D12Renderer::ViewTarget, 1> noteView{
+                                    {{left.texture, left.format, left.width, left.height,
+                                      eye_swap::noticeProjection(aspect)}}};
+                                overlay.renderViews(noteView, note, true, false, backing);
+                            } catch (...) {
+                                cutNoteShow = false; // only the note: the screen is drawn as before
+                                cutNoteText[0] = 0;
                             }
                         }
                         copyMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -

@@ -18,7 +18,9 @@
 // immersive, only shown on the flat screen. Its camera does not move, so it stays there (reason camera_still).
 //
 // Pure and allocation-free; nothing here reads or writes the game. Made by Agent Mulder.
+#include "cutscene077.hpp"
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 
@@ -184,4 +186,79 @@ class RefusalLog {
 // Said in the log once a session: what can never be immersive.
 constexpr const char* videoNote =
     "a pre-rendered video has no 3D camera: it can only be shown on the flat screen, never 3d or immersive";
+
+// HERO VR 0.0.77 CUTFIX2: the refusal as one line in the headset, for testing (the stroke font: capitals, digits,
+// some punctuation; no underscores). The first gate in the order of refusals' bits, and how many more.
+inline const char* refusalLabel(unsigned bit) {
+    static constexpr const char* labels[refusalCount] = {
+        "IMMERSIVE OFF THIS SESSION (FAULT)", "NO PLAYER", "NO VR BRIDGE", "GAMEPLAY", "VIEW: GAME SCREEN",
+        "NO HEAD TRACKING", "EYE IMAGES LOST", "SCENE CLOCK STOPPED", "CAMERA STILL (PAUSE, CARD OR VIDEO)",
+        "MENU BUTTON (PAUSE)", "3D DEPTH IS 0", "NO SUBTITLE PANEL"};
+    return bit < refusalCount ? labels[bit] : "UNKNOWN";
+}
+// "3D NOT SHOWN: CAMERA STILL (PAUSE, CARD OR VIDEO) +1" (empty for no refusal or flat).
+inline void noteLine(uint32_t mode, uint32_t mask, char* out, size_t size) {
+    if (!out || !size)
+        return;
+    out[0] = 0;
+    if (!mask || mode == flat)
+        return;
+    unsigned first = refusalCount, more = 0;
+    for (unsigned b = 0; b < refusalCount; ++b)
+        if (mask & (1u << b)) {
+            if (first == refusalCount)
+                first = b;
+            else
+                ++more;
+        }
+    if (first == refusalCount)
+        return;
+    if (more)
+        std::snprintf(out, size, "%s NOT SHOWN: %s +%u", mode == immersive ? "IMMERSIVE" : "3D", refusalLabel(first),
+                      more);
+    else
+        std::snprintf(out, size, "%s NOT SHOWN: %s", mode == immersive ? "IMMERSIVE" : "3D", refusalLabel(first));
+}
+// Shows the note once the same screen has been refused for noteSettleMs on end (a scene's first frames, and the
+// switch to the game's camera, go by without it); gone as soon as the scene shows or the screen goes down.
+inline constexpr uint64_t noteSettleMs = 750;
+class RefusalNote {
+public:
+    bool update(bool screen, uint32_t mask, uint64_t nowMs) {
+        if (!screen || !mask) {
+            sinceMs_ = 0;
+            mask_ = 0;
+            return false;
+        }
+        if (!sinceMs_)
+            sinceMs_ = nowMs ? nowMs : 1;
+        mask_ = mask;
+        return nowMs - sinceMs_ >= noteSettleMs;
+    }
+    uint32_t mask() const { return mask_; }
+
+private:
+    uint64_t sinceMs_{};
+    uint32_t mask_{};
+};
+
+// HERO VR 0.0.77 CUTFIX2 (CANDIDATE): the cut2 report's screen stretches lost the player record for some frames
+// (no_player 115 to 425 of 582 to 723). A scene already shown keeps going through such a gap for up to
+// heroGraceMs; it never starts without a player (the title screen, a load).
+inline constexpr uint64_t heroGraceMs = 2000;
+class HeroGrace {
+public:
+    bool present(bool hero, bool sceneShown, uint64_t nowMs) {
+        if (hero) {
+            seenMs_ = nowMs ? nowMs : 1;
+            return true;
+        }
+        if (!sceneShown)
+            seenMs_ = 0;
+        return sceneShown && seenMs_ && nowMs - seenMs_ <= heroGraceMs;
+    }
+
+private:
+    uint64_t seenMs_{};
+};
 } // namespace spidy::cutscene077

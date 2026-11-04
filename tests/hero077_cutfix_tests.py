@@ -42,8 +42,9 @@ class Cutfix(unittest.TestCase):
     def test_probe_counts_moves_read_only(self):
         p = src('src/stereo_probe.cpp')
         self.assertIn('std::atomic<uint64_t> cameraMoves{};', p)
-        at = p.index('HERO VR 0.0.77 CUTFIX (cutscene077_gate.hpp): whether the game')
-        body = p[at:p.index('native_eyes::Command desired{};', at)]
+        # CUTFIX2: sampled each frame in renderOffscreen, not only while our eyes render (placeEyes).
+        at = p.index('void sampleGameCamera() {')
+        body = p[at:p.index('uint8_t renderOffscreen() {', at)]
         self.assertIn('cutscene077::cameraMoved(lastPose, lastLens, pose.data(), lens)', body)
         self.assertNotIn('SetPose', body)
         self.assertNotIn('originalSubmit', body)
@@ -52,14 +53,14 @@ class Cutfix(unittest.TestCase):
         # Every safety gate of cut1 stays: the screen, a player, the bridge, not gameplay, not VIEW: GAME SCREEN, a
         # tracked head, eyes not lost, no fault; a refused or failed command keeps the screen.
         g = self.game
-        self.assertIn('cutMode == cutscene077::immersive && !cutImmersiveFault && screen && player.hero &&', g)
+        self.assertIn('cutMode == cutscene077::immersive && !cutImmersiveFault && screen && cutHeroOk &&', g)
         self.assertIn('bridgeRunning && !gameplay && !flatScreen && validTrackedPose(frame.head) &&', g)
         self.assertIn('return screen || gameScreen.holding();', g)
         self.assertIn('cutImmersiveFault = true;', g)
 
     def test_refusals_logged(self):
         g = self.game
-        self.assertIn('HERO VR 0.0.77 CUTFIX: scene clock %s, camera moves %llu (+%llu); screen frames ', g)
+        self.assertIn('HERO VR 0.0.77 CUTFIX: scene clock %s, camera moves %llu (+%llu) of %llu frames ', g)
         self.assertIn('HERO VR 0.0.77 CUTFIX: a %.1f s screen stretch, %s %s; frames %llu refused ', g)
         self.assertIn('cutscene077::videoNote', g)
         h = src('include/spidy/cutscene077_gate.hpp')

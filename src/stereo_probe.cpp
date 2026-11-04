@@ -69,6 +69,8 @@ std::atomic<uint64_t> eyesPlaced{};
 // HERO VR 0.0.77 CUTFIX (cutscene077_gate.hpp): render frames whose game camera (pose or lens) moved, the scene
 // clock SM2 has without the game-time hook.
 std::atomic<uint64_t> cameraMoves{};
+// HERO VR 0.0.77 CUTFIX2: frames the game camera was read at all (0: the sampler never ran).
+std::atomic<uint64_t> cameraSamples{};
 }
 using native_view::Descriptor;
 // NEAR CLIP's near plane for the head's and the eyes' lenses in immersive VR
@@ -2933,20 +2935,6 @@ void placeEyes() {
         gameJitter[0].store(main.values[0x428 / 4], std::memory_order_relaxed);
         gameJitter[1].store(main.values[0x42c / 4], std::memory_order_relaxed);
     }
-    // HERO VR 0.0.77 CUTFIX (cutscene077_gate.hpp): whether the game's own camera moved since the last render
-    // frame. Read only; a moving camera is a scene's clock on SM2 (no game-time hook), a still one a pause.
-    if (render) {
-        static float lastPose[16]{}, lastLens[4]{};
-        static bool havePose{};
-        const auto pose = main.pose();
-        const float lens[4]{main.values[0x400 / 4], main.values[0x404 / 4], main.values[0x408 / 4],
-                            main.values[0x40c / 4]};
-        if (havePose && cutscene077::cameraMoved(lastPose, lastLens, pose.data(), lens))
-            cutscene077::cameraMoves.fetch_add(1, std::memory_order_relaxed);
-        std::memcpy(lastPose, pose.data(), sizeof(lastPose));
-        std::memcpy(lastLens, lens, sizeof(lastLens));
-        havePose = true;
-    }
     native_eyes::Command desired{};
     bool controlled{};
     if (render && frameHead.frame == frameIndex) {
@@ -3391,9 +3379,37 @@ void* submitScene(void* view, void* parent, uint32_t flags, uint64_t last, uint6
     }
     return result;
 }
+// HERO VR 0.0.77 CUTFIX2 (cutscene077_gate.hpp): whether the game's own camera (base+0xc2ca220, the view
+// placeEyes() reads) moved since the previous frame, every frame the game sets up its render jobs. CONFIRMED by the
+// cut2 report: counted in placeEyes() (0.0.77 CUTFIX) it only ran while our eyes rendered, which a scene on the
+// screen has not got yet, so every screen frame read "camera_still" while the window probe showed the camera moving
+// each frame. Read only; an unreadable or invalid view counts nothing (the scene then stays on the screen).
+void sampleGameCamera() {
+    static float lastPose[16]{}, lastLens[4]{};
+    static bool havePose{};
+    Descriptor main{};
+    const auto primary = pointer(base + 0xc2ca220);
+    if (!primary || !read(primary, &main, sizeof(main)) || !native_view::valid(main)) {
+        havePose = false;
+        return;
+    }
+    const auto pose = main.pose();
+    const float lens[4]{main.values[0x400 / 4], main.values[0x404 / 4], main.values[0x408 / 4],
+                        main.values[0x40c / 4]};
+    cutscene077::cameraSamples.fetch_add(1, std::memory_order_relaxed);
+    if (havePose && cutscene077::cameraMoved(lastPose, lastLens, pose.data(), lens))
+        cutscene077::cameraMoves.fetch_add(1, std::memory_order_relaxed);
+    std::memcpy(lastPose, pose.data(), sizeof(lastPose));
+    std::memcpy(lastLens, lens, sizeof(lastLens));
+    havePose = true;
+}
 // 1920240 sets up this frame's render jobs for the offscreen views.
 uint8_t renderOffscreen() {
     ++offscreenPass;
+    try {
+        sampleGameCamera(); // HERO VR 0.0.77 CUTFIX2
+    } catch (...) {
+    }
     ++SpidyShadowData.passes;
     native_body::renderFrame();
     if (!lateEyes && (enabled || live.load() || hiddenHero.load()))

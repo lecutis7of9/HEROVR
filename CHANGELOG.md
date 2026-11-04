@@ -2,6 +2,16 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## 0.0.77 (tag v0.0.77) - cutscenes, story moves, Sandman, the flat front end (EXPERIMENTAL release)
+
+The cut8 build (f686fe4) released with the stamps moved: VERSION 0.0.77, PORT-VERSION Update 39.10, launcher 0.0.77.1
+build 19 (HERO_TEST_BUILD stays OFF). Cutscenes flat / 3d / immersive (live.txt `cutscenes`, flat the default), story
+moves and the phone's STORY MOVES cheat sheet, Sandman, boss damage read for every hero, the flat front end, the wrist
+minimap (in progress), the ledge fix. Known issues: the game's Y zip prompt and the objective waypoint do not show in
+VR yet. Every launcher on 0.0.76 or older offers it once; after the update the versions match, so it is not offered
+again. Still EXPERIMENTAL, 0.0.63 the most recent STABLE build; Revert unchanged. The launcher's Credits page carries the
+immersive cutscenes credit.
+
 ## hero-0.0.77-cutscene (8) - Sandman's HP read, a log for every throw, the objective marker's source (TEST build)
 
 From the player's cut7 report ("when you throw the debris at sandman if it hits him it is supposed to DAMAGE him";
@@ -344,6 +354,12 @@ game's own pad button; timings and the PC FNSM button are CANDIDATE until a head
 - **DIAGNOSTICS.** The timeline and console say each step: SWITCH HERO asked (phone / head), each phase, the result
   (switched / no new hero / cancelled), each throw (yank or click, ground or air). The new STRY record
   (SpidyStoryData) puts the counts in update37.json and one line in the report.
+## 0.0.76 in the launcher (tag v0.0.76.1) - the v0.0.76 files, version stamps only
+
+The published v0.0.76 (HV076.zip) still said VERSION 0.0.75, so no launcher could offer it. v0.0.76.1 is the same
+code with only the stamps moved: VERSION 0.0.76, PORT-VERSION Update 39.9, launcher 0.0.76.1 build 18. Every
+launcher on 0.0.75 or older (0.0.63 included) now offers 0.0.76 once; after the update the versions match, so it is
+not offered again. Still EXPERIMENTAL, 0.0.63 the most recent STABLE build; Revert unchanged.
 
 ## hero-0.0.76-bikes - a Harley for each hero, Cap's chest-draw grapple, Punisher holo guard (TEST build, not released)
 

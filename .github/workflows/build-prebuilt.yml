@@ -178,6 +178,13 @@ jobs:
             ${{ steps.pkg.outputs.zip }}.sha256
           retention-days: 30
 
+      - name: Keep the compiled launcher with this run (the release's launcher zip carries it)
+        uses: actions/upload-artifact@v7
+        with:
+          name: launcher-exe
+          path: out/ci/SM2VRLauncher.exe
+          retention-days: 30
+
       - name: Upload to the release
         if: ${{ inputs.upload && !startsWith(github.ref_name, 'hero-0.0.73') && !startsWith(github.ref_name, 'hero-0.0.74') && !startsWith(github.ref_name, 'hero-0.0.75') && !startsWith(github.ref_name, 'hero-0.0.76') && !startsWith(github.ref_name, 'hero-0.0.77') && !startsWith(github.ref_name, 'mp-solo-test') }}
         env:

@@ -66,7 +66,7 @@ inline float stepVolume(float v, int dir) {
 enum SeatMode : uint8_t { seatAuto = 0, seatButton = 1, seatOff = 2, seatHeight = 3 };
 inline constexpr const char* seatHelp = "AUTO SIT centres you in the driver's seat as you get in; no restart needed.";
 // The driver's eye in the van frame (vehicle_view's seat: x left, y up, z forward; metres).
-inline constexpr Vec3 seatEye{-.45f, 1.60f, -.762f}; // 0.0.78 SEAT REACH: van072::seatEye (0.56 m from the grips)
+inline constexpr Vec3 seatEye{-.45f, 1.60f, -.728f}; // 0.0.78 SEAT REACH: van072::seatEye (0.58 m from the grips)
 inline constexpr float liftLow = -.9f, liftHigh = .6f; // the most it moves the eye down / up
 // 0.0.74 test 10: the most it moves the eye level (any way). 0.0.78 SEAT REACH: 1 m (was .5: a boarding carry the
 // body fell short of by more left the eye that far back of the seat).

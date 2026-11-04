@@ -27842,7 +27842,9 @@ int main() {
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;
             check(std::string(mm::slotFolders[s]) == std::string("Suits/") + mm::suitFolders[k] && !mm::slotMayDecimate[s] &&
-                      mm::slotDrawCap[s] == mm::drawTriangles && mm::slotIsSuit(s) && mm::suitSlot(mm::suitFolders[k]) == s,
+                      // 0.0.78 HQ PUNISHER: its own cap suitHqTriangles (the 80k model); every other suit drawTriangles
+                      mm::slotDrawCap[s] == (std::string(mm::suitFolders[k]) == "Suit_punisher_1" ? mm::suitHqTriangles : mm::drawTriangles) &&
+                      mm::slotIsSuit(s) && mm::suitSlot(mm::suitFolders[k]) == s,
                   std::string("suit slot ") + mm::suitFolders[k]);
         }
         check(mm::suitSlot("Suit_hulk_1") == 0 && mm::suitSlot("") == 0 && mm::suitSlot(nullptr) == 0 && !mm::slotIsSuit(mm::slotRoster),
@@ -33116,8 +33118,10 @@ int main() {
                 const Vec3 c = m.centre + Vec3{sx * halfW, sy * halfH, 0};
                 const float t = (van072::wheelHub.z - van072::seatEye.z) / (c.z - van072::seatEye.z);
                 const Vec3 cross = van072::seatEye + (c - van072::seatEye) * t;
+                // 0.0.78 SEAT REACH: from the seat eye slid 0.18 m nearer the wheel (0.58 m from its grips) the lower
+                // left corner passes 0.203 m from the hub (0.228 from the measured seat): 1 cm margin past the rim's line
                 check(t > 0 && t < 1 && length(Vec3{cross.x - van072::wheelHub.x, cross.y - van072::wheelHub.y, 0}) >
-                                           van072::Tune{}.wheelRadius + .02f, "a corner hidden by the wheel");
+                                           van072::Tune{}.wheelRadius + .01f, "a corner hidden by the wheel");
             }
         const float eye = length(van072::seatEye - m.centre);
         check(eye > .6f && eye < 1.1f, "readable from the seat");

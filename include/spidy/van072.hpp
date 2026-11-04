@@ -42,11 +42,12 @@ inline constexpr Vec3 doorHandleOut{-.98f, 1.18f, -.66f}, doorHandleIn{-.855f, 1
 // 0.0.78 SEAT REACH (owner t1891u: "the view is far too far back from the steering wheel"): ROOT CAUSE - the seat
 // eye was the seat's own measured head spot, 0.53 m behind and 0.42 m over the hub: 0.70 m from the wheel's
 // 9-and-3 grips (an arm's full stretch; a seated driver's hands rest 0.45 - 0.6 m from his eyes). The eye is
-// slid forward at its height (the seat slid up) to driverReach of the grips: z -.55 -> -.762 (0.56 m;
+// slid forward at its height (the seat slid up) to driverReach of the grips: z -.55 -> -.728 (0.58 m;
 // carReachEye(seatEye072, wheelHub, .19) - tests/core_tests SEAT REACH). Head room: 0.29 m under the shell's roof.
 inline constexpr Vec3 seatEye072{-.45f, 1.60f, -.55f}; // the measured seat (the cab's seat back is behind it)
-inline constexpr Vec3 seatEye{-.45f, 1.60f, -.762f}, wheelHub{-.45f, 1.18f, -1.08f};
-inline constexpr float driverReach = .56f; // eye -> each grip: a natural seated reach (0.45 - 0.6 m)
+inline constexpr Vec3 seatEye{-.45f, 1.60f, -.728f}, wheelHub{-.45f, 1.18f, -1.08f};
+inline constexpr float driverReach = .58f; // eye -> each grip: a natural seated reach (0.45 - 0.6 m). Not nearer:
+// from 0.56 m the dash screen's lower left corner went behind the rim and was seen 56 degrees off (van_screen tests)
 // A car's driver eye slid forward (-z) at its height until the wheel's 9-and-3 grips (hub -+ gripHalf along x)
 // are `reach` away; an eye already that near (or a bad input) is kept. Never ahead of 0.2 m behind the hub.
 inline Vec3 carReachEye(Vec3 eye, Vec3 hub, float gripHalf, float reach = driverReach) {

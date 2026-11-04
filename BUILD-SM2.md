@@ -3119,7 +3119,7 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   hero007_play.hpp hipSuit / ownThighHolsters / PlayInput::suitHolster (kind 0: no drop-leg holster over the suit's);
   suit_wear WRIST TWIST (the twist chain); apps/wrist_twist_preview.cpp + tools/suits/render_wrist.py (the forearm
   cross-section at rolls -90/0/+90/180) and tools/suits/bpy_render_compare.py (source vs shipped close-ups, previews).
-  SEAT REACH: van072.hpp seatEye072 (the measured seat) / seatEye / driverReach .56 / carReachEye / carGripReach;
+  SEAT REACH: van072.hpp seatEye072 (the measured seat) / seatEye / driverReach .58 / carReachEye / carGripReach;
   vehicle074::seatEye the same; batmobile074::tune eye = carReachEye(layout eye, hub, .185); bike075::riderEye (the
   lean about the hip, riderTorso .72, mostLean .7 rad) in bike075::tune; vehicle074::seatReach and the rig's level
   clamp 1 m (game_tracking.hpp). No new live.txt switch.

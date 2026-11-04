@@ -56,10 +56,11 @@ From the player's cut8 reports ("prompts and main menu are top priority for 78")
   wheel's 9-and-3 grips or the bar grips (van 0.70, 1989 0.66, ODAMI 0.70, FOREVER 0.65, FOREVER 2 0.69, Cap's bike
   0.81, Wolverine's bike 0.79 m). Seated mode did apply the offset in all three axes (AUTO SIT; HEIGHT ONLY the height),
   the vehicle's yaw was handled, and the model scale was right; the level part of the move was also clamped at 0.5 m
-  twice, so a short boarding carry left him further back. Now each car's eye is slid forward at its height to 0.56 m
-  from the grips (van 0.195 m, 1989 0.12, ODAMI 0.19, FOREVER 0.11, FOREVER 2 0.17), head room re-measured on the
-  shipped models (0.13 m or more to the body and the roof); on the bikes the rider leans forward about his hip (Cap 25,
-  Wolverine 28 degrees) to 0.56 m. The seat move's level clamp is 1 m. tests/core_tests SEAT REACH checks every one.
+  twice, so a short boarding carry left him further back. Now each car's eye is slid forward at its height to 0.58 m
+  from the grips (van 0.18 m, 1989 0.09, ODAMI 0.16, FOREVER 0.085, FOREVER 2 0.145), head room re-measured on the
+  shipped models (0.13 m or more to the body and the roof); on the bikes the rider leans forward about his hip (Cap 23,
+  Wolverine 25 degrees) to 0.58 m. Not nearer: from 0.56 m the van's dash screen lost its lower left corner behind the
+  wheel's rim and was seen 56 degrees off; from 0.58 m that corner passes 1.3 cm outside the rim's line (VAN SCREEN test). The seat move's level clamp is 1 m. tests/core_tests SEAT REACH checks every one.
 
 ## 0.0.77 launcher hotfix (tag v0.0.77.1) - special thanks on the main screen
 

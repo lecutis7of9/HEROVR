@@ -36,7 +36,7 @@ van072::Tune tune(uint32_t car) {
     t.handleOut = l.handleOut;
     t.handleIn = l.handleIn;
     // 0.0.78 SEAT REACH (owner t1891u): every car's measured eye sat 0.58 m behind its hub (convert.py's one
-    // EYE/hub spacing), 0.63 - 0.70 m from the grips; slid forward at its height to van072::driverReach (0.56 m).
+    // EYE/hub spacing), 0.63 - 0.70 m from the grips; slid forward at its height to van072::driverReach (0.58 m).
     // Head room re-measured on the shipped models: 0.13 m or more to the body and the roof (was 0.16 - 0.19).
     t.eye = van072::carReachEye(l.eye, l.hub, .185f);
     t.hub = l.hub;

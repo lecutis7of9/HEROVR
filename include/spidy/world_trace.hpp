@@ -314,6 +314,12 @@ struct Boss {
     float metres{};
     Vital vital{};
     char name[nameChars]{};
+    // HERO VR 0.0.77 CUT8 BOSS HP (diagnostic): 0 no health component on its record, 1 BotHealth (exact vtable),
+    // 2 a class derived from BotHealth (RTTI), 3 only a "Health"-named class that is not BotHealth (otherHp /
+    // otherMost: its +0xd0 / +0xa0, logged only - unverified, never used as HP); healthClass: that class's name.
+    uint32_t healthFrom{};
+    float otherHp{-1.f}, otherMost{-1.f};
+    char healthClass[nameChars]{};
 };
 bool nearestBoss(Boss& out);
 uint64_t healthComponents(); // BotHealth components the last scan found

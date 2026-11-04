@@ -3,6 +3,7 @@
 // why). Read-only: it reads the component registry and RTTI with guarded reads and
 // writes only its own record.
 #include "spidy/world_trace.hpp"
+#include "spidy/cut8.hpp" // HERO VR 0.0.77 CUT8 POI TARGET
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -121,6 +122,10 @@ struct Class {
     uint32_t bits{};
     char name[nameChars]{};
     int prompt = -1; // HERO VR 0.0.77 PROMPT CARDS: story077d kind of it or a class it derives from
+    // HERO VR 0.0.77 CUT8 BOSS HP: 1 it is or derives from .?AVBotHealth@@ (by RTTI, so a class derived from it - a
+    // boss's own health - counts too; cut7 matched only BotHealth's exact vtable); healthNamed: some class in its
+    // hierarchy has "Health" in its name (the diagnostic logs it when a boss has no BotHealth).
+    bool botHealth{}, healthNamed{};
 };
 // A vtable's own class name and the bits of it and every class it derives from (MSVC x64 RTTI).
 Class classify(uintptr_t vtable) {
@@ -143,6 +148,10 @@ Class classify(uintptr_t vtable) {
         if (read(imageBase + hierarchy.bases + 4ull * i, &descriptor, 4) && read(imageBase + descriptor, &type, 4) &&
             typeName(imageBase + type, name)) {
             c.bits |= bitsOf(name);
+            if (!std::strcmp(name, ".?AVBotHealth@@"))
+                c.botHealth = true;
+            if (std::strstr(name, "Health"))
+                c.healthNamed = true;
             if (c.prompt < 0) // the most derived first
                 if ((c.prompt = story077d::kindOf(name)) >= 0)
                     c.bits |= promptBit;
@@ -219,6 +228,11 @@ void run() {
     std::vector<uintptr_t> enemyRecords;
     uintptr_t heroRecord{};
     std::unordered_map<uintptr_t, uintptr_t> healthOf, nowHealthOf; // Version 0.0.5: record -> BotHealth
+    // HERO VR 0.0.77 CUT8 BOSS HP: record -> 1 exact BotHealth / 2 derived; record -> the health class's name (also a
+    // "Health"-named class that is not BotHealth: otherHealth, its component, read for the log only).
+    std::unordered_map<uintptr_t, uint32_t> healthFrom, nowHealthFrom;
+    std::unordered_map<uintptr_t, const char*> healthClass, nowHealthClass;
+    std::unordered_map<uintptr_t, uintptr_t> otherHealth, nowOtherHealth;
     std::unordered_map<uintptr_t, std::array<char, nameChars>> enemyNames; // 0.0.75: record -> its enemy class
     auto rateFrom = std::chrono::steady_clock::now();
     uint32_t refreshes{};
@@ -339,6 +353,82 @@ void run() {
         for (auto& l : out)
             if (poiDumpLines.size() < 400)
                 poiDumpLines.push_back(std::move(l));
+    };
+    // HERO VR 0.0.77 CUT8 POI TARGET (diagnostic, read-only, draws nothing): the GUI2 POI components hold no world
+    // place of their own (cut7's POI DUMP: every one "at 0.0 0.0 0.0") but 32-bit words of the registry handle's form
+    // (cut8.hpp handleParts: e.g. +98 6b72c101). Each such word that resolves to a live registry entry (generation and
+    // the entry's own handle both match) is logged with that entry's class, its record's place and metres from the
+    // hero - when it changes, at most 300 lines a session. CANDIDATE source of the game's objective marker only:
+    // proven when a line's place / metres match the flat marker (its distance on the HUD) and follow it.
+    uintptr_t poiTable{};
+    uint32_t poiCount{};
+    uint32_t poiTargetLines{};
+    std::unordered_map<uintptr_t, uint64_t> poiTargetSig;
+    const auto poiTargets = [&](uintptr_t component, const char* kindName, bool heroOk, Vec3 heroWorld) {
+        if (!poiTable || !poiCount || poiTargetLines >= 300)
+            return;
+        uint64_t words[64]{};
+        if (!read(component, words, sizeof(words)))
+            return;
+        std::string line;
+        uint64_t sig = 1469598103934665603ull;
+        uint32_t hits = 0;
+        for (uint32_t i = 1; i < 64 && hits < 6; ++i)
+            for (uint32_t half = 0; half < 2 && hits < 6; ++half) {
+                const uint32_t h = static_cast<uint32_t>(words[i] >> (32 * half));
+                uint32_t index{}, gen{};
+                if (!cut8::handleParts(h, poiCount, index, gen))
+                    continue;
+                struct Entry16 {
+                    uintptr_t address;
+                    uint32_t generation, pad;
+                } e{};
+                if (!read(poiTable + index * 16ull, &e, sizeof(e)) || e.generation != gen || e.address < 0x10000 ||
+                    e.address % 8)
+                    continue;
+                struct Head {
+                    uintptr_t vtable, pad0, record;
+                    uint32_t pad1, handle;
+                } hd{};
+                if (!read(e.address, &hd, sizeof(hd)) || hd.handle != h)
+                    continue;
+                ++hits;
+                uintptr_t vt{};
+                const char* n = vtableName(e.address, vt);
+                Vec3 at{};
+                const bool placed = hd.record && position(hd.record, at) && finite(at);
+                char piece[160];
+                if (placed)
+                    sprintf_s(piece, " +%x%s %08x=%.36s at %.1f %.1f %.1f %.0f m;", i * 8, half ? "h" : "", h,
+                              n ? (std::strncmp(n, ".?AV", 4) ? n : n + 4) : "?", at.x, at.y, at.z,
+                              heroOk ? length(at - heroWorld) : -1.f);
+                else
+                    sprintf_s(piece, " +%x%s %08x=%.36s (no place);", i * 8, half ? "h" : "", h,
+                              n ? (std::strncmp(n, ".?AV", 4) ? n : n + 4) : "?");
+                line += piece;
+                sig = (sig ^ h ^ (static_cast<uint64_t>(i) << 40)) * 1099511628211ull;
+                if (placed)
+                    sig = (sig ^ static_cast<uint64_t>(static_cast<int64_t>(at.x) * 7 + static_cast<int64_t>(at.z))) *
+                          1099511628211ull;
+            }
+        if (!hits)
+            return;
+        auto& was = poiTargetSig[component];
+        if (was == sig)
+            return;
+        was = sig;
+        ++poiTargetLines;
+        char head[160];
+        sprintf_s(head, "CUT8 POI TARGET %u %.30s 0x%llx slot %08llx:", poiTargetLines,
+                  kindName ? kindName : "?", static_cast<unsigned long long>(component),
+                  static_cast<unsigned long long>(words[0x80 / 8] & 0xffffffffull));
+        std::string l = head;
+        l += line;
+        if (l.size() > 236)
+            l.resize(236);
+        std::lock_guard<std::mutex> lock(promptLock);
+        if (poiDumpLines.size() < 400)
+            poiDumpLines.push_back(std::move(l));
     };
     const auto botStep = [&](uintptr_t nearest) {
         if (!botOn.load(std::memory_order_relaxed))
@@ -480,6 +570,17 @@ void run() {
                             read(h->second + healthHp, &v.hp, 4) && read(h->second + healthMost, &v.most, 4))
                             v.have = std::isfinite(v.hp) && std::isfinite(v.most) && v.most > 0 && v.most < 1e7f;
                         boss.vital = v;
+                        // CUT8 BOSS HP diagnostic: where its HP came from (0 none, 1 BotHealth, 2 derived, 3 only a
+                        // Health-named class that is not BotHealth - its +d0/+a0 read for the log, never used).
+                        if (const auto f = healthFrom.find(record); f != healthFrom.end())
+                            boss.healthFrom = f->second;
+                        else if (const auto o = otherHealth.find(record); o != otherHealth.end()) {
+                            boss.healthFrom = 3;
+                            read(o->second + healthHp, &boss.otherHp, 4);
+                            read(o->second + healthMost, &boss.otherMost, 4);
+                        }
+                        if (const auto hc = healthClass.find(record); hc != healthClass.end() && hc->second)
+                            strncpy_s(boss.healthClass, hc->second, _TRUNCATE);
                     }
                 if (n < found.size() && metres <= enemyReach)
                     found[n++] = {metres, rel, record, at};
@@ -586,9 +687,14 @@ void run() {
             }
             registryMisses = 0;
             work.status = 1;
+            poiTable = table; // CUT8 POI TARGET
+            poiCount = static_cast<uint32_t>(count);
             nowWatched.clear();
             nowPrompts.clear();
             nowHealthOf.clear();
+            nowHealthFrom.clear();
+            nowHealthClass.clear();
+            nowOtherHealth.clear();
             nowActors.clear();
             nowArchetype.clear();
             uintptr_t hero{};
@@ -611,12 +717,27 @@ void run() {
                     !head.record)
                     continue;
                 ++work.entries;
-                if (head.vtable == imageBase + botHealthTable && nowHealthOf.size() < 4096) // Version 0.0.5
-                    nowHealthOf[head.record] = entry.address;
                 auto found = classes.find(head.vtable);
                 if (found == classes.end()) {
                     found = classes.emplace(head.vtable, classify(head.vtable)).first;
                     work.classes = classes.size();
+                }
+                // Version 0.0.5 BotHealth by its vtable; HERO VR 0.0.77 CUT8 BOSS HP (CANDIDATE): also any class
+                // derived from BotHealth (RTTI). The exact one wins over a derived one on the same record.
+                {
+                    const bool exact = head.vtable == imageBase + botHealthTable;
+                    if ((exact || found->second.botHealth) && nowHealthOf.size() < 4096) {
+                        auto& slot = nowHealthFrom[head.record];
+                        if (exact || slot != 1) {
+                            nowHealthOf[head.record] = entry.address;
+                            slot = exact ? 1u : 2u;
+                            nowHealthClass[head.record] = found->second.name;
+                        }
+                    } else if (found->second.healthNamed && nowHealthClass.size() < 8192 &&
+                               !nowHealthFrom.count(head.record)) {
+                        nowHealthClass[head.record] = found->second.name; // logged only, not read
+                        nowOtherHealth[head.record] = entry.address;
+                    }
                 }
                 const uint32_t bits = found->second.bits;
                 if (!bits)
@@ -680,6 +801,9 @@ void run() {
                 heroRecord = heroKnown ? hero : 0;
                 heroNowRecord.store(heroRecord, std::memory_order_relaxed);
                 healthOf.swap(nowHealthOf);
+                healthFrom.swap(nowHealthFrom);
+                healthClass.swap(nowHealthClass);
+                otherHealth.swap(nowOtherHealth);
                 healthFound.store(healthOf.size(), std::memory_order_relaxed);
                 enemyNames.clear();
                 // 0.0.76 CRIME GPS FIX: the 64 nearest the hero (guarded position reads; unknown ones last)
@@ -836,7 +960,7 @@ void run() {
                 }
                 std::vector<story077g::Candidate> marks;
                 std::vector<uintptr_t> markRecords;
-                uint32_t reads = 0, poiNewReads = 0;
+                uint32_t reads = 0, poiNewReads = 0, poiTargetReads = 0;
                 counts.poiComponents = counts.poiTyped = counts.poiUntyped = counts.poiTypeCount = 0;
                 for (auto& c : counts.objectiveCandidates)
                     c = 0;
@@ -864,6 +988,8 @@ void run() {
                             t = poiTypeOf.emplace(address, poiTypeName(address)).first;
                             poiDump(address, k->cls, at, heroKnown ? length(at - heroAt) : -1.f);
                         }
+                        if (poiTargetReads++ < 48) // CUT8 POI TARGET (diagnostic): its handle words, logged on change
+                            poiTargets(address, k->cls, heroKnown, heroAt);
                         if (t == poiTypeOf.end())
                             continue;
                         const char* tn = t->second;
@@ -897,6 +1023,8 @@ void run() {
                 }
                 for (auto it = poiTypeOf.begin(); it != poiTypeOf.end();) // forget the gone ones
                     it = promptsLive.count(it->first) ? std::next(it) : poiTypeOf.erase(it);
+                for (auto it = poiTargetSig.begin(); it != poiTargetSig.end();) // CUT8 POI TARGET: the gone ones
+                    it = promptsLive.count(it->first) ? std::next(it) : poiTargetSig.erase(it);
                 const story077g::Mark mark = story077g::pick(marks.data(), static_cast<uint32_t>(marks.size()), heroAt,
                                                              heroKnown, waypointMode.load(std::memory_order_relaxed));
                 uintptr_t markRecord{};

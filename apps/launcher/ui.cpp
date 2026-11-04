@@ -2488,6 +2488,8 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                    "(live.txt waypoints = scan to try it): its source is not found yet, scans write POI DUMP lines"},
           {"Punch with a web held", "A hand whose swing web holds still punches near an enemy or a boss "
                                     "(live.txt punch_web = off: it never does, as cut6)"},
+          {"LB + RB near a boss", "The game's throw; each one logs the boss's HP over 2 s, the left stick sent, the aim "
+                                  "and his distance (live.txt throw_watch = off: no such log)"},
           {"A or a web on a ledge", "Off a ledge or roof edge (the game's floor crawl) as off a wall: RT + A "
                                     "(live.txt ledge_jump = game: cut6's; wall_view = turned: the view onto the wall)"},
           {"Left stick all the way", "live.txt story_sprint = on: the game's run (RT) while your feet are on the ground; off by default"},

@@ -2,6 +2,26 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-cutscene (8) - Sandman's HP read, a log for every throw, the objective marker's source (TEST build)
+
+From the player's cut7 report ("when you throw the debris at sandman if it hits him it is supposed to DAMAGE him";
+"BUILD THE CORRECT IN GAME OBJECTIVE WAYPOINTS THAT THE GAME ALREADY USES JUST MAKE IT APPEAR IN VR DONT MAKE YOUR
+OWN DONT GUESS"):
+- **Sandman's HP (cause CANDIDATE, fix CANDIDATE):** every BOSS DAMAGE line in every log read "hp -1 / 0": the read
+  takes a record's health only from a component with BotHealth's exact vtable (0x531b0a0), which the thugs have
+  (0.0.5's DAMAGE PROBE read them) but Sandman's record never showed. The scan now also takes any component whose
+  class derives from .?AVBotHealth@@ (by RTTI), and a "CUT8 BOSS HP" line says where his HP came from (none /
+  BotHealth / a derived class / only a Health-named class that is not BotHealth, read for the log only) and the
+  class's name. The headset confirms it: that line shows a real hp.
+- **Every throw logged (live.txt throw_watch, 5598, on by default):** each LB + RB throw writes a "CUT8 THROW WATCH"
+  line 2 s later: the boss's HP as the throw starts and at 0.5 s, 1 s and 2 s (and the lowest), his distance before
+  and after, the left stick sent the game that frame and the throw aim (story_throw_aim's mode and degrees).
+- **The game's objective marker (source NOT FOUND, nothing drawn):** cut7's POI DUMP showed the game's GUI2 POI
+  components hold no world place of their own, but words of the registry handle's form. "CUT8 POI TARGET" lines now
+  resolve those words through the game's registry and log the class, world place and distance of what each points
+  to. No marker is drawn from it: it is the game's marker's source only once a line's distance matches the distance
+  the flat HUD shows by the marker and follows it. The waypoints default stays off.
+
 ## hero-0.0.77-cutscene (7) - the wrist minimap, off the ledge, Sandman, a flat front end, FPS (TEST build, 0.0.77 RC)
 
 From the player's report on cut6 ("left wrist doesnt show map, i can move after cutscene just not off that ledge ...

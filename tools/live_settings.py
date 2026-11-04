@@ -595,6 +595,9 @@ SETTINGS = {
     'punch_web': ((0, 1), 'SpidyPunchWeb', "PUNCH WEB {} (0 on, the default: a hand whose swing web holds still punches "
                   "while an enemy is near or a boss within 40 m; 1 off: a webbing hand never punches, as cut6) - live, "
                   "no restart needed"),
+    'throw_watch': ((0, 1), 'SpidyThrowWatch', "THROW WATCH {} (0 on, the default: each LB + RB throw logs the boss's HP "
+                    "as it starts and over the next 2 s, the left stick sent, the throw's aim and the boss's distance; "
+                    "1 off: no such log) - live, no restart needed"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
                     "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
@@ -790,6 +793,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'wall_view': ('level', 'turned'),  # HERO VR 0.0.77 CUT7
                 'ledge_jump': ('all', 'game'),  # HERO VR 0.0.77 CUT7
                 'punch_web': ('on', 'off'),  # HERO VR 0.0.77 CUT7
+                'throw_watch': ('on', 'off'),  # HERO VR 0.0.77 CUT8
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
                 'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
                 'fly_classic': ('off', 'on'),  # HERO VR 0.0.76 FLIGHT (off: the reworked flight)
@@ -1072,6 +1076,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'wall_view': {'level': 0, 'turned': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
            'ledge_jump': {'all': 0, 'game': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
            'punch_web': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
+           'throw_watch': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT8
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
            'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
            'fly_classic': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.76 FLIGHT
@@ -1419,6 +1424,7 @@ START_ONLY = START_ONLY + ('waypoints',)  # HERO VR 0.0.77 WAYPOINT
 START_ONLY = START_ONLY + ('wrist_map', 'wrist_map_size', 'wrist_map_at', 'wrist_map_hud')  # HERO VR 0.0.77 WRIST MAP
 START_ONLY = START_ONLY + ('wrist_map_source', 'wrist_map_holo', 'see_through_depth', 'diag_logs',
                            'cut_note', 'wall_view', 'ledge_jump', 'punch_web')  # HERO VR 0.0.77 CUT7: kept between sessions
+START_ONLY = START_ONLY + ('throw_watch',)  # HERO VR 0.0.77 CUT8: kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

@@ -3092,3 +3092,11 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   stand-in and sm2_damage::watchBoss); native_gpu::sceneDepthInUse, diagEveryMs, Frames::tick window, bootCounts.
   live.txt: wrist_map_source 5590, wrist_map_holo 5591, see_through_depth 5592, diag_logs 5593, cut_note 5594,
   wall_view 5595, ledge_jump 5596, punch_web 5597.
+- cut8 (include/spidy/cut8.hpp, tests/cut8_tests.cpp, tests/hero077_cut8_tests.py, src/world_trace.cpp,
+  src/game_xr.cpp): world_trace Class::botHealth / healthNamed (classify's RTTI base walk); the BotHealth match
+  moved after the class lookup and takes exact (1) or derived (2) BotHealth, healthFrom / healthClass / otherHealth
+  per record, Boss::healthFrom / healthClass / otherHp / otherMost and the CUT8 BOSS HP line; cut8::ThrowWatch (the
+  rising LB + RB edge, hp at 0.5 / 1 / 2 s, lowest, stick sent, aim) and the CUT8 THROW WATCH line;
+  cut8::handleParts and poiTargets (the GUI2 POI components' handle-form words resolved through the registry, a CUT8
+  POI TARGET line on change, 300 a session, drained with the POI DUMP lines; nothing drawn).
+  live.txt: throw_watch 5598.

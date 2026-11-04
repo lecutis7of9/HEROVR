@@ -217,6 +217,9 @@ add_test(NAME cutscene077 COMMAND spidy_cutscene077_tests)
 add_executable(spidy_cut6_replay_tests tests/cut6_replay_tests.cpp)
 target_include_directories(spidy_cut6_replay_tests PRIVATE include)
 add_test(NAME cut6_replay COMMAND spidy_cut6_replay_tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/cut6_234713_samples.txt)
+add_executable(spidy_cut8_tests tests/cut8_tests.cpp) # HERO VR 0.0.77 CUT8
+target_include_directories(spidy_cut8_tests PRIVATE include)
+add_test(NAME cut8 COMMAND spidy_cut8_tests)
 # HERO VR 0.0.77 CUTFIX (include/spidy/cutscene077_gate.hpp): the scene clock without the game-time hook, refusals.
 add_executable(spidy_cutscene077_gate_tests tests/cutscene077_gate_tests.cpp)
 target_include_directories(spidy_cutscene077_gate_tests PRIVATE include)

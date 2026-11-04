@@ -69,6 +69,7 @@
 #include "spidy/prompt_cards.hpp" // HERO VR 0.0.77 PROMPT CARDS (drawing)
 #include "spidy/story077g.hpp" // HERO VR 0.0.77 WAYPOINT
 #include "spidy/story077h.hpp" // HERO VR 0.0.77 WRIST MAP
+#include "spidy/cut8.hpp" // HERO VR 0.0.77 CUT8 THROW WATCH
 #include "spidy/waypoint_mark.hpp" // HERO VR 0.0.77 WAYPOINT (drawing)
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
@@ -1414,6 +1415,9 @@ std::atomic<uint32_t> wallViewNow{0};
 // HERO VR 0.0.77 CUT7 SANDMAN: live.txt punch_web (0 on: a hand whose only hold is its own swing web still punches
 // while an enemy is listed or a boss is within 40 m; 1 off: SpidyVR's busy rule, as cut6). bossNear77: last frame's.
 std::atomic<uint32_t> punchWebNow{0};
+// HERO VR 0.0.77 CUT8: live.txt throw_watch (cut8::ThrowWatch; 0 on: each LB + RB throw logs the boss's HP as it starts
+// and over the next 2 s, the left stick sent, the aim and the boss's distance; 1 off).
+std::atomic<uint32_t> throwWatchNow{cut8::throwWatchOn};
 uint32_t bossNear77 = 0;
 uint64_t punchWebFreed77 = 0;
 std::atomic<uint32_t> ledgeJumpNow{0};
@@ -9336,6 +9340,21 @@ DWORD WINAPI run(void*) {
                                                               static_cast<double>(boss.metres), static_cast<double>(bossLastHp),
                                                               static_cast<double>(bossLastMost));
                                                     game_prompts::note(line);
+                                                    // HERO VR 0.0.77 CUT8 BOSS HP (diagnostic): where the HP read came from.
+                                                    static constexpr const char* hpFrom[4] = {
+                                                        "none (no health component on his record)", "BotHealth",
+                                                        "a class derived from BotHealth (CUT8, CANDIDATE)",
+                                                        "only a Health-named class that is not BotHealth (not read as HP)"};
+                                                    char hpLine[400];
+                                                    sprintf_s(hpLine, "HERO VR 0.0.77 CUT8 BOSS HP: %s health %s%s%s, hp %.0f / %.0f, "
+                                                                    "other +d0 %.1f +a0 %.1f (unverified), BotHealth records %llu",
+                                                              boss.name, hpFrom[boss.healthFrom < 4 ? boss.healthFrom : 0],
+                                                              boss.healthClass[0] ? " " : "", boss.healthClass,
+                                                              static_cast<double>(bossLastHp), static_cast<double>(bossLastMost),
+                                                              static_cast<double>(boss.otherHp), static_cast<double>(boss.otherMost),
+                                                              static_cast<unsigned long long>(world_trace::healthComponents()));
+                                                    game_prompts::note(hpLine);
+                                                    consoleLine(hpLine);
                                                 }
                                             }
                                         }
@@ -11769,6 +11788,40 @@ DWORD WINAPI run(void*) {
                                           sb::aimName(storyAimNow.load()), storyAim.throws,
                                           static_cast<double>(aim.degrees));
                                 game_prompts::note(line);
+                            }
+                            { // HERO VR 0.0.77 CUT8 THROW WATCH (cut8::ThrowWatch, read-only): live.txt throw_watch.
+                                static cut8::ThrowWatch throwWatch;
+                                static bool throwWatchWas = false;
+                                const bool watchOn = throwWatchNow.load() == cut8::throwWatchOn;
+                                const bool throwEdge = throwing && !throwWatchWas;
+                                throwWatchWas = throwing;
+                                const auto reportThrow = [&](const cut8::ThrowWatch::Report& r, bool cut) {
+                                    const auto f = [](float v) { return static_cast<double>(v); };
+                                    char line[360];
+                                    sprintf_s(line, "HERO VR 0.0.77 CUT8 THROW WATCH: throw %u%s, boss hp %.1f/%.0f -> 0.5 s %.1f, "
+                                                    "1 s %.1f, 2 s %.1f, lowest %.1f (-1: not read), boss %.0f m -> %.0f m, "
+                                                    "left stick sent %d %d (aim %s %.0f deg, mode %s), boss frames %u",
+                                              r.throwNo, cut ? " (cut short by the next throw)" : "", f(r.hp0), f(r.most0),
+                                              f(r.hpAt[0]), f(r.hpAt[1]), f(r.hpAt[2]), f(r.lowest), f(r.metres0),
+                                              f(r.metresEnd), r.stickX, r.stickY, r.aimActive ? "on" : "not sent",
+                                              f(r.aimDegrees), sb::aimName(storyAimNow.load()), r.bossSeen);
+                                    game_prompts::note(line);
+                                    consoleLine(line);
+                                };
+                                if (watchOn && (throwEdge || throwWatch.active)) {
+                                    world_trace::setEnemiesWanted(true); // the scan keeps the boss's list (2 s a call)
+                                    world_trace::Boss tb;
+                                    const bool known = world_trace::nearestBoss(tb);
+                                    cut8::ThrowWatch::Report r;
+                                    if (throwEdge) {
+                                        if (throwWatch.start(known, tb.vital.have != 0, tb.vital.hp, tb.vital.most, tb.metres,
+                                                             pad.thumbLX, pad.thumbLY, aim.active, aim.degrees, r))
+                                            reportThrow(r, true);
+                                    } else if (throwWatch.update(frame.seconds, known, tb.vital.have != 0, tb.vital.hp,
+                                                                 tb.metres, r))
+                                        reportThrow(r, false);
+                                } else if (!watchOn)
+                                    throwWatch.active = false;
                             }
                             // HERO VR 0.0.77 STORY SPRINT (story077b::StorySprint, CANDIDATE): the stick pushed all the
                             // way on the ground holds the game's RT (its run, "Hold R2" in the story's chases).
@@ -17571,6 +17624,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyCutNote(void* v) { return set
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWallView(void* v) { return setLive(v, 0, 1, 5595, wallViewNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyLedgeJump(void* v) { return setLive(v, 0, 1, 5596, ledgeJumpNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunchWeb(void* v) { return setLive(v, 0, 1, 5597, punchWebNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyThrowWatch(void* v) { return setLive(v, 0, 1, 5598, throwWatchNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
 }

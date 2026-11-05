@@ -321,6 +321,24 @@ struct ModelMisses {
     uint64_t full{}, badPlace{};
 };
 ModelMisses modelMisses();
+// HERO VR 0.0.78 cut15 PROP SKIPS: every hero prop model (a gun, the shield, a baton, the claws, the grapple gun, the
+// arsenal) appendHero007 did not draw, counted since the start by why: its model missing (MODEL MISSING, no stand-in),
+// the model sink full (modelSinkBudget), a bad place (non-finite frame or vertex), the model's size check (not
+// metric), out of range (under 5 cm or past its range from the eye), over its triangle cap, or other. game_xr logs a
+// rise for the first-person draw and the mirror's apart (at most every 10 s each, PROP SKIP lines).
+enum PropSkip : uint32_t { skipMissing, skipSinkFull, skipBadPlace, skipSize, skipRange, skipOverCap, skipOther, propSkipKinds };
+struct PropSkips {
+    uint64_t n[propSkipKinds]{};
+    uint32_t lastLook{}; // the last skipped Item::look
+    uint64_t total() const {
+        uint64_t t = 0;
+        for (const uint64_t v : n)
+            t += v;
+        return t;
+    }
+};
+PropSkips propSkips();
+const char* propSkipName(uint32_t why);
 // Version 0.0.72: ten ordinary models, plus the van (body, cab, wheel) and a hammer in hand and one on show;
 // build 9: + the worn suit twice (first person and the mirror); 0.0.74 test 1: + a hideout room.
 inline constexpr size_t modelSinkBudget = 3 * (10 * size_t{mesh_model::drawTriangles} + size_t{mesh_model::vanTriangles} +

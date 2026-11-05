@@ -217,6 +217,26 @@ void appendBatarang(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float
 namespace {
 std::vector<Vertex>* gModelSink = nullptr;
 std::atomic<uint64_t> gMissFull{0}, gMissBadPlace{0}; // 0.0.74 test 10 MIRROR PROPS: drawTextured's misses
+// cut15 PROP SKIPS: why the last model draw on this thread returned false (set where it fails), and the counts.
+thread_local uint32_t gFailWhy = skipOther;
+std::atomic<uint64_t> gSkips[propSkipKinds]{};
+std::atomic<uint32_t> gSkipLook{0};
+void skipped(uint32_t why, uint32_t look) {
+    gSkips[why < propSkipKinds ? why : skipOther].fetch_add(1, std::memory_order_relaxed);
+    gSkipLook.store(look, std::memory_order_relaxed);
+}
+}
+PropSkips propSkips() {
+    PropSkips r;
+    for (uint32_t i = 0; i < propSkipKinds; ++i)
+        r.n[i] = gSkips[i].load(std::memory_order_relaxed);
+    r.lastLook = gSkipLook.load(std::memory_order_relaxed);
+    return r;
+}
+const char* propSkipName(uint32_t why) {
+    static const char* const names[propSkipKinds] = {"model missing", "sink full", "bad place", "size check",
+                                                     "out of range", "over cap", "other"};
+    return why < propSkipKinds ? names[why] : "other";
 }
 ModelMisses modelMisses() {
     return {gMissFull.load(std::memory_order_relaxed), gMissBadPlace.load(std::memory_order_relaxed)};
@@ -238,11 +258,13 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
     const Vec3 ex = place(Vec3{1, 0, 0}) - o, ey = place(Vec3{0, 1, 0}) - o, ez = place(Vec3{0, 0, 1}) - o;
     if (!ok(o) || !ok(ex) || !ok(ey) || !ok(ez)) {
         gMissBadPlace.fetch_add(1, std::memory_order_relaxed);
+        gFailWhy = skipBadPlace;
         return false;
     }
     const size_t from = sink.size();
     if (from + size_t{model.triangles()} * 3 > modelSinkBudget) {
         gMissFull.fetch_add(1, std::memory_order_relaxed);
+        gFailWhy = skipSinkFull;
         return false;
     }
     // Version 0.0.73 VAN FPS: a big model placed by a turn and one scale (the van, the hammers) takes the
@@ -314,6 +336,7 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
         if (!ok(v.position) || !ok(v.color) || !std::isfinite(v.shape.x) || !std::isfinite(v.shape.y)) {
             sink.resize(from);
             gMissBadPlace.fetch_add(1, std::memory_order_relaxed);
+            gFailWhy = skipBadPlace;
             return false;
         }
     }
@@ -325,13 +348,17 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
 // could not make its texture array) untextured, its light copy (Mesh::lite) when it has one.
 template <class Place>
 bool drawMesh(std::vector<Vertex>& out, const mesh_model::Mesh& full, Place place, Vec3 viewer) {
-    if (!full.ok() || full.triangles() > std::min(full.cap, mesh_model::vanTriangles))
+    if (!full.ok() || full.triangles() > std::min(full.cap, mesh_model::vanTriangles)) {
+        gFailWhy = skipOverCap;
         return false;
+    }
     if (gModelSink)
         return drawTextured(*gModelSink, full, place, viewer);
     const mesh_model::Mesh& model = full.lite && full.lite->ok() ? *full.lite : full;
-    if (model.triangles() > mesh_model::liteTriangles)
+    if (model.triangles() > mesh_model::liteTriangles) {
+        gFailWhy = skipOverCap;
         return false;
+    }
     thread_local std::vector<std::pair<float, uint32_t>> order;
     thread_local std::vector<Vec3> placed;
     const uint32_t n = model.triangles();
@@ -397,8 +424,10 @@ bool metric(const mesh_model::Mesh& m) {
 
 bool appendModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer) {
     Frame k{};
-    if (!metric(model) || !frameOf(it, k) || !ok(viewer) || !inRange(k.o, viewer, 40.f))
+    if (!metric(model) || !frameOf(it, k) || !ok(viewer) || !inRange(k.o, viewer, 40.f)) {
+        gFailWhy = !metric(model) ? skipSize : !frameOf(it, k) || !ok(viewer) ? skipBadPlace : skipRange; // cut15
         return false;
+    }
     return drawMesh(out, model, [&](Vec3 c) { return k.o + k.r * c.x + k.u * c.y - k.f * c.z; }, viewer);
 }
 
@@ -446,6 +475,26 @@ bool appendArsenal078(std::vector<Vertex>& out, const Item& it, const Draw& d, V
         appendModel(out, it, *part(mag), viewer);
     return true;
 }
+
+namespace {
+// cut15 PROP SKIPS: the arsenal item's own model (the gun's body, the loose magazine or shell) is not loaded.
+bool arsenalMissing078(const Item& it, const Draw& d) {
+    namespace p78 = punisher078;
+    const auto none = [&](uint32_t p) { return p >= parts078 || !d.arsenal078[p]; };
+    switch (it.look) {
+    case lookPump078: return none(partPump);
+    case lookPistol078: return none(partPistol);
+    case lookSniper078: return none(partSniper);
+    case lookRifle078: return none(partRifle);
+    case lookMag078:
+        return none(it.side == p78::suppressedPistol ? partPistolMag : it.side == p78::sniperRifle ? partSniperMag
+                    : it.side == p78::assaultRifle   ? partRifleMag
+                                                     : parts078);
+    case lookShell078: return none(partShell);
+    default: return false;
+    }
+}
+} // namespace
 
 bool appendClawModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer) {
     Frame k{};
@@ -1025,8 +1074,10 @@ bool drawLayered(std::vector<Vertex>& out, const mesh_model::Mesh& model, Place 
 
 bool appendShieldModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer) {
     Frame k{};
-    if (!metric(model) || !frameOf(it, k) || !ok(viewer) || !inRange(k.o, viewer, 80.f))
+    if (!metric(model) || !frameOf(it, k) || !ok(viewer) || !inRange(k.o, viewer, 80.f)) {
+        gFailWhy = !metric(model) ? skipSize : !frameOf(it, k) || !ok(viewer) ? skipBadPlace : skipRange; // cut15
         return false;
+    }
     const Vec3 pv = model.hasPivot ? model.pivot : captain::pivotLeft;
     const uint32_t side = it.side == 1 ? 1u : 0u;
     const bool spinning = it.look == lookShieldSpin;
@@ -1396,16 +1447,23 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
     };
     const auto item = [&](const Item& given) {
         bool drawn = false;
+        gFailWhy = skipOther; // cut15 PROP SKIPS: set by the draw that fails
         if (given.look >= lookPump078 && given.look <= lookShell078) { // HERO VR 0.0.78: the models or nothing
-            appendArsenal078(out, given, d, viewer);
+            if (!appendArsenal078(out, given, d, viewer))
+                skipped(arsenalMissing078(given, d) ? skipMissing : gFailWhy, given.look);
             return;
         }
         if (given.look == lookGrappleGun) { // the model or nothing (no built-in grapple gun, no empty holster)
-            if (d.grappleGunModel && appendModel(out, given, *d.grappleGunModel, viewer) && given.holster)
+            if (!d.grappleGunModel)
+                skipped(skipMissing, given.look);
+            else if (!appendModel(out, given, *d.grappleGunModel, viewer))
+                skipped(gFailWhy, given.look);
+            else if (given.holster)
                 appendHolster(out, given, viewer, pixelAngle);
             return;
         }
         const Item it = inPalm(given, false);
+        bool tried = true; // cut15: a model draw was asked for
         if (it.look == lookBatarang && d.batarangModel)
             drawn = appendBatarangModel(out, it, *d.batarangModel, viewer);
         else if (it.look == lookPistol && d.pistolModel)
@@ -1419,6 +1477,14 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
         else if (it.look == lookClaws && it.side < 2 && d.clawModel[it.side]) // Version 0.0.73 (fix 10)
             drawn = d.clawSteel ? appendClawSteel(out, it, *d.clawModel[it.side], viewer)
                                 : appendClawModel(out, it, *d.clawModel[it.side], viewer);
+        else
+            tried = false;
+        // cut15 PROP SKIPS: a model given and not drawn (its built-in look may stand in below), or none given where
+        // there is no stand-in (MODEL MISSING).
+        if (!drawn && tried)
+            skipped(gFailWhy, it.look);
+        else if (!drawn && noStandIn(d.modelWanted, it.look))
+            skipped(skipMissing, it.look);
         if (!drawn && noStandIn(d.modelWanted, it.look)) {
             // Version 0.0.72 MODEL MISSING: no fake lookalike (the wrist names the missing model).
         } else if (!drawn) {

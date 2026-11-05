@@ -17,8 +17,18 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
   lit over 20% (a menu or full-screen panel) gives no cards, and pieces over 40% of it are dropped: never the whole
   layer. Only in VR play; never in menus, the flat or stereo screen modes. Any fault: no cards (console: HERO VR 0.0.78
   cut21 PROMPT CARDS / PROMPT LAYER, every 10 s).
+- NO STALL FIND: the layer is no longer found by the UI DUMP's read-back (it waits up to 2 s for the GPU). The hunt
+  only watches the game's barriers for 45 presents; then at most 4 candidates (8-bit alpha, the back buffer's size,
+  drawn then read) are checked one at a time by the cards' own alpha read-back, which is only mapped once the GPU has
+  finished it (no wait); the first lit somewhere but under 25% is kept, a candidate with no read-back in 1.5 s is passed
+  over, none passing backs off as before. Frame cost: each present one command list on the game's queue (2 barrier
+  pairs and a 1280x720 copy, 3.7 MB, GPU only, no CPU wait); every 100 ms one 3.7 MB copy to a read-back buffer and a
+  scan of every 2nd row and pixel of the one the GPU finished (about 0.1 ms CPU); up to 8 small quads per eye.
+- UI DUMP (cut18 diagnostic) OFF BY DEFAULT: live.txt ui_dump - 1 off is now the default (each dump's read-back could
+  hitch the game up to 2 s while swinging); ui_dump = on still saves the pictures.
 - Tests: tests/cut21_tests.cpp (the cut18 dump's alpha grid gives 5 cards covering 0.47% of the eye; a full layer
-  gives none), tests/hero078_cut21_prompt_layer_tests.py.
+  gives none; the candidate check from the sampled read-back), tests/hero078_cut21_prompt_layer_tests.py (no
+  uiDump or GPU wait in the layer code; ui_dump off by default).
 
 ## hero-0.0.78-cut20-resume - immersive again after a cutscene's pause; the stick pause too (local, not built)
 

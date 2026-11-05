@@ -5,8 +5,8 @@
 // its metres, the threat triangle, the reticle, the gadget wheel, the prompts - into a render target of its own, the
 // frame's size (1280x720 RGBA8 there, #1: 3 RENDER_TARGET -> readable a present, last state 0xac3), clear but for those
 // pieces (alpha 0.35% / 1.40%), its colour premultiplied (no pixel's colour above its alpha). The composed frame (#2,
-// alpha 100%) is not it. So: find that target once (native_eye_gpu: the UI DUMP's hunt and readback, the first target
-// in its order that isLayer), copy it each present on the game's queue, read its alpha back every maskEveryMs into a
+// alpha 100%) is not it. So: find that target once (native_eye_gpu: the UI DUMP's hunt - no pictures, no wait - then
+// each of its best candidates' alpha read back like the cards' own, no wait, the first that isLayer kept), copy it each present on the game's queue, read its alpha back every maskEveryMs into a
 // coarse grid, and draw each lit piece (regions) as its own small card at its place in view (cardRect), keyed by the
 // layer's own alpha. Never the whole layer: a layer lit over maxCoverPercent (a menu, the map, a fade) gives no cards, a
 // piece wider or taller than maxRegionFrac is left out, every card is capped (maxCardTan) and shrunk (shrink).
@@ -40,10 +40,16 @@ inline constexpr float maxCardTan[2] = {.30f, .16f};  // a card's width, height 
 inline constexpr uint64_t locateFirstMs = 3000, locateMaxMs = 30000; // a failed find is tried again after this, doubling
 inline constexpr uint32_t maxLocates = 40;             // a session
 inline constexpr uint64_t quietLostMs = 3000;          // the found target not drawn to this long: found again
+inline constexpr uint32_t maxProbes = 4;               // a find checks at most this many of the hunt's best targets
+inline constexpr uint64_t probeMs = 1500;              // a target whose alpha is not read back in this long: the next
 
 // DXGI formats (dxgiformat.h): 8-bit with alpha.
 inline bool eightBitAlpha(uint32_t f) {
     return (f >= 27 && f <= 29) || f == 87 || f == 90 || f == 91;
+}
+// A hunt's target worth checking: 8-bit with alpha, the back buffer's own size, drawn and then read this hunt.
+inline bool candidate(uint32_t format, uint32_t w, uint32_t h, uint32_t backW, uint32_t backH, uint64_t toRead) {
+    return eightBitAlpha(format) && w && h && w == backW && h == backH && toRead;
 }
 // The find: an 8-bit target with alpha of the back buffer's own size, lit somewhere but mostly clear.
 inline bool isLayer(uint32_t format, uint32_t w, uint32_t h, uint32_t backW, uint32_t backH, uint64_t alphaPixels,
@@ -55,9 +61,11 @@ inline bool isLayer(uint32_t format, uint32_t w, uint32_t h, uint32_t backW, uin
 
 struct Grid {
     uint32_t cols{}, rows{}, width{}, height{}, lit{};
+    uint64_t samples{}, alphaSamples{}; // the pixels read, those of them lit: the find's check (isLayer)
     std::array<uint8_t, maxCols * maxRows> on{};
     bool begin(uint32_t w, uint32_t h) {
         width = height = cols = rows = lit = 0;
+        samples = alphaSamples = 0;
         on.fill(0);
         if (!w || !h)
             return false;
@@ -75,14 +83,17 @@ struct Grid {
         if (!pixels || y >= height)
             return;
         uint8_t* line = on.data() + static_cast<size_t>(y / cell) * cols;
-        for (uint32_t x = 0; x < width; x += 2)
+        for (uint32_t x = 0; x < width; x += 2) {
+            ++samples;
             if (pixels[static_cast<size_t>(x) * 4 + 3] > alphaOn) {
+                ++alphaSamples;
                 uint8_t& c = line[x / cell];
                 if (!c) {
                     c = 1;
                     ++lit;
                 }
             }
+        }
     }
     bool at(uint32_t x, uint32_t y) const {
         return x < cols && y < rows && on[static_cast<size_t>(y) * cols + x];

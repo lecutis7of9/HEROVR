@@ -621,10 +621,10 @@ SETTINGS = {
                   "pressed, and when his health stops falling to the debris throws a small Y card over him says it is "
                   "time for the Y web strike; 1 off: as 0.0.77) - live, no restart needed"),
     # HERO VR 0.0.78 cut18 UI DUMP (include/spidy/ui_dump.hpp), diagnostic
-    'ui_dump': ((0, 1), 'SpidyUiDump', "UI DUMP {} (0 on, the default in this test build: up to 3 times a session in VR "
-                "play - 20 s in, a prompt in reach, the boss's Y moment - the game's frame and its UI layers are saved "
-                "as pictures to %APPDATA%\\Spidy\\ui-dump, to find where its button prompts are; 1 off) - live, no "
-                "restart needed"),
+    'ui_dump': ((0, 1), 'SpidyUiDump', "UI DUMP {} (0 on: up to 3 times a session in VR play - 20 s in, a prompt in "
+                "reach, the boss's Y moment - the game's frame and its UI layers are saved as pictures to "
+                "%APPDATA%\\Spidy\\ui-dump, to find where its button prompts are, each save can hitch the game up "
+                "to 2 s; 1 off, the default since cut21) - live, no restart needed"),
     # HERO VR 0.0.78 cut21 PROMPT LAYER (include/spidy/prompt_layer.hpp), CANDIDATE
     'prompt_layer': ((0, 1), 'SpidyPromptLayer', "PROMPT LAYER {} (0 on, the default: in VR play the game's own button "
                      "prompts, waypoint and markers show as small cards where the game puts them, cut from its UI "

@@ -147,6 +147,41 @@ int main() {
             full.row(row.data(), y);
         check(full.lit == 80 * 45 && regions(full, r) == 0, "a full layer: no cards");
     }
+    // The find without the UI DUMP's read-back: a candidate's own alpha read-back (every 2nd row, every 2nd pixel, as
+    // native_eye_gpu reads it) decides, from the grid's samples.
+    {
+        check(candidate(28, 1280, 720, 1280, 720, 3), "TARGET #1 (RGBA8, the frame's size, drawn then read) is a candidate");
+        check(!candidate(28, 1280, 720, 1280, 720, 0), "a target never read this hunt is not");
+        check(!candidate(28, 1920, 1080, 1280, 720, 3), "TARGET #6 (1920x1080) is not");
+        check(!candidate(10, 1280, 720, 1280, 720, 3), "a float target is not");
+        Grid half;
+        half.begin(1280, 720);
+        std::vector<uint8_t> row(1280 * 4);
+        for (uint32_t y = 0; y < 720; y += 2) {
+            std::memset(row.data(), 0, row.size());
+            const uint32_t cy = y / cell;
+            if (cy < sizeof(dump) / sizeof(dump[0]))
+                for (uint32_t x = 0; x < 1280; ++x)
+                    if (dump[cy][x / cell] == '#')
+                        row[x * 4 + 3] = 200;
+            half.row(row.data(), y);
+        }
+        check(half.samples == 640ull * 360 && half.alphaSamples > 0, "every 2nd row and pixel sampled");
+        check(isLayer(28, 1280, 720, 1280, 720, half.alphaSamples, half.samples), "the dump's layer passes the check");
+        Grid full;
+        full.begin(1280, 720);
+        std::vector<uint8_t> lit(1280 * 4, 255);
+        for (uint32_t y = 0; y < 720; y += 2)
+            full.row(lit.data(), y);
+        check(!isLayer(28, 1280, 720, 1280, 720, full.alphaSamples, full.samples), "the composed frame fails it");
+        Grid clear;
+        clear.begin(1280, 720);
+        std::vector<uint8_t> none(1280 * 4, 0);
+        for (uint32_t y = 0; y < 720; y += 2)
+            clear.row(none.data(), y);
+        check(!isLayer(28, 1280, 720, 1280, 720, clear.alphaSamples, clear.samples), "a clear target fails it");
+        check(maxProbes >= 2 && maxProbes <= 8 && probeMs >= 500 && probeMs <= 3000, "a few candidates, each briefly");
+    }
     // A large panel among small pieces is left out, the small ones kept.
     {
         Grid p;

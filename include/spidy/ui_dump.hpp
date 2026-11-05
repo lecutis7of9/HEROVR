@@ -15,7 +15,7 @@
 #include <cstdint>
 
 namespace spidy::ui_dump {
-// live.txt ui_dump (SpidyUiDump 5645): 0 on (the default in this diagnostic build), 1 off.
+// live.txt ui_dump (SpidyUiDump 5645): 0 on, 1 off (the default since cut21: a dump's read-back can hitch up to 2 s).
 enum Mode : uint32_t { dumpOn = 0, dumpOff = 1 };
 // Why a dump was asked for (each at most once a session, and at most maxDumps in all).
 enum Reason : uint32_t { reasonNone = 0, reasonPlay = 1, reasonPrompt = 2, reasonBossGate = 3, reasonKinds = 4 };

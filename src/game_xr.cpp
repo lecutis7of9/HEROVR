@@ -1460,11 +1460,12 @@ uint64_t punchWebFreed77 = 0;
 // small Y card shows over him), 1 off (as 0.0.77). The read below is the VR loop's, last frame's; the BOSS GATE / BOSS
 // Y / BOSS LOST lines are written either way.
 std::atomic<uint32_t> bossGateNow{cut16::bossGateOn};
-// HERO VR 0.0.78 cut18 UI DUMP (diagnostic, include/spidy/ui_dump.hpp): live.txt ui_dump - 0 on (the default in this
-// build: at most 3 times a session, in VR play, the presented frame and the game's frame-shaped render targets are
-// written as PNGs to %APPDATA%\Spidy\ui-dump with a log line each, to find where the game draws its prompts), 1 off.
+// HERO VR 0.0.78 cut18 UI DUMP (diagnostic, include/spidy/ui_dump.hpp): live.txt ui_dump - 0 on (at most 3 times a
+// session, in VR play, the presented frame and the game's frame-shaped render targets are written as PNGs to
+// %APPDATA%\Spidy\ui-dump with a log line each, to find where the game draws its prompts; each dump's read-back can
+// hitch the game up to 2 s), 1 off (the default since cut21: the prompt layer is found without it).
 // uiDumpAsk: the reasons' bits, set where a prompt should be up; the VR loop's ui_dump::Plan takes them.
-std::atomic<uint32_t> uiDumpNow{ui_dump::dumpOn}, uiDumpAsk{};
+std::atomic<uint32_t> uiDumpNow{ui_dump::dumpOff}, uiDumpAsk{}; // cut21: off by default
 // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE, include/spidy/prompt_layer.hpp): live.txt prompt_layer - 0 on (the
 // default: in VR play the game's own button prompts, waypoint and markers, cut from its UI layer by their alpha, show
 // as small cards where the game puts them in its view; never the whole layer), 1 off. promptLayerFrame: the VR loop's
@@ -18336,7 +18337,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldLightGain(void* v) { ret
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossYCard(void* v) { return setLive(v, 0, 1, 5643, bossYCardNow, asU32); }
 // HERO VR 0.0.78 cut16: boss_gate (0 on, 1 off).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossGate(void* v) { return setLive(v, 0, 1, 5644, bossGateNow, asU32); }
-// HERO VR 0.0.78 cut18 UI DUMP (diagnostic): live.txt ui_dump, 0 on, 1 off.
+// HERO VR 0.0.78 cut18 UI DUMP (diagnostic): live.txt ui_dump, 0 on, 1 off (the default since cut21).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyUiDump(void* v) { return setLive(v, 0, 1, 5645, uiDumpNow, asU32); }
 // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): live.txt prompt_layer, 0 on, 1 off.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptLayer(void* v) { return setLive(v, 0, 1, 5646, promptLayerNow, asU32); }

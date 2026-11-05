@@ -2492,8 +2492,9 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                           "to him (live.txt boss_y_card = off: Y cards only within 30 m)"},
           {"Sandman's debris", "Throw his debris back (LB + RB) until his health stops falling, then Y when its card "
                                "shows over him (live.txt boss_gate = off: no card, Y as 0.0.77)"},
-          {"Prompt pictures (test)", "Up to 3 times a session the game's frame and UI layers are saved to "
-                                     "%APPDATA%\\Spidy\\ui-dump, to find its button prompts (live.txt ui_dump = off)"},
+          {"Prompt pictures (test)", "Off by default, as each save can hitch the game up to 2 s; live.txt "
+                                     "ui_dump = on saves the game's frame and UI layers up to 3 times a session to "
+                                     "%APPDATA%\\Spidy\\ui-dump (live.txt ui_dump = off)"},
           {"Prompts in VR", "The game's own button prompts, waypoint and markers as small cards where the game puts "
                             "them, never the whole screen (live.txt prompt_layer = off)"},
           {"LB + RB near a boss", "The game's throw; each one logs the boss's HP over 2 s, the left stick sent, the aim "

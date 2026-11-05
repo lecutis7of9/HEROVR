@@ -38,6 +38,24 @@ class Cut21(unittest.TestCase):
         for d in ('void wantPromptLayer(bool', 'bool latestPromptLayer(', 'std::string promptLayerLine('):
             self.assertIn(d, h)
 
+    def test_no_stall(self):
+        # The layer's find, check, copy and alpha read-back never wait on the GPU, and never use the UI DUMP's read-back.
+        n = src('src/native_eye_gpu.cpp')
+        start = n.index('void dropLayer(uint64_t now)')
+        layer = n[start:n.index('void promptLayerStep(', start)]
+        self.assertNotIn('uiDump(', layer)
+        self.assertNotIn('WaitForSingleObject', layer)
+        self.assertNotIn('SetEventOnCompletion', layer)
+        self.assertIn('prompt_layer::candidate(', layer)
+        self.assertIn('void checkCandidate(', layer)
+        self.assertIn('if (!layerVerified)', layer)
+        self.assertIn('!layerVerified || !layerShot.texture', n)
+
+    def test_ui_dump_off_by_default(self):
+        self.assertIn('uiDumpNow{ui_dump::dumpOff}', src('src/game_xr.cpp'))
+        self.assertIn('1 off, the default since cut21', live_settings.SETTINGS['ui_dump'][2])
+        self.assertIn('Off by default, as each save can hitch the game up to 2 s', src('apps/launcher/ui.cpp'))
+
     def test_cards_small_and_keyed(self):
         r = src('src/d3d12_renderer.cpp')
         self.assertIn('unsigned D3D12Renderer::recordCards(', r)

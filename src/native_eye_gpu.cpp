@@ -6082,8 +6082,10 @@ void uiDumpStep(IDXGISwapChain* swapchain) {
     uiShotReady = true;
 }
 // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): while game_xr wants it (VR play), the game's UI layer is found with
-// the UI DUMP's hunt (45 presents, read back once, no pictures kept) - the first read-back target that is
-// prompt_layer::isLayer - then copied each present from its readable state (as the HUD panel), and every
+// the UI DUMP's hunt (45 presents, watching barriers only), then its best candidates (prompt_layer::candidate, at most
+// maxProbes) checked one at a time by the same no-wait alpha read-back as the cards' - the first that is
+// prompt_layer::isLayer kept. Never the UI DUMP's read-back (it waits up to 2 s), never a wait on the GPU. Then
+// copied each present from its readable state (as the HUD panel), and every
 // maskEveryMs read back (no wait: mapped on a later present) into a cell grid of where its alpha is. game_xr cuts
 // that grid's small pieces (prompts, the waypoint, markers) into small cards; never the whole layer.
 enum LayerWhy : uint32_t {
@@ -6092,6 +6094,7 @@ enum LayerWhy : uint32_t {
     layerHunting,
     layerBackingOff,
     layerGaveUp,
+    layerChecking,
     layerCopied,
     layerNotReadable,
     layerBusy,
@@ -6100,10 +6103,11 @@ enum LayerWhy : uint32_t {
 };
 const char* layerWhyName(uint32_t w) {
     static const char* names[] = {"idle (not wanted)", "waiting for a UI DUMP to finish", "finding the layer",
-                                  "not found yet (trying again)", "not found (gave up this session)", "copied",
+                                  "not found yet (trying again)", "not found (gave up this session)",
+                                  "checking a candidate's alpha (no wait)", "copied",
                                   "not in a readable state", "copies in flight", "format not readable",
                                   "stopped (Spidy's GPU path off)"};
-    return w < 10 ? names[w] : "?";
+    return w < 11 ? names[w] : "?";
 }
 struct LayerReadback {
     ComPtr<ID3D12Resource> buffer;
@@ -6125,6 +6129,10 @@ std::mutex layerGridLock; // the grid only
 prompt_layer::Grid layerGrid;
 uint64_t layerGridMs{};
 std::atomic<uint32_t> layerWhy{};
+std::atomic<bool> layerVerified{};  // layerResource is the layer (its alpha read back and isLayer), not a candidate
+std::vector<UiTarget> layerCandidates; // a find's, best first; the present thread's
+size_t layerCandidate{};
+uint64_t layerProbeMs{}, layerProbes{};
 std::atomic<uint64_t> layerFinds{}, layerLost{}, layerCopies{}, layerMasks{}, layerSkipState{}, layerSkipBusy{};
 std::mutex layerLineLock;
 std::string layerFoundLine = "not found yet";
@@ -6144,11 +6152,14 @@ void dropLayer(uint64_t now) {
     }
     layerResource.Reset();
     layerShot = {};
+    layerVerified = false;
     std::lock_guard gridLock(layerGridLock);
     layerGrid = {};
     layerGridMs = 0;
 }
 void stopLocating() {
+    layerCandidates.clear(); // the references go
+    layerCandidate = 0;
     if (!layerLocating)
         return;
     layerLocating = false;
@@ -6157,8 +6168,35 @@ void stopLocating() {
     uiTargets.clear(); // the references go
     uiLookedAt.clear();
 }
-// The find: the UI DUMP's hunt, then its read-back, the first target that is the layer kept.
-void locateLayer(IDXGISwapChain* swapchain, uint64_t now) {
+// The find: the UI DUMP's hunt (barriers watched, nothing read), then its candidates checked by checkCandidate.
+void findFailed(uint64_t now, const char* why) {
+    layerCandidates.clear();
+    layerCandidate = 0;
+    layerNextTry = now + prompt_layer::locateDelay(layerFailed++);
+    layerWhy = layerTries >= prompt_layer::maxLocates ? layerGaveUp : layerBackingOff;
+    char head[200];
+    snprintf(head, sizeof(head), "find %u at %ux%u: %s", layerTries, layerBackW, layerBackH, why);
+    std::lock_guard lock(layerLineLock);
+    layerFoundLine = head;
+}
+// The next candidate held (not yet the layer): its alpha read back, no wait, by captureLayer.
+void adoptCandidate(uint64_t now) {
+    if (layerCandidate >= layerCandidates.size()) {
+        findFailed(now, "none of the candidates is the layer");
+        return;
+    }
+    const auto& c = layerCandidates[layerCandidate];
+    layerResource = c.resource;
+    layerState = c.state;
+    layerSeenMs = now;
+    layerTracked = c.resource.Get();
+    layerVerified = false;
+    layerMaskAskedMs = 0; // read at once
+    layerProbeMs = now;
+    ++layerProbes;
+    layerWhy = layerChecking;
+}
+void locateLayer(uint64_t now) {
     if (!layerLocating) {
         if (uiReason || uiAsked.load()) {
             layerWhy = layerWaitDump;
@@ -6205,47 +6243,57 @@ void locateLayer(IDXGISwapChain* swapchain, uint64_t now) {
         return ui_dump::score(a.format, a.width, a.height, a.toRead, backW, backH) >
                ui_dump::score(b.format, b.width, b.height, b.toRead, backW, backH);
     });
-    std::string line;
-    std::vector<UiShot> shots;
-    uiDump(swapchain, all, shots, line);
-    const UiTarget* found{};
-    double share{};
-    for (const auto& shot : shots) {
-        if (shot.backBuffer || !shot.rank || shot.rank > all.size())
-            continue;
-        const auto c = ui_dump::cover(shot.rgba.data(), shot.width, shot.height);
-        if (prompt_layer::isLayer(shot.format, shot.width, shot.height, backW, backH, c.alpha, c.pixels)) {
-            found = &all[shot.rank - 1];
-            share = 100.0 * static_cast<double>(c.alpha) / static_cast<double>(c.pixels ? c.pixels : 1);
-            break;
-        }
+    layerCandidates.clear();
+    layerCandidate = 0;
+    for (auto& t : all)
+        if (layerCandidates.size() < prompt_layer::maxProbes &&
+            prompt_layer::candidate(t.format, t.width, t.height, backW, backH, t.toRead))
+            layerCandidates.push_back(std::move(t));
+    all.clear(); // the other references go
+    if (layerCandidates.empty()) {
+        findFailed(now, "no target of the frame's size with alpha was drawn and read");
+        return;
     }
-    char head[200];
-    if (!found) {
-        layerNextTry = now + prompt_layer::locateDelay(layerFailed++);
-        layerWhy = layerTries >= prompt_layer::maxLocates ? layerGaveUp : layerBackingOff;
-        snprintf(head, sizeof(head), "find %u at %ux%u: none of %zu targets is the layer", layerTries, backW, backH,
-                 all.size());
-    } else {
-        layerResource = found->resource; // a reference: let go when lost
-        layerState = found->state;
-        layerSeenMs = now;
-        layerTracked = found->resource.Get();
+    adoptCandidate(now);
+}
+// A candidate's first alpha read-back in: the layer (kept, copied from now on) or the next candidate. No wait: called
+// only when a read-back the GPU already finished was mapped, or on its time running out.
+void checkCandidate(uint64_t now, const prompt_layer::Grid* grid) {
+    if (layerVerified || layerCandidate >= layerCandidates.size())
+        return;
+    const auto& c = layerCandidates[layerCandidate];
+    if (grid && prompt_layer::isLayer(c.format, c.width, c.height, layerBackW, layerBackH, grid->alphaSamples,
+                                      grid->samples)) {
+        layerVerified = true;
         layerFailed = 0;
         ++layerFinds;
-        snprintf(head, sizeof(head), "find %u: %ux%u %s (format %u), %.2f%% alpha, %llu RT->read in %u presents",
-                 layerTries, found->width, found->height, uiFormatName(found->format), found->format, share,
-                 static_cast<unsigned long long>(found->toRead), ui_dump::huntPresents);
+        char head[220];
+        snprintf(head, sizeof(head),
+                 "find %u: %ux%u %s (format %u), %.2f%% alpha, %llu RT->read in %u presents, candidate %zu of %zu",
+                 layerTries, c.width, c.height, uiFormatName(c.format), c.format,
+                 100.0 * static_cast<double>(grid->alphaSamples) / static_cast<double>(grid->samples ? grid->samples : 1),
+                 static_cast<unsigned long long>(c.toRead), ui_dump::huntPresents, layerCandidate + 1,
+                 layerCandidates.size());
+        layerCandidates.clear(); // the others' references go
+        layerCandidate = 0;
+        std::lock_guard lock(layerLineLock);
+        layerFoundLine = head;
+        return;
     }
-    all.clear(); // the other references go
-    std::lock_guard lock(layerLineLock);
-    layerFoundLine = head;
+    if (!grid && now < layerProbeMs + prompt_layer::probeMs)
+        return;
+    dropLayer(now); // not it (or never readable): the next
+    ++layerCandidate;
+    adoptCandidate(now);
 }
-// Maps the read-backs the GPU has finished: the newest one's alpha into the grid.
-void readLayerMasks(uint64_t now) {
+// Maps the read-backs the GPU has finished (never waits: only those its fence has passed): the newest one's alpha
+// into the grid, and into `got` (true when one came in).
+prompt_layer::Grid layerReadGrid; // the present thread's, off the stack
+bool readLayerMasks(uint64_t now) {
+    bool got = false;
     const auto completed = fence->GetCompletedValue();
     if (completed == UINT64_MAX)
-        return;
+        return false;
     for (auto& r : layerReadbacks) {
         if (!r.pending || r.fence > completed)
             continue;
@@ -6253,7 +6301,7 @@ void readLayerMasks(uint64_t now) {
         void* data{};
         if (FAILED(r.buffer->Map(0, nullptr, &data)))
             continue;
-        prompt_layer::Grid grid;
+        auto& grid = layerReadGrid;
         if (grid.begin(r.width, r.height))
             for (uint32_t y = 0; y < r.height; y += 2)
                 grid.row(static_cast<const uint8_t*>(data) + r.layout.Offset +
@@ -6261,14 +6309,26 @@ void readLayerMasks(uint64_t now) {
                          y);
         D3D12_RANGE written{0, 0};
         r.buffer->Unmap(0, &written);
+        got = true;
+        ++layerMasks;
+        if (!layerVerified)
+            continue; // a candidate's: checked by captureLayer, not drawn
         std::lock_guard gridLock(layerGridLock);
         layerGrid = grid;
         layerGridMs = now;
-        ++layerMasks;
     }
+    return got;
 }
+// Each present: the layer copied (for the cards) and every maskEveryMs its alpha read back, both on the game's queue
+// with no wait for the GPU. A candidate (not yet checked) gets the alpha read-back only, until checkCandidate decides.
 void captureLayer(uint64_t now) {
-    readLayerMasks(now);
+    const bool got = readLayerMasks(now);
+    if (!layerVerified) {
+        checkCandidate(now, got ? &layerReadGrid : nullptr);
+        if (!layerResource || layerVerified)
+            return; // the next candidate (or the layer) from the next present
+    }
+    const bool verified = layerVerified;
     const auto desc = layerResource->GetDesc();
     bool linear{};
     const auto view = screenView(desc.Format, linear);
@@ -6290,8 +6350,8 @@ void captureLayer(uint64_t now) {
         return;
     }
     std::erase_if(retiredLayer, [&](const Retired& old) { return now >= old.releaseMs; });
-    if (!layerShot.texture || layerShot.width != desc.Width || layerShot.height != desc.Height ||
-        layerShot.view != view) {
+    if (verified && (!layerShot.texture || layerShot.width != desc.Width || layerShot.height != desc.Height ||
+        layerShot.view != view)) {
         if (layerShot.texture)
             retiredLayer.push_back({layerShot.texture, now + 3000});
         layerShot = {};
@@ -6342,20 +6402,25 @@ void captureLayer(uint64_t now) {
             mask->height = desc.Height;
         }
     }
-    auto* slot = readyCommands(layerCommands);
+    if (!verified && !mask)
+        return; // a candidate's read-back in flight: nothing to copy
+    auto* slot = readyCommands(layerCommands); // never waits: a free slot or none
     if (!slot) {
         ++layerSkipBusy;
         layerWhy = layerBusy;
         return;
     }
+    const UINT barriers = verified ? 2 : 1;
     D3D12_RESOURCE_BARRIER b[2]{};
     b[0].Type = b[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     b[0].Transition = {layerResource.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, state,
                        D3D12_RESOURCE_STATE_COPY_SOURCE};
-    b[1].Transition = {layerShot.texture.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST};
-    originalBarrier(slot->list.Get(), 2, b);
-    slot->list->CopyResource(layerShot.texture.Get(), layerResource.Get());
+    if (verified)
+        b[1].Transition = {layerShot.texture.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                           D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST};
+    originalBarrier(slot->list.Get(), barriers, b);
+    if (verified)
+        slot->list->CopyResource(layerShot.texture.Get(), layerResource.Get());
     if (mask) {
         D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
         src.pResource = layerResource.Get();
@@ -6365,9 +6430,9 @@ void captureLayer(uint64_t now) {
         dst.PlacedFootprint = mask->layout;
         slot->list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
     }
-    for (auto& barrier : b)
-        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
-    originalBarrier(slot->list.Get(), 2, b);
+    for (UINT i = 0; i < barriers; ++i)
+        std::swap(b[i].Transition.StateBefore, b[i].Transition.StateAfter);
+    originalBarrier(slot->list.Get(), barriers, b);
     if (!submitCommands(*slot))
         return;
     if (mask) {
@@ -6375,6 +6440,8 @@ void captureLayer(uint64_t now) {
         mask->pending = true;
         layerMaskAskedMs = now;
     }
+    if (!verified)
+        return;
     ++layerShot.frame;
     ++layerCopies;
     layerMs = now;
@@ -6403,12 +6470,12 @@ void promptLayerStep(IDXGISwapChain* swapchain) {
         layerTries = layerFailed = 0; // a new size: found again
         layerNextTry = 0;
     }
-    if (layerResource && now > layerSeenMs.load() + prompt_layer::quietLostMs) {
+    if (layerResource && layerVerified && now > layerSeenMs.load() + prompt_layer::quietLostMs) {
         dropLayer(now); // the game let it go or draws elsewhere now: found again
         ++layerLost;
     }
     if (!layerResource) {
-        locateLayer(swapchain, now);
+        locateLayer(now);
         return;
     }
     captureLayer(now);
@@ -6618,7 +6685,7 @@ bool latestPromptLayer(Screen& out, prompt_layer::Grid& grid, uint64_t maxAgeMs)
     const auto now = GetTickCount64();
     {
         std::lock_guard submitLock(submission);
-        if (!layerShot.texture || !layerShot.frame || now < layerMs || now - layerMs > maxAgeMs)
+        if (!layerVerified || !layerShot.texture || !layerShot.frame || now < layerMs || now - layerMs > maxAgeMs)
             return false;
         out = layerShot;
     }
@@ -6640,7 +6707,8 @@ std::string promptLayerLine() {
     sprintf_s(state, "%x", layerState.load());
     return std::string("HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): the game's UI layer ") +
            layerWhyName(layerWhy.load()) + "; " + found + "; found " + n(layerFinds) + ", lost " + n(layerLost) +
-           ", copies " + n(layerCopies) + ", masks " + n(layerMasks) + ", skipped (state 0x" + state + ") " +
+           ", candidates checked " + n(layerProbes) + ", copies " + n(layerCopies) + ", masks " + n(layerMasks) +
+           ", skipped (state 0x" + state + ") " +
            n(layerSkipState) + ", busy " + n(layerSkipBusy) + ", transitions " + n(layerTransitions);
 }
 bool latestHud(Screen& out, uint64_t maxAgeMs) {

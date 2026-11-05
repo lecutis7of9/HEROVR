@@ -453,6 +453,11 @@ class ZipPress {
     uint32_t releases() const {
         return releases_;
     }
+    // The stick-up zip is in the game's hands (LT+RT, or LT alone in its aim mode). CANDIDATE signal that the
+    // game's white zip circle is on screen. Not a world position of that point.
+    bool zipOnScreen() const {
+        return phase_ != Phase::idle;
+    }
 
   private:
     // held: LT + RT down; aiming: LT alone, RT up for time_; waiting: let

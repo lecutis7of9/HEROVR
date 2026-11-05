@@ -178,6 +178,12 @@ inline Vec3 trackingOfWorld(const Pose& worldFromTracking, Vec3 world) {
 // near zip point makes the circle slide. It is not separated here, because the layer does not say which blob it is.
 inline constexpr float markerMetres = 6.f;
 inline constexpr float markerLockMetres = 1024.f;
+// CANDIDATE, not a measured zip distance: while the stick-up zip is on screen, a marker is drawn at the tangent
+// the game gave it, this far in front of the head, instead of markerLockMetres. A near zip point at 1024 m slides.
+inline constexpr float markerViewMetres = hudMetres;
+inline float markerDepth(bool zipOnScreen) {
+    return zipOnScreen ? markerViewMetres : markerLockMetres;
+}
 inline constexpr uint32_t markerPadPixels = 12; // the crop and card grown this much each way, both alike: a marker
                                                 // that moved since the 100 ms grid stays whole (the alpha keys it)
 // A marker piece's centre and size (head tangents) and its padded crop of the layer {u0, v0, u1, v1}.

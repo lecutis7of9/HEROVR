@@ -17857,14 +17857,26 @@ DWORD WINAPI run(void*) {
                                                     static_cast<float>(pieces[i].x1) / layerImage.width,
                                                     static_cast<float>(pieces[i].y1) / layerImage.height};
                                                 Vec3 centre{};
-                                                if (marker) {
+                                                if (marker && zipPress.zipOnScreen()) {
+                                                    // CANDIDATE: the game's zip circle shares this layer. No confirmed
+                                                    // zip-point position, so it is not pinned at 1024 m. It sits where
+                                                    // the game drew it in this view.
+                                                    float zc{}, zy{};
+                                                    if (!splitLensOk ||
+                                                        !prompt_split::markerPlace(pieces[i], layerImage.width,
+                                                                                   layerImage.height, splitLens23, zc,
+                                                                                   zy, tw, th, cropIn))
+                                                        continue;
+                                                    metres = prompt_split::markerDepth(true);
+                                                    centre = prompt_split::headPoint(splitHead, zc, zy, metres);
+                                                } else if (marker) {
                                                     centre = prompt_split::trackingOfWorld(saved->worldFromTracking,
                                                                                            heldMarker23[i].world);
                                                     if (!finite(centre))
                                                         continue;
                                                     tw = heldMarker23[i].tw;
                                                     th = heldMarker23[i].th;
-                                                    metres = prompt_split::markerLockMetres;
+                                                    metres = prompt_split::markerDepth(false);
                                                     for (int k = 0; k < 4; ++k)
                                                         cropIn[k] = heldMarker23[i].crop[k];
                                                 } else if (split23.kind(i) == prompt_split::kindMarker) {

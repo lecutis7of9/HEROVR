@@ -2,6 +2,7 @@
 // cut23 placed a marker by reading its layer place through the head that is showing the picture, 6 m out. These
 // tests hold the icon on the ray of the camera that drew the pixels and then move the viewer. The game's destination
 // position is not read: the hold is markerLockMetres along that ray. Code and these tests are not a headset run.
+#include "spidy/game_pad.hpp"
 #include "spidy/prompt_split.hpp"
 #include "spidy/prompt_world.hpp"
 
@@ -62,6 +63,15 @@ float rectCentreX(const float r[4]) {
 
 int main() {
     check(markerLockMetres > 500.f && markerMetres < 20.f, "the hold is far; cut23's 6 m stays named and unused");
+    check(markerDepth(false) == markerLockMetres && markerDepth(true) == markerViewMetres &&
+              markerViewMetres < 3.f,
+          "CANDIDATE: a stick-up zip marker is in the view, not at the 1024 m far stand-in");
+    game_pad::ZipPress zip;
+    check(!zip.zipOnScreen(), "no stick-up zip: the circle is not claimed on screen");
+    check(zip.update(.016f, true, true, false).zip && zip.zipOnScreen(),
+          "stick up sends the game's zip and the circle path is the view, not 1024 m");
+    zip.update(.016f, false, true, false);
+    check(!zip.zipOnScreen(), "stick released before the aim: circle path off");
     const Vec3 destination{0, 20.f, -1173.f}; // the video's 1173 m objective, level with a rooftop camera
     const Pose capture = headAt(0, 0, {0, 20.f, 0});
     Pose eyes[2];

@@ -36,7 +36,9 @@ class Cut23(unittest.TestCase):
         self.assertIn('heldMarker23[i].ok &&', body)
         self.assertIn('split23.kind(i) == prompt_split::kindMarker', body)
         self.assertIn('prompt_split::trackingOfWorld(saved->worldFromTracking,', body)
-        self.assertIn('prompt_split::markerLockMetres', body)
+        self.assertIn('prompt_split::markerDepth(false)', body)
+        self.assertIn('zipPress.zipOnScreen()', body)
+        self.assertIn('prompt_split::markerDepth(true)', body)
         self.assertNotIn('metres = prompt_split::markerMetres;', g)
         # HUD stays view-locked. A marker with no capture lock is not glued to the head.
         self.assertIn('prompt_split::hudPlace(', body)

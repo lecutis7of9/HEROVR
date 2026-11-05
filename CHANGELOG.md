@@ -49,9 +49,12 @@ brick building, looking up carried it into the clouds, and dropping off a roof l
   camera_still) and Virtual Desktop holding xrEndFrame (142 rounds, 14.2 s: "the stream to the headset, not the
   game"). An earlier session had already lost the GPU device (0x887A002B); the monitor copy stays skipped. Do not
   package this tip as a playability build. The last headset build that was hitch-light on that machine is `56b1780`.
-- **Web-zip circle cannot be given its own depth yet.** reticles were 0, so the white circle is the game's UI blob,
-  not `game_swing::Aim.point`. No confirmed read of the game's LT+RT zip point exists, and the layer does not name
-  the blob, so it still shares the 1024 m far-diamond stand-in. That stand-in is wrong for a near point. Not split.
+- **Web-zip circle (CANDIDATE, not a world read).** No confirmed position of the game's LT+RT zip point. While
+  `ZipPress` says the stick-up zip is in the game (`zipOnScreen`: LT+RT or its aim mode), marker blobs are drawn at
+  the tangent the game gave them, `markerViewMetres` (the HUD distance) in front of the head, not at 1024 m. The far
+  diamond still uses 1024 m when that zip is not held. The layer still does not name which blob is which, so a
+  diamond on screen during the zip is view-placed too. Not headset-confirmed. Worth a private cut26 only to try that
+  circle; it adds no GPU or present work. `56b1780` remains the playability baseline. The 184004 stalls are not this.
 
 ## hero-0.0.78-cut23-split - the game's HUD stays in your view, its world markers stay in its world; lights A/B (test cut, not a release)
 

@@ -48,6 +48,8 @@ class Cut23(unittest.TestCase):
         self.assertIn('prompt_split::matchedCapture(', g)
         self.assertNotIn('src = saved', g)
         self.assertIn('prompt_split::lockPoint(', g)
+        self.assertIn('cut24 PIECE', src('include/spidy/prompt_split.hpp'))
+        self.assertIn('splitPieceLines23 < 80', g)
         self.assertIn('HERO VR 0.0.78 cut24 WAYPOINT LOCK (CANDIDATE)', g)
         gpu = src('src/native_eye_gpu.cpp')
         self.assertIn('SpidyLatchedEyeSerial()', gpu)

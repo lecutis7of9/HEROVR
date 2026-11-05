@@ -44,6 +44,8 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 
 namespace spidy::prompt_split {
 // live.txt prompt_anchor (SpidyPromptAnchor 5647): 0 split (the default since cut23), 1 view (cut21's: every card at
@@ -237,6 +239,49 @@ inline Kind prior(const Box& b) {
 // other frame (including the one on the headset now), is not that camera: 0 means there is nothing to lock from.
 inline uint64_t matchedCapture(uint64_t pixelSerial, uint64_t storedSerial) {
     return pixelSerial != 0 && pixelSerial == storedSerial ? storedSerial : 0;
+}
+// One UI-layer piece as the split has it. `how`: 0 dropped (no capture camera), 1 view-locked, 2 world-locked.
+// This is the split's vote, not a read of which blob is the objective diamond.
+struct PieceNote {
+    Kind kind{kindHud};
+    float x0{}, y0{}, x1{}, y1{};
+    uint8_t how{};
+};
+// One bounded line. Stops before `cap`. A trailing "|+" means more pieces did not fit. No world position is written.
+inline uint32_t pieceLine(char* out, uint32_t cap, int matched, float turnDeg, uint64_t serial, const PieceNote* notes,
+                          uint32_t n) {
+    if (!out || cap < 8)
+        return 0;
+    out[0] = 0;
+    const int wrote = std::snprintf(out, cap, "cut24 PIECE match=%d turn=%.1f serial=%llu n=%u", matched ? 1 : 0,
+                                    std::isfinite(turnDeg) ? turnDeg : -1.f,
+                                    static_cast<unsigned long long>(serial), n);
+    if (wrote < 0) {
+        out[0] = 0;
+        return 0;
+    }
+    uint32_t used = static_cast<uint32_t>(wrote) < cap ? static_cast<uint32_t>(wrote) : cap - 1;
+    out[used] = 0;
+    n = notes ? std::min(n, prompt_layer::maxCards) : 0;
+    for (uint32_t i = 0; i < n; ++i) {
+        const char* how = notes[i].how == 2 ? "lock" : notes[i].how == 1 ? "view" : "drop";
+        char bit[72];
+        std::snprintf(bit, sizeof bit, " | %u%s %.2f,%.2f-%.2f,%.2f %s", i,
+                      notes[i].kind == kindMarker ? "M" : "H", notes[i].x0, notes[i].y0, notes[i].x1, notes[i].y1,
+                      how);
+        const uint32_t need = static_cast<uint32_t>(std::strlen(bit));
+        if (used + need + 1 >= cap) {
+            if (used + 4 < cap) {
+                std::memcpy(out + used, " |+", 3);
+                used += 3;
+                out[used] = 0;
+            }
+            break;
+        }
+        std::memcpy(out + used, bit, need + 1);
+        used += need;
+    }
+    return used;
 }
 
 class Split {

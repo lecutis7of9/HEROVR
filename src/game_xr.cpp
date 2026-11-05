@@ -17669,7 +17669,10 @@ DWORD WINAPI run(void*) {
                                 // cut23 PROMPT SPLIT: the classifier, its grid's sign and counts.
                                 static prompt_split::Split split23;
                                 static uint64_t splitStamp23{}, splitHudCards23{}, splitMarkerCards23{}, splitNoLens23{};
-                                static uint64_t splitLocks23{}, splitLockMiss23{};
+                                static uint64_t splitLocks23{}, splitLockMiss23{}, splitSrcSerial23{};
+                                static int splitMatched23{};
+                                static float splitTurn23{-1.f};
+                                static uint32_t splitPieceLines23{};
                                 static prompt_split::Lens splitLens23{};
                                 // cut24: each marker held in the game's world from the camera that drew its pixels.
                                 struct HeldMarker {
@@ -17746,9 +17749,14 @@ DWORD WINAPI run(void*) {
                                                     // The headset's camera is not the one that drew this grid. Do not
                                                     // lock from it, and do not vote the classifier from it either.
                                                     ++splitLockMiss23;
+                                                    splitMatched23 = 0;
+                                                    splitTurn23 = -1.f;
+                                                    splitSrcSerial23 = srcSerial;
                                                     for (uint32_t i = 0; i < prompt_layer::maxCards; ++i)
                                                         heldMarker23[i] = {};
                                                 } else {
+                                                    splitMatched23 = 1;
+                                                    splitSrcSerial23 = srcSerial;
                                                 const Pose srcEyes[2] = {src->trackingEyes[0].pose,
                                                                          src->trackingEyes[1].pose};
                                                 float srcFov[2][4]{};
@@ -17768,6 +17776,8 @@ DWORD WINAPI run(void*) {
                                                                                   : promptRecordingFov23.load(),
                                                     static_cast<float>(layerImage.width) /
                                                         static_cast<float>(std::max(layerImage.height, 1u)));
+                                                splitTurn23 =
+                                                    prompt_split::turnedDegrees(srcTracking.orientation, splitHead.orientation);
                                                 const Pose worldHead = compose(src->worldFromTracking, srcTracking);
                                                 prompt_split::Box boxes[prompt_layer::maxCards];
                                                 for (uint32_t i = 0; i < n; ++i)
@@ -17920,6 +17930,30 @@ DWORD WINAPI run(void*) {
                                                 ++cards.count;
                                         }
                                         layerLast = cards.count;
+                                        // cut24: which way the split called each blob, and whether a capture camera
+                                        // was stored. Not a read of the diamond. On change only, 80 lines a session.
+                                        if (splitAnchor && n && splitPieceLines23 < 80) {
+                                            prompt_split::PieceNote notes[prompt_layer::maxCards]{};
+                                            const uint32_t pn = std::min(n, prompt_layer::maxCards);
+                                            for (uint32_t i = 0; i < pn; ++i) {
+                                                const auto b = prompt_split::boxOf(pieces[i], layerImage.width,
+                                                                                   layerImage.height);
+                                                notes[i] = {split23.kind(i), b.x0, b.y0, b.x1, b.y1,
+                                                            split23.kind(i) == prompt_split::kindMarker
+                                                                ? static_cast<uint8_t>(heldMarker23[i].ok ? 2 : 0)
+                                                                : static_cast<uint8_t>(1)};
+                                            }
+                                            char piece[240];
+                                            prompt_split::pieceLine(piece, sizeof piece, splitMatched23, splitTurn23,
+                                                                    splitSrcSerial23, notes, pn);
+                                            static char lastPiece23[240]{};
+                                            if (std::strcmp(piece, lastPiece23) != 0) {
+                                                std::memcpy(lastPiece23, piece, sizeof lastPiece23);
+                                                ++splitPieceLines23;
+                                                game_prompts::note(piece);
+                                                consoleLine(piece);
+                                            }
+                                        }
                                         if (cards.count) {
                                             overlay.setCards(std::move(cards));
                                             cardsSet = true;

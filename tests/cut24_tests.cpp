@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 
 using namespace spidy;
 using namespace spidy::prompt_split;
@@ -158,6 +159,20 @@ int main() {
     check(hole.kind(0) == kindHud,
           "KNOWN HOLE: a piece that stays put while the tracked head turns is voted HUD; this is not evidence the "
           "objective diamond did or did not");
+    PieceNote notes[2] = {{kindHud, .04f, .05f, .28f, .11f, 1}, {kindMarker, .61f, .40f, .66f, .48f, 0}};
+    char line[240];
+    const uint32_t got = pieceLine(line, sizeof line, 0, -1.f, 0, notes, 2);
+    check(got > 0 && std::strstr(line, "match=0") && std::strstr(line, "0H") && std::strstr(line, "view") &&
+              std::strstr(line, "1M") && std::strstr(line, "drop") && !std::strstr(line, "lock"),
+          "a miss logs the split vote and a drop; it does not claim a world lock or a destination");
+    notes[1].how = 2;
+    pieceLine(line, sizeof line, 1, 4.2f, 99, notes, 2);
+    check(std::strstr(line, "match=1") && std::strstr(line, "turn=4.2") && std::strstr(line, "serial=99") &&
+              std::strstr(line, "lock") && std::strstr(line, "view"),
+          "a matched sample names the turn and which piece was view-locked or world-locked");
+    char tiny[48];
+    pieceLine(tiny, sizeof tiny, 1, 0, 1, notes, 2);
+    check(std::strstr(tiny, "|+") != nullptr, "a short line stops and marks that a piece was left out");
 
     std::printf("%s (%d)\n", failures ? "FAILED" : "passed", failures);
     return failures ? 1 : 0;

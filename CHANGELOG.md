@@ -29,10 +29,17 @@ brick building, looking up carried it into the clouds, and dropping off a roof l
   HUD. prompt_cards stays off. No new live.txt switch (`prompt_anchor` split remains the default).
 - **Not claimed:** that cohtml projects through the latched head view. cut23 already called that a CANDIDATE. The log
   line is `cut24 WAYPOINT LOCK (CANDIDATE)`.
-- **Runtime evidence that would close the hole:** a VR-play log of that line while the diamond is on screen and the
-  head yaws (marker cards above 0, and the diamond stable in the world — a HUD-only count while it slides means the
-  classifier called it HUD). And one pair of layer frames whose diamond pixel agrees with unprojecting through the
-  head lens of the serial stored with those frames. We do not have either.
+- **What a play log can separate (cut24 PIECE, on change, 80 lines a session, no new game read):** each blob's
+  layer box, the split's vote (H or M), and view / lock / drop, plus whether the pixels' serial still matched a
+  stored eye command and the degrees that command's head has turned from the head showing the picture. It does not
+  name the diamond. A line taken while the diamond is visibly sliding, with that blob's box on it, says which cause
+  it was: `H` and `view` means the split head-locked it; `M` and `lock` with `match=1` means the lock ran and the
+  miss is the camera or the 1024 m depth; `match=0` and `drop` means the capture serial was not stored.
+- **Runtime evidence still required:** that log during the yaw, the look-up and the roof drop, and one pair of layer
+  frames whose diamond pixel agrees with unprojecting through the head lens of the serial on the matching line. The
+  existing CUT10 GUI2 POI lines (disassembly-confirmed layout only; the world-triple scan is not a confirmed offset)
+  from the same session, next to the diamond's on-screen metres, are what would show whether a record's place is the
+  objective. We do not have those. No pointer was added.
 
 ## hero-0.0.78-cut23-split - the game's HUD stays in your view, its world markers stay in its world; lights A/B (test cut, not a release)
 

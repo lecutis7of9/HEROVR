@@ -78,9 +78,11 @@ function Show-StartFailure([int]$Code, [string]$Reason) {
     $text = $what
     if($Reason) { $text += "`n`n" + $Reason }
     $text += "`n`nThis launcher is older than the mod. Start the new one: " + (Join-Path (Split-Path $PSScriptRoot -Parent) 'HERO VR Launcher.cmd') + ' (it repairs files and explains errors). Reports > Collect gathers the logs.'
+    # 0.0.78 cut18 QUIET LOG: no control characters (a BEL is the Windows alert sound) and no icon (its sound).
+    $text = $text -replace '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '?'
     try {
         Add-Type -AssemblyName System.Windows.Forms
-        [void][System.Windows.Forms.MessageBox]::Show($text, 'HERO VR', 'OK', 'Warning', 'Button1', 'DefaultDesktopOnly')
+        [void][System.Windows.Forms.MessageBox]::Show($text, 'HERO VR', 'OK', 'None', 'Button1', 'DefaultDesktopOnly')
     } catch { Write-Host $text }
 }
 # A throw before the session (the package's Python, the mod files, the options) shows the same way, then goes on as before.

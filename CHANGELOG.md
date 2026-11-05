@@ -2,6 +2,18 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut18-quiet - no Windows sounds from the report/log windows (local branch, not built)
+
+From the player: the error report window plays the Windows alert sound as it starts writing, and a modem-like
+chatter while it writes fast. His reports hold no BEL (0x07) or other control characters, and no beep call is in the
+mod, so the cause is not confirmed; every path text takes to a window is made silent:
+- The VR session (tools/run_game_vr.py) swaps every control character but tab and line ends for '?' before it reaches
+  the console, the launcher or <report>-console.log (a BEL is the Windows alert sound; a fast run of them chatters).
+- The launcher's log box (Reports, session and build logs) does the same, and swallows keys typed into it (a
+  read-only box sounds the alert for each one); copy, select-all and the arrow keys still work.
+- tools/launch-game-vr.ps1's start-failure window (old launchers only) has no warning icon, so no sound.
+- Tests: tests/hero078_cut18_quiet_tests.py.
+
 ## hero-0.0.78-cut18-uidump - UI DUMP: where the game's button prompts are drawn in VR play (local branch, not built)
 
 A diagnostic on top of cut17, to find the game's own prompts (the Y web strike on Sandman, interact prompts) so they

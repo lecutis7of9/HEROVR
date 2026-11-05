@@ -608,20 +608,33 @@ def preflight(requested):
                           recommended_eye=[int(eye[1]), int(eye[2])] if eye else None)
 
 
+# HERO VR 0.0.78 cut18 QUIET LOG: control characters (BEL 0x07 above all, which Windows plays as its alert sound
+# for each one a console or log window is handed; a run of them sounds like a modem) never reach the console or
+# the console log. Tab, line feed and carriage return stay; every other C0 character and DEL becomes '?'.
+_LOUD = {c: '?' for c in (*range(0, 9), 11, 12, *range(14, 32), 127)}
+
+
+def quiet_text(text):
+    """`text` with the control characters a console could sound (BEL) or garble swapped for '?'."""
+    return str(text).translate(_LOUD)
+
+
 class _Echo:
-    """A console stream that writes to the session's console log as well."""
+    """A console stream that writes to the session's console log as well, without control characters."""
 
     def __init__(self, stream, log):
         self.stream, self.log = stream, log
 
     def write(self, text):
+        quiet = quiet_text(text)
         if self.stream:
-            self.stream.write(text)
-        try:
-            self.log.write(text)
-            self.log.flush()
-        except (OSError, ValueError):
-            pass  # a full disk must not end the session
+            self.stream.write(quiet)
+        if self.log is not None:
+            try:
+                self.log.write(quiet)
+                self.log.flush()
+            except (OSError, ValueError):
+                pass  # a full disk must not end the session
         return len(text)
 
     def flush(self):
@@ -641,6 +654,7 @@ def keep_console(report):
         report.parent.mkdir(parents=True, exist_ok=True)
         log = path.open('a', encoding='utf-8')
     except OSError:
+        sys.stdout, sys.stderr = _Echo(sys.stdout, None), _Echo(sys.stderr, None)  # quiet even without the log
         return None
     sys.stdout, sys.stderr = _Echo(sys.stdout, log), _Echo(sys.stderr, log)
     return path

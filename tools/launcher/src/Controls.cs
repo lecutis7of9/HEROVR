@@ -961,7 +961,36 @@ namespace Sm2VrLauncher
                 Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = BackColor,
                 ForeColor = Theme.Silver, Font = Theme.Mono(12), DetectUrls = false, WordWrap = true, HideSelection = false
             };
+            // 0.0.78 cut18 QUIET LOG: a read-only box sounds the Windows alert for every key typed into it; keys
+            // that do not copy, select or move are swallowed before they reach it.
+            box.KeyDown += (s, e) => { if (!QuietKey(e)) e.SuppressKeyPress = true; };
+            box.KeyPress += (s, e) => { e.Handled = true; };
             Controls.Add(box);
+        }
+        static bool QuietKey(KeyEventArgs e)
+        {
+            if (e.Control && (e.KeyCode == Keys.C || e.KeyCode == Keys.A || e.KeyCode == Keys.Insert)) return true;
+            switch (e.KeyCode)
+            {
+                case Keys.Left: case Keys.Right: case Keys.Up: case Keys.Down: case Keys.PageUp: case Keys.PageDown:
+                case Keys.Home: case Keys.End: case Keys.ShiftKey: case Keys.ControlKey: case Keys.Tab: return true;
+                default: return false;
+            }
+        }
+        /// <summary>0.0.78 cut18 QUIET LOG: <paramref name="text"/> without control characters (a BEL is the Windows
+        /// alert sound; a fast run of them sounds like a modem). Tab and line ends stay; every other C0 character and DEL is '?'.</summary>
+        public static string Quiet(string text)
+        {
+            if (text == null) return null;
+            System.Text.StringBuilder b = null;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                bool loud = (c < ' ' && c != '\t' && c != '\n' && c != '\r') || c == '\x7f';
+                if (loud && b == null) b = new System.Text.StringBuilder(text, 0, i, text.Length);
+                if (b != null) b.Append(loud ? '?' : c);
+            }
+            return b == null ? text : b.ToString();
         }
         public string AllText { get { return box.Text; } }
         public void Clear() { if (InvokeRequired) { BeginInvoke((Action)Clear); return; } box.Clear(); }
@@ -970,6 +999,7 @@ namespace Sm2VrLauncher
         {
             if (text == null) return;
             if (IsDisposed) return;
+            text = Quiet(text);
             if (InvokeRequired) { try { BeginInvoke((Action<string, Color>)Line, text, color); } catch (InvalidOperationException) { } return; }
             if (box.TextLength > MaxChars) { box.Select(0, box.TextLength / 3); box.SelectedText = ""; }
             box.SelectionStart = box.TextLength;

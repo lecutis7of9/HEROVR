@@ -75,6 +75,7 @@
 #include "spidy/ui_dump.hpp" // HERO VR 0.0.78 cut18 UI DUMP (diagnostic)
 #include "spidy/prompt_layer.hpp" // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE)
 #include "spidy/prompt_world.hpp" // HERO VR 0.0.78 cut22 PROMPT WORLD (CANDIDATE)
+#include "spidy/prompt_split.hpp" // HERO VR 0.0.78 cut23 PROMPT SPLIT (CANDIDATE)
 #include "spidy/waypoint_mark.hpp" // HERO VR 0.0.77 WAYPOINT (drawing)
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
@@ -682,6 +683,7 @@ uint32_t SpidyImpostorReachNow();
 // percent of the game's, and its counts (calls, writes, the game's metres, ours).
 DWORD WINAPI SpidyFarWindows(void* percent);
 DWORD WINAPI SpidyCullMarginDegrees(void* degrees);
+uint32_t SpidyGameViewLiftOn();
 DWORD WINAPI SpidyShadowMatchOn(void* on);
 // 0.0.73 LIGHT CHECKS (stereo_probe.cpp, eye_queries.hpp): read when the eyes are made.
 DWORD WINAPI SpidyLightChecksOn(void* on);
@@ -1481,7 +1483,13 @@ std::atomic<uint32_t> promptLayerNow{prompt_layer::layerOn};
 // HERO VR 0.0.78 cut22 PROMPT WORLD (CANDIDATE, prompt_world.hpp): live.txt prompt_anchor - 0 room (the default:
 // the game's UI pieces stand still in the room, HUD pieces on a board pulled into view, markers where the game drew
 // them), 1 view (cut21's: at their place in the view, turning with the head).
-std::atomic<uint32_t> promptAnchorNow{prompt_world::anchorRoom};
+// HERO VR 0.0.78 cut23 PROMPT SPLIT (CANDIDATE, prompt_split.hpp): 0 split (the default since cut23: the HUD locked to
+// the view, the markers where the game drew them in its world), 1 view, 2 room (cut22's board).
+std::atomic<uint32_t> promptAnchorNow{prompt_split::anchorSplit};
+// cut23: the game's view lens inputs the split reads (stereo_probe viewLens): the cull margin as applied, and the
+// RECORDING FOV angle (0 off).
+std::atomic<uint32_t> promptCullDegrees23{recording_fov::cullMarginChoices[0]};
+std::atomic<int> promptRecordingFov23{};
 bool promptLayerFrame{};
 cut16::BossGate bossGate16;
 uint32_t bossFight16 = 0; // a living boss read within cut16::bossFightMetres (3 s grace)
@@ -3802,6 +3810,7 @@ DWORD WINAPI run(void*) {
             native_hud::setSize(values.hud);
             near_clip::set(values.nearClipMm);
             recording_fov::set(values.recordingFov);
+            promptRecordingFov23 = recording_fov::sanitized(values.recordingFov);
             sendSwingSettings();
             if (swingStarted && startPunch && samplePunch) {
                 if (values.punch && !punchStarted) {
@@ -9242,10 +9251,11 @@ DWORD WINAPI run(void*) {
                                         uint64_t gc[4]{};
                                         SpidyGameViewLod(gl, gc);
                                         char gline[300];
-                                        sprintf_s(gline, "HERO VR 0.0.78 CUT9 GAME VIEW LOD (CANDIDATE beacon fix) %s: game view "
+                                        sprintf_s(gline, "HERO VR 0.0.78 CUT9 GAME VIEW LOD (CANDIDATE beacon fix) %s, lift %s (cut23 lights A/B, live.txt game_view_lift): game view "
                                                          "scale %.3f x %.2f, eyes %.3f / %.3f; calls %llu writes %llu lifted %llu "
                                                          "restored %llu",
                                                   shared_lod::modeName(shared_lod::modeOf(SpidySharedLodNow())),
+                                                  SpidyGameViewLiftOn() ? "ON" : "OFF",
                                                   static_cast<double>(gl[0]), static_cast<double>(gl[1]),
                                                   static_cast<double>(gl[2]), static_cast<double>(gl[3]),
                                                   static_cast<unsigned long long>(gc[0]), static_cast<unsigned long long>(gc[1]),
@@ -15882,6 +15892,7 @@ DWORD WINAPI run(void*) {
                             if (const uint32_t cullWant = recording_fov::cullMarginOf(c38(combat38::cullMargin));
                                 cullWant != cullAppliedDegrees) {
                                 cullAppliedDegrees = cullWant;
+                                promptCullDegrees23 = cullWant;
                                 SpidyCullMarginDegrees(reinterpret_cast<void*>(static_cast<uintptr_t>(cullWant)));
                             }
                             // 0.0.73 test 2 SHADOW MATCH: on or off when it changes (test 3: ON by default,
@@ -17655,6 +17666,10 @@ DWORD WINAPI run(void*) {
                                 static prompt_world::Sorter worldSorter22;
                                 static uint64_t worldStamp22{}, worldLastMs22{}, worldBoardCards22{}, worldMarkerCards22{};
                                 static Pose worldGridHead22{};
+                                // cut23 PROMPT SPLIT: the classifier, its grid's sign and counts.
+                                static prompt_split::Split split23;
+                                static uint64_t splitStamp23{}, splitHudCards23{}, splitMarkerCards23{}, splitNoLens23{};
+                                static prompt_split::Lens splitLens23{};
                                 bool cardsSet = false;
                                 if (promptLayerFrame && !saved->flatScreen && !saved->stereoScreen && !showScreen &&
                                     !overlayFault) {
@@ -17675,13 +17690,48 @@ DWORD WINAPI run(void*) {
                                         // it still as the head turns. HUD pieces on the board (pulled in, grown),
                                         // markers in the direction the game drew them from the head of their grid.
                                         // live.txt prompt_anchor = view: cut21's (at their place in the view).
-                                        const bool roomAnchor = promptAnchorNow.load() == prompt_world::anchorRoom;
+                                        const uint32_t anchorMode = promptAnchorNow.load();
+                                        const bool roomAnchor = anchorMode == prompt_split::anchorRoom;
+                                        const bool splitAnchor = anchorMode == prompt_split::anchorSplit;
                                         Pose roomHead{};
                                         {
                                             const auto& e0 = saved->trackingEyes[made(0)].pose;
                                             const auto& e1 = saved->trackingEyes[made(1)].pose;
                                             roomHead.position = (e0.position + e1.position) * .5f;
                                             roomHead.orientation = e0.orientation;
+                                        }
+                                        // HERO VR 0.0.78 cut23 PROMPT SPLIT (CANDIDATE, prompt_split.hpp): the head of
+                                        // this frame's eyes and the game's view lens on it (stereo_probe viewLens).
+                                        Pose splitHead{};
+                                        bool splitLensOk = false;
+                                        if (splitAnchor) {
+                                            const Pose eyePoses[2] = {saved->trackingEyes[made(0)].pose,
+                                                                      saved->trackingEyes[made(1)].pose};
+                                            float eyeFov[2][4]{};
+                                            for (unsigned eye = 0; eye < 2; ++eye) {
+                                                const auto& f = saved->trackingEyes[made(eye)].fov;
+                                                eyeFov[eye][0] = f.left;
+                                                eyeFov[eye][1] = f.right;
+                                                eyeFov[eye][2] = f.down;
+                                                eyeFov[eye][3] = f.up;
+                                            }
+                                            splitHead = prompt_split::headOf(eyePoses[0], eyePoses[1]);
+                                            splitLensOk = prompt_split::headLens(
+                                                splitHead, eyePoses, eyeFov,
+                                                static_cast<float>(promptCullDegrees23.load()), splitLens23,
+                                                native_gpu::screenRequested() ? 0 : promptRecordingFov23.load(),
+                                                static_cast<float>(layerImage.width) /
+                                                    static_cast<float>(std::max(layerImage.height, 1u)));
+                                            if (!splitLensOk)
+                                                ++splitNoLens23;
+                                            if (layerGrid.stamp != splitStamp23) {
+                                                splitStamp23 = layerGrid.stamp;
+                                                prompt_split::Box boxes[prompt_layer::maxCards];
+                                                for (uint32_t i = 0; i < n; ++i)
+                                                    boxes[i] = prompt_split::boxOf(pieces[i], layerImage.width,
+                                                                                   layerImage.height);
+                                                split23.update(boxes, n, splitHead.orientation);
+                                            }
                                         }
                                         const uint64_t worldNowMs = GetTickCount64();
                                         const float worldSeconds =
@@ -17716,7 +17766,40 @@ DWORD WINAPI run(void*) {
                                         }
                                         for (uint32_t i = 0; i < n && cards.count < D3D12Renderer::maxCards; ++i) {
                                             bool both = true;
-                                            if (!roomAnchor) {
+                                            if (splitAnchor) {
+                                                // cut23: HUD locked to the view (a point of the head's frame), markers
+                                                // where the game drew them (through its head lens, from this head).
+                                                const bool marker =
+                                                    splitLensOk && split23.kind(i) == prompt_split::kindMarker;
+                                                float cx{}, cy{}, tw{}, th{}, metres{};
+                                                float cropIn[4] = {
+                                                    static_cast<float>(pieces[i].x0) / layerImage.width,
+                                                    static_cast<float>(pieces[i].y0) / layerImage.height,
+                                                    static_cast<float>(pieces[i].x1) / layerImage.width,
+                                                    static_cast<float>(pieces[i].y1) / layerImage.height};
+                                                if (marker) {
+                                                    if (!prompt_split::markerPlace(pieces[i], layerImage.width,
+                                                                                   layerImage.height, splitLens23, cx,
+                                                                                   cy, tw, th, cropIn))
+                                                        continue;
+                                                    metres = prompt_split::markerMetres;
+                                                } else {
+                                                    if (!prompt_split::hudPlace(pieces[i], layerImage.width,
+                                                                                layerImage.height, cx, cy, tw, th))
+                                                        continue;
+                                                    metres = prompt_split::hudMetres;
+                                                }
+                                                const Vec3 centre = prompt_split::headPoint(splitHead, cx, cy, metres);
+                                                const float aspect = tw / th;
+                                                for (unsigned eye = 0; eye < 2 && both; ++eye)
+                                                    both = prompt_world::cardRect(
+                                                        roomVp[eye], centre, tw * metres, aspect, roomTan[eye][0],
+                                                        roomTan[eye][1], roomTan[eye][2], roomTan[eye][3],
+                                                        targets[eye].width, targets[eye].height, cropIn,
+                                                        cards.rect[cards.count][eye], cards.crop[cards.count][eye]);
+                                                if (both)
+                                                    ++(marker ? splitMarkerCards23 : splitHudCards23);
+                                            } else if (!roomAnchor) {
                                                 for (unsigned eye = 0; eye < 2 && both; ++eye)
                                                     both = prompt_layer::cardRect(
                                                         pieces[i], layerImage.width, layerImage.height,
@@ -17796,7 +17879,9 @@ DWORD WINAPI run(void*) {
                                     sprintf_s(worldLine, "HERO VR 0.0.78 cut22 PROMPT WORLD (CANDIDATE) %s: board cards %llu, "
                                                          "marker cards %llu, grids sorted %llu, board put %u, glided %u, "
                                                          "board yaw %.0f deg",
-                                              promptAnchorNow.load() == prompt_world::anchorRoom ? "ROOM" : "VIEW",
+                                              promptAnchorNow.load() == prompt_split::anchorRoom   ? "ROOM"
+                                              : promptAnchorNow.load() == prompt_split::anchorView ? "VIEW"
+                                                                                                   : "SPLIT",
                                               static_cast<unsigned long long>(worldBoardCards22),
                                               static_cast<unsigned long long>(worldMarkerCards22),
                                               static_cast<unsigned long long>(worldSorter22.grids()),
@@ -17804,6 +17889,24 @@ DWORD WINAPI run(void*) {
                                               static_cast<double>(worldBoard22.yaw() * 57.29578f));
                                     game_prompts::note(worldLine);
                                     consoleLine(worldLine);
+                                    char splitLine[360];
+                                    sprintf_s(splitLine, "HERO VR 0.0.78 cut23 PROMPT SPLIT (CANDIDATE) %s: HUD cards %llu "
+                                                         "(view-locked), marker cards %llu (world), grids %llu, votes "
+                                                         "marker %llu / HUD %llu, new pieces %llu, no lens %llu; lens "
+                                                         "L%.2f R%.2f D%.2f U%.2f (cull %u, recording %d)",
+                                              promptAnchorNow.load() == prompt_split::anchorSplit ? "ON" : "OFF",
+                                              static_cast<unsigned long long>(splitHudCards23),
+                                              static_cast<unsigned long long>(splitMarkerCards23),
+                                              static_cast<unsigned long long>(split23.grids()),
+                                              static_cast<unsigned long long>(split23.markerVotes()),
+                                              static_cast<unsigned long long>(split23.hudVotes()),
+                                              static_cast<unsigned long long>(split23.fresh()),
+                                              static_cast<unsigned long long>(splitNoLens23),
+                                              static_cast<double>(splitLens23.left), static_cast<double>(splitLens23.right),
+                                              static_cast<double>(splitLens23.down), static_cast<double>(splitLens23.up),
+                                              promptCullDegrees23.load(), promptRecordingFov23.load());
+                                    game_prompts::note(splitLine);
+                                    consoleLine(splitLine);
                                 }
                             }
                             const uint64_t promptNowMs = GetTickCount64();
@@ -18480,8 +18583,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossGate(void* v) { return se
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyUiDump(void* v) { return setLive(v, 0, 1, 5645, uiDumpNow, asU32); }
 // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): live.txt prompt_layer, 0 on, 1 off.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptLayer(void* v) { return setLive(v, 0, 1, 5646, promptLayerNow, asU32); }
-// HERO VR 0.0.78 cut22 PROMPT WORLD (CANDIDATE): live.txt prompt_anchor, 0 room, 1 view.
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptAnchor(void* v) { return setLive(v, 0, 1, 5647, promptAnchorNow, asU32); }
+// HERO VR 0.0.78 cut22 PROMPT WORLD / cut23 PROMPT SPLIT (CANDIDATE): live.txt prompt_anchor, 0 split, 1 view, 2 room.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptAnchor(void* v) { return setLive(v, 0, 2, 5647, promptAnchorNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
 }

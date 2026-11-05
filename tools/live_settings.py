@@ -632,12 +632,18 @@ SETTINGS = {
     'prompt_layer': ((0, 1), 'SpidyPromptLayer', "PROMPT LAYER {} (0 on, the default: in VR play the game's own button "
                      "prompts, waypoint and markers show as small cards cut from its UI layer, never the whole "
                      "screen and nothing the mod made up; 1 off) - live, no restart needed"),
-    # HERO VR 0.0.78 cut22 PROMPT WORLD (include/spidy/prompt_world.hpp), CANDIDATE
-    'prompt_anchor': ((0, 1), 'SpidyPromptAnchor', "PROMPT ANCHOR {} (where prompt_layer's cards of the game's own "
-                      "UI stand: 0 room, the default - still in the room while you look around, its HUD (the Y "
-                      "prompt too) on a board in front of you pulled in from the screen's edges and a bit larger, "
-                      "which follows only a turn or step you hold; its markers where the game drew them; 1 view: "
-                      "cut21's, at their place in your view, turning with your head) - live, no restart needed"),
+    # HERO VR 0.0.78 cut22 PROMPT WORLD (include/spidy/prompt_world.hpp); cut23 PROMPT SPLIT
+    # (include/spidy/prompt_split.hpp), CANDIDATE
+    'prompt_anchor': ((0, 2), 'SpidyPromptAnchor', "PROMPT ANCHOR {} (where prompt_layer's cards of the game's own "
+                      "UI stand: 0 split, the default - its HUD (health, ability and gadget circles, map, the Y "
+                      "prompt) stays still in your view, pulled in from the screen's edges and a bit larger; its "
+                      "world markers (waypoints, threat and objective icons) sit where the game drew them in its "
+                      "world; 1 view: cut21's, everything at its place in your view; 2 room: cut22's room board, "
+                      "left behind as you move) - live, no restart needed"),
+    # HERO VR 0.0.78 cut23 LIGHTS A/B (stereo_probe gameViewLiftStep, shared_lod::gameViewLift), CANDIDATE
+    'game_view_lift': ((0, 1), 'SpidyGameViewLift', "GAME VIEW LIFT {} (0 off, the cut23 default: the game's own view "
+                       "keeps the game's detail, as in 0.0.77, a test for the bridge and car lights shining through "
+                       "things; 1 on: cut9's lift to the eyes' detail, far mission beacons) - live, no restart needed"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
                     "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
@@ -838,7 +844,8 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'boss_gate': ('on', 'off'),  # HERO VR 0.0.78 cut16
                 'ui_dump': ('on', 'off'),  # HERO VR 0.0.78 cut18
                 'prompt_layer': ('on', 'off'),  # HERO VR 0.0.78 cut21
-                'prompt_anchor': ('room', 'view'),  # HERO VR 0.0.78 cut22
+                'prompt_anchor': ('split', 'view', 'room'),  # HERO VR 0.0.78 cut22, cut23
+                'game_view_lift': ('off', 'on'),  # HERO VR 0.0.78 cut23 LIGHTS A/B
                 'world_light': ('game', 'game_soft', 'studio'),  # HERO VR 0.0.78 WORLD LIGHT
                 'world_shadow': ('on', 'vehicles', 'off'),  # HERO VR 0.0.78 WORLD LIGHT
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
@@ -1128,7 +1135,8 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'boss_gate': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut16
            'ui_dump': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut18
            'prompt_layer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut21
-           'prompt_anchor': {'room': 0, 'view': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut22
+           'prompt_anchor': {'split': 0, 'view': 1, 'room': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78 cut22, cut23
+           'game_view_lift': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut23 LIGHTS A/B
            'world_light': {'game': 0, 'game_soft': 1, 'studio': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'world_shadow': {'on': 0, 'vehicles': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
@@ -1506,6 +1514,7 @@ START_ONLY = START_ONLY + ('boss_gate',)  # HERO VR 0.0.78 cut16: kept between s
 START_ONLY = START_ONLY + ('ui_dump',)  # HERO VR 0.0.78 cut18: kept between sessions
 START_ONLY = START_ONLY + ('prompt_layer',)  # HERO VR 0.0.78 cut21: kept between sessions
 START_ONLY = START_ONLY + ('prompt_anchor',)  # HERO VR 0.0.78 cut22: kept between sessions
+START_ONLY = START_ONLY + ('game_view_lift',)  # HERO VR 0.0.78 cut23 LIGHTS A/B: kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',
@@ -2169,6 +2178,44 @@ def migrate_078_cut22_cards(path):
 
 HEADER += MIGRATED_078_CUT22_CARDS + '\n'
 
+
+# HERO VR 0.0.78 cut23 PROMPT SPLIT: cut22's default prompt_anchor (room) left the game's HUD behind as the hero
+# moved (the owner's video). A live.txt holding room moves to split once; a value chosen after the marker stays.
+MIGRATED_078_CUT23_ANCHOR = ('# HERO VR 0.0.78 cut23: prompt_anchor set once from room to split, the new default - '
+                             'the game\'s HUD still in your view, its markers in its world (migrated; a value '
+                             'chosen after this line stays)')
+
+
+def migrate_078_cut23_anchor(path):
+    """Once: an existing live.txt without MIGRATED_078_CUT23_ANCHOR whose prompt_anchor line is room gets split; the
+    marker is added either way. No live.txt: nothing (the DLL's default, split, applies; HEADER carries the marker).
+    The line to show, or None. Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_078_CUT23_ANCHOR in text:
+        return None
+    try:
+        old = parse(text)[0].get('prompt_anchor')
+        changed = old is not None and str(old).strip().lower() in ('room', '0')
+        if changed:
+            text = write_back(text, {'prompt_anchor': 'split'})
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_078_CUT23_ANCHOR + '\n')
+    except (OSError, ValueError, KeyError):
+        return None
+    if not changed:
+        return None
+    return ("live.txt: prompt_anchor set once from room to split, the cut23 default (the game's HUD stays in your "
+            'view, its markers in its world); prompt_anchor = room brings cut22\'s board back.')
+
+
+HEADER += MIGRATED_078_CUT23_ANCHOR + '\n'
 
 # 0.0.73 lights (the owner after test 4: "street lights still flicker and headlights still ghosting"; his
 # video: the bulbs and light pools are steady, the lens-flare streaks and bloom halos round street and

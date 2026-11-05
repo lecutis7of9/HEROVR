@@ -2,6 +2,33 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut23-split - the game's HUD stays in your view, its world markers stay in its world; lights A/B (test cut, not a release)
+
+From the owner's cut22 video and report ("the HUD should remain stationary in your view", icons "run off the side",
+"the lights shining through things like bridge lights and car lights are back"):
+- **HUD left behind when jumping or falling (cause CONFIRMED by code):** cut22's room board ignored the hero's travel
+  through the world. cut23 PROMPT SPLIT (include/spidy/prompt_split.hpp, live.txt prompt_anchor = split, the new
+  default, set once from room by a live.txt migration) locks every HUD piece (health, ability and gadget circles, map,
+  generic button prompts) to a point of the head's frame, pulled in from the screen's edges and a bit larger, so it
+  never stays in the world. tests/cut23_tests.cpp checks the HUD rects are identical across head turns, travel and falls.
+- **World icons running off the side (cause CONFIRMED by code):** the game's view in immersive play is the head with
+  the cull margin widened (about 130 degrees across on a Quest 3); cut21/22 assumed 72 degrees, so a marker 50 degrees
+  out was drawn under 30. Markers are now placed through the game's real head lens (both eyes' corners, the cull
+  margin, RECORDING FOV's covering when on) from the current head, within 0.5 degrees in the tests. That cohtml projects
+  through this view is a CANDIDATE.
+- **Which piece is which (CANDIDATE classifier):** a piece that moves on the game's UI layer while the head is still
+  votes marker; one that stays still under a head turn of more than 6 degrees votes HUD; pieces start from their place
+  (the outer band HUD, the middle marker). Prompts on a world target (LB+RB at a car) are markers, so world-anchored.
+  The mod's cooked prompt cards stay OFF (prompt_cards); only the game's own pixels are shown. A
+  "cut23 PROMPT SPLIT (CANDIDATE)" line logs the counts, votes and lens.
+- **Lights through bridges and car hoods, rooftop beams (cause NOT proven; A/B CANDIDATE):** the 0.0.76 LIGHTS LOCK
+  (the game's flares off in VR) and the 0.0.73 light checks are unchanged. The one change since 0.0.77 to the game's
+  own view, which the eyes' culling and the flares' depth come from, is cut9's GAME VIEW LIFT (its detail raised to the
+  eyes' for far mission beacons, the vertical rooftop beams). cut23 turns it OFF by default (live.txt game_view_lift =
+  off; = on brings cut9's back, live); the GAME VIEW LOD line says which. If the lights still shine through with it off,
+  the lift is ruled out.
+- **Sandman Y zip:** deferred; the SANDMAN Y WATCH log stays.
+
 ## 0.0.78 (tag v0.0.78) - immersive cutscenes by default, prompts as small VR cards, a quiet launcher (EXPERIMENTAL release)
 
 The cut21 build (1434d58) with the release stamps: VERSION 0.0.78 (newer than 0.0.77 in every shipped launcher, so it

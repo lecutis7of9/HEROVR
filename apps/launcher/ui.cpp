@@ -2497,10 +2497,11 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                                      "ui_dump = on saves the game's frame and UI layers up to 3 times a session to "
                                      "%APPDATA%\\Spidy\\ui-dump (live.txt ui_dump = off)"},
           {"Prompts in VR", "Only the game's own button prompts, waypoint and markers, cut from its UI, never the "
-                            "whole screen; they stand still in the room, the HUD on a board in front of you pulled "
-                            "in from the edges so the Y prompt is in view (live.txt prompt_anchor = view: cut21's, "
-                            "turning with your head; live.txt prompt_layer = off: none; prompt_cards = on: the "
-                            "mod's own Y cards too)"},
+                            "whole screen; its HUD (health, ability circles, map, the Y prompt) stays still in your "
+                            "view, pulled in from the edges so it is in view; its markers sit where the game drew "
+                            "them in its world (live.txt prompt_anchor = view: cut21's, all in your view; = room: "
+                            "cut22's board; live.txt prompt_layer = off: none; prompt_cards = on: the mod's own Y "
+                            "cards too)"},
           {"LB + RB near a boss", "The game's throw; each one logs the boss's HP over 2 s, the left stick sent, the aim "
                                   "and his distance (live.txt throw_watch = off: no such log)"},
           {"A or a web on a ledge", "Off a ledge or roof edge (the game's floor crawl) as off a wall: RT + A "

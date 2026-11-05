@@ -26,9 +26,10 @@
 #include <cstdint>
 
 namespace spidy::prompt_world {
-// live.txt prompt_anchor (SpidyPromptAnchor 5647): 0 room (the default: cut22's world-locked cards), 1 view (cut21's
-// cards at their place in the view, which turn with the head; for comparison).
-enum Anchor : uint32_t { anchorRoom = 0, anchorView = 1 };
+// live.txt prompt_anchor (SpidyPromptAnchor 5647). cut22: 0 room, 1 view. Since cut23 (prompt_split.hpp, whose
+// Anchor the DLL reads): 0 split (the default), 1 view (cut21's cards at their place in the view, which turn with the
+// head), 2 room (cut22's room board, which the owner's video showed left behind as the hero moves; for comparison).
+enum Anchor : uint32_t { anchorRoom = 2, anchorView = 1 };
 
 inline constexpr float boardDistance = 1.4f;   // metres in front of the eyes
 inline constexpr float boardDrop = .16f;       // metres under the eyes (about 6.5 degrees down)

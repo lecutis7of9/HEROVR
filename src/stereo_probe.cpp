@@ -2027,6 +2027,10 @@ void sharedLodRestore(unsigned eye) {
 std::atomic<uintptr_t> gameLiftWritten{};
 std::atomic<float> gameLiftEyeScale[2]{NAN, NAN}, gameLiftScale{NAN}, gameLiftMultiplier{1.f};
 std::atomic<uint64_t> gameLiftCalls{}, gameLiftWrites{}, gameLiftLifted{}, gameLiftRestores{};
+// HERO VR 0.0.78 cut23 LIGHTS A/B (CANDIDATE): live.txt game_view_lift (SpidyGameViewLift 5648) - 0 off, the cut23
+// default (the game view at the game's own detail, as in 0.0.77, before the lights through bridges and car hoods came
+// back), 1 on (cut9's lift to the eyes' scale for far mission beacons). Off puts back any multiplier the lift wrote.
+std::atomic<uint32_t> gameLiftOn{0};
 void gameViewLiftStep(uintptr_t v, uint32_t mode, bool eyesKnown) {
     namespace sl = spidy::shared_lod;
     if (pointer(base + sl::activeViewRva) != v)
@@ -2035,7 +2039,7 @@ void gameViewLiftStep(uintptr_t v, uint32_t mode, bool eyesKnown) {
     float gs = NAN;
     read(v + sl::scaleOffset, &gs, 4);
     gameLiftScale = gs;
-    const float m = eyesKnown ? sl::gameViewLift(mode, gs, gameLiftEyeScale[0].load(), gameLiftEyeScale[1].load()) : 1.f;
+    const float m = eyesKnown && gameLiftOn.load() ? sl::gameViewLift(mode, gs, gameLiftEyeScale[0].load(), gameLiftEyeScale[1].load()) : 1.f;
     if (m <= 1.f && gameLiftWritten.load() != v)
         return; // never ours: left as the game has it
     uint32_t bits{};
@@ -4693,6 +4697,15 @@ extern "C" uint32_t SpidyViewGatesNow() {
 }
 // HERO VR 0.0.78 CUT9 GAME VIEW LIFT: out[0] the game view's scale, [1] its multiplier, [2..3] the eyes' scales;
 // counts[0] game view calls, [1] writes, [2] lifted, [3] restored.
+// HERO VR 0.0.78 cut23 LIGHTS A/B (CANDIDATE): live.txt game_view_lift, 0 off (the default), 1 on (cut9's).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGameViewLift(void* v) {
+    const auto value = reinterpret_cast<uintptr_t>(v);
+    if (value > 1)
+        return 5648;
+    gameLiftOn = static_cast<uint32_t>(value);
+    return 0;
+}
+extern "C" uint32_t SpidyGameViewLiftOn() { return gameLiftOn.load(); }
 extern "C" void SpidyGameViewLod(float out[4], uint64_t counts[4]) {
     out[0] = gameLiftScale.load();
     out[1] = gameLiftMultiplier.load();

@@ -3140,6 +3140,10 @@ def session(a, startup, session_off=()):
         migrated_cut22 = live_settings.migrate_078_cut22_cards(ROOT/'live.txt')
         if migrated_cut22:
             print(migrated_cut22, flush=True)
+        # HERO VR 0.0.78 cut23: prompt_anchor room -> split, once (a prompt_anchor value chosen after it stays).
+        migrated_cut23 = live_settings.migrate_078_cut23_anchor(ROOT/'live.txt')
+        if migrated_cut23:
+            print(migrated_cut23, flush=True)
         # 0.0.7 MIRROR PERSIST FIX: what is made when VR starts (MIRROR VIEW TEST) is set before the start.
         for name, value in live_settings.vr_start_settings(ROOT/'live.txt').items():
             _, export, text = live_settings.SETTINGS[name]

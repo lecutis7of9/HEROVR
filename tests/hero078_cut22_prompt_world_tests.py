@@ -20,18 +20,19 @@ def src(p):
 class Cut22(unittest.TestCase):
     def test_anchor_switch(self):
         g = src('src/game_xr.cpp')
-        self.assertIn('WINAPI SpidyPromptAnchor(void* v) { return setLive(v, 0, 1, 5647, promptAnchorNow, asU32); }', g)
+        self.assertIn('WINAPI SpidyPromptAnchor(void* v) { return setLive(v, 0, 2, 5647, promptAnchorNow, asU32); }', g)
         self.assertEqual(len(re.findall(r'\b5647\b', g)), 1)
-        self.assertIn('std::atomic<uint32_t> promptAnchorNow{prompt_world::anchorRoom};', g)
+        # cut23: split is the default; room (cut22's) is 2
+        self.assertIn('std::atomic<uint32_t> promptAnchorNow{prompt_split::anchorSplit};', g)
         key = 'prompt_anchor'
-        self.assertEqual(live_settings.SETTINGS[key][:2], ((0, 1), 'SpidyPromptAnchor'))
+        self.assertEqual(live_settings.SETTINGS[key][:2], ((0, 2), 'SpidyPromptAnchor'))
         self.assertTrue(live_settings.SETTINGS[key][2].endswith('- live, no restart needed'))
-        self.assertEqual(live_settings.CHOICES[key]['room'], 0)
+        self.assertEqual(live_settings.CHOICES[key]['room'], 2)
         self.assertEqual(live_settings.CHOICES[key]['view'], 1)
         self.assertIn(key, live_settings.START_ONLY)
         self.assertIn('live.txt prompt_anchor = view', src('apps/launcher/ui.cpp'))
         h = src('include/spidy/prompt_world.hpp')
-        self.assertIn('enum Anchor : uint32_t { anchorRoom = 0, anchorView = 1 };', h)
+        self.assertIn('enum Anchor : uint32_t { anchorRoom = 2, anchorView = 1 };', h)
         self.assertIn('SpidyPromptAnchor 5647', h)
 
     def test_cards_room_locked(self):
@@ -46,7 +47,7 @@ class Cut22(unittest.TestCase):
         self.assertIn('prompt_world::markerPoint(worldGridHead22', block)
         self.assertIn('layerGrid.stamp != worldStamp22', block)
         # cut21's head placement only with prompt_anchor = view
-        self.assertIn('if (!roomAnchor) {', block)
+        self.assertIn('} else if (!roomAnchor) {', block)
         self.assertIn('prompt_layer::cardRect(', block)
         self.assertNotIn('setInset', block)
         self.assertIn('HERO VR 0.0.78 cut22 PROMPT WORLD (CANDIDATE) %s', g)

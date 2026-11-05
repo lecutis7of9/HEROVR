@@ -1083,6 +1083,11 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
     inset_ = {};
     if (!insetFault_.empty() || views.size() != 2 || !preserveColor)
         insetDrawn_ = {};
+    // HERO VR 0.0.78 cut21 PROMPT LAYER: likewise the cards.
+    cardsDrawnSet_ = std::move(cards_);
+    cards_ = {};
+    if (!cardsFault_.empty() || views.size() != 2 || !preserveColor)
+        cardsDrawnSet_ = {};
     // Only an image that stays can be recoloured.
     const bool grading = grade && preserveColor && grade->visible();
     if (grading)
@@ -1229,6 +1234,18 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
                     insetFault_ = std::string("PROMPT WINDOW off: ") + e.what();
                 } catch (...) {
                     insetFault_ = "PROMPT WINDOW off: unknown fault";
+                }
+            }
+            // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): the game's own prompts and markers as small cards,
+            // after the inset, under the drawings. A failure only turns the cards off.
+            if (cardsDrawnSet_.source && cardsDrawnSet_.count) {
+                try {
+                    if (recordCards(views[eye], rtv, static_cast<unsigned>(eye)) && eye + 1 == views.size())
+                        ++cardsDrawn_;
+                } catch (const std::exception& e) {
+                    cardsFault_ = std::string("PROMPT LAYER cards off: ") + e.what();
+                } catch (...) {
+                    cardsFault_ = "PROMPT LAYER cards off: unknown fault";
                 }
             }
             list_->SetGraphicsRootSignature(root_.Get());
@@ -1390,13 +1407,22 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     // large targets (4608 x 4896 eyes changed copied values by 2 levels).
     // HERO VR 0.0.77: from the drawn rectangle's corner (0 for a whole-target blit).
     // HERO VR 0.0.77 CUTSCENES: from a crop of the source (0, 1: all of it).
-    float3 c = source.SampleLevel(scaled, uvOrigin + (position.xy - targetOrigin) * targetPixel * uvScale, 0).rgb;
+    const float4 s = source.SampleLevel(scaled, uvOrigin + (position.xy - targetOrigin) * targetPixel * uvScale, 0);
+    float3 c = s.rgb;
+    // HERO VR 0.0.78 cut21 PROMPT LAYER: keyed 2 - the source's own alpha (premultiplied: its colour unmultiplied).
+    if (keyed == 2)
+        c = s.a > 0.002 ? saturate(s.rgb / s.a) : float3(0, 0, 0);
     // The key (cutscene077.hpp keyOf) reads the display values: bright, colourless pixels (words, icons).
     const float3 shown = linearSource ? encode(saturate(c)) : saturate(c);
     if (linearSource)
         c = srgbTarget ? max(c, 0) : encode(saturate(c));
     else if (srgbTarget)
         c = decode(saturate(c));
+    if (keyed == 2) {
+        const float a = saturate(s.a);
+        const float g = a + saturate(backdrop) * (1 - a);
+        return float4(g > 0 ? c * (a / g) : float3(0, 0, 0), g);
+    }
     if (keyed) {
         const float lum = dot(shown, float3(0.2126, 0.7152, 0.0722));
         const float sat = max(max(shown.r, shown.g), shown.b) - min(min(shown.r, shown.g), shown.b);
@@ -1556,6 +1582,68 @@ bool D3D12Renderer::recordInset(const ViewTarget& target, D3D12_CPU_DESCRIPTOR_H
     list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list_->DrawInstanced(3, 1, 0, 0);
     return true;
+}
+void D3D12Renderer::setCards(Cards cards) noexcept {
+    cards_ = std::move(cards);
+}
+void D3D12Renderer::clearCards() noexcept {
+    cards_ = {};
+}
+// HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): each card a crop of the one source, keyed by its alpha, with
+// blit's shader and the see-through pipeline's blend (renderViews waited for the GPU, so the descriptor is free).
+unsigned D3D12Renderer::recordCards(const ViewTarget& target, D3D12_CPU_DESCRIPTOR_HANDLE rtv, unsigned eye) {
+    const auto& set = cardsDrawnSet_;
+    if (eye > 1 || !set.source || !set.count || set.count > maxCards)
+        return 0;
+    prepareBlit(target.format);
+    if (!keyPipeline_)
+        return 0;
+    if (!cardHeap_) {
+        D3D12_DESCRIPTOR_HEAP_DESC heap{};
+        heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        heap.NumDescriptors = 1;
+        heap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        hr(device_->CreateDescriptorHeap(&heap, IID_PPV_ARGS(&cardHeap_)), "Create card descriptor heap");
+    }
+    D3D12_SHADER_RESOURCE_VIEW_DESC sv{};
+    sv.Format = set.view;
+    sv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    sv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    sv.Texture2D.MipLevels = 1;
+    device_->CreateShaderResourceView(set.source.Get(), &sv, cardHeap_->GetCPUDescriptorHandleForHeapStart());
+    list_->SetPipelineState(keyPipeline_.Get());
+    list_->SetGraphicsRootSignature(blitRoot_.Get());
+    ID3D12DescriptorHeap* heaps[] = {cardHeap_.Get()};
+    list_->SetDescriptorHeaps(1, heaps);
+    list_->SetGraphicsRootDescriptorTable(0, cardHeap_->GetGPUDescriptorHandleForHeapStart());
+    list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    const float w = static_cast<float>(target.width), h = static_cast<float>(target.height);
+    unsigned drawn = 0;
+    for (unsigned i = 0; i < set.count; ++i) {
+        const float* r = set.rect[i][eye];
+        const float x0 = std::clamp(r[0], 0.f, w), y0 = std::clamp(r[1], 0.f, h);
+        const float x1 = std::clamp(r[2], 0.f, w), y1 = std::clamp(r[3], 0.f, h);
+        if (!(x1 - x0 >= 8.f) || !(y1 - y0 >= 8.f)) // also NaN
+            continue;
+        const float* crop = set.crop[i][eye];
+        if (!(crop[2] > crop[0]) || !(crop[3] > crop[1]) || crop[0] < 0 || crop[1] < 0 || crop[2] > 1 || crop[3] > 1)
+            continue;
+        const UINT mode[] = {set.linear ? 1u : 0u, srgb(target.format) ? 1u : 0u,
+                             std::bit_cast<UINT>(1.f / (x1 - x0)), std::bit_cast<UINT>(1.f / (y1 - y0)),
+                             std::bit_cast<UINT>(x0), std::bit_cast<UINT>(y0),
+                             std::bit_cast<UINT>(crop[0]), std::bit_cast<UINT>(crop[1]),
+                             std::bit_cast<UINT>(crop[2] - crop[0]), std::bit_cast<UINT>(crop[3] - crop[1]),
+                             2u, std::bit_cast<UINT>(set.backdrop)};
+        list_->SetGraphicsRoot32BitConstants(1, 12, mode, 0);
+        D3D12_VIEWPORT viewport{x0, y0, x1 - x0, y1 - y0, 0, 1};
+        D3D12_RECT rect{static_cast<LONG>(x0), static_cast<LONG>(y0), static_cast<LONG>(x1), static_cast<LONG>(y1)};
+        list_->RSSetViewports(1, &viewport);
+        list_->RSSetScissorRects(1, &rect);
+        list_->DrawInstanced(3, 1, 0, 0);
+        ++drawn;
+    }
+    return drawn;
 }
 namespace {
 bool typeless(DXGI_FORMAT format) {

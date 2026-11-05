@@ -1,5 +1,6 @@
 #pragma once
 #include "spidy/eye_color.hpp"
+#include "spidy/prompt_layer.hpp"
 #include <array>
 #include <cstdint>
 #include <string>
@@ -292,6 +293,13 @@ struct UiShot {
 };
 void requestUiDump(uint32_t reason);
 bool takeUiDump(uint32_t& reason, std::vector<UiShot>& shots, std::string& line);
+// HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE, include/spidy/prompt_layer.hpp): while wanted (VR play), the game's
+// UI layer - the render target its prompts, waypoint and markers are drawn into, with alpha - is found (the UI
+// DUMP's hunt), copied each present and its alpha read into a cell grid every 100 ms. latestPromptLayer gives the
+// copy (PIXEL_SHADER_RESOURCE, premultiplied RGBA8) and the grid when both are fresh; promptLayerLine one log line.
+void wantPromptLayer(bool wanted);
+bool latestPromptLayer(Screen& out, prompt_layer::Grid& grid, uint64_t maxAgeMs);
+std::string promptLayerLine();
 // HERO VR 0.0.77 CUT7 FPS: whether the see-through models are drawn now (the eyes' depth watched only then).
 void sceneDepthInUse(bool used);
 // HERO VR 0.0.77 CUT7 BOOT SCREEN (diagnostic): presents of any swapchain, screen copies made and skipped since

@@ -625,6 +625,10 @@ SETTINGS = {
                 "play - 20 s in, a prompt in reach, the boss's Y moment - the game's frame and its UI layers are saved "
                 "as pictures to %APPDATA%\\Spidy\\ui-dump, to find where its button prompts are; 1 off) - live, no "
                 "restart needed"),
+    # HERO VR 0.0.78 cut21 PROMPT LAYER (include/spidy/prompt_layer.hpp), CANDIDATE
+    'prompt_layer': ((0, 1), 'SpidyPromptLayer', "PROMPT LAYER {} (0 on, the default: in VR play the game's own button "
+                     "prompts, waypoint and markers show as small cards where the game puts them, cut from its UI "
+                     "layer, never the whole screen; 1 off) - live, no restart needed"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
                     "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
@@ -824,6 +828,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'boss_y_card': ('on', 'off'),  # HERO VR 0.0.78 cut15
                 'boss_gate': ('on', 'off'),  # HERO VR 0.0.78 cut16
                 'ui_dump': ('on', 'off'),  # HERO VR 0.0.78 cut18
+                'prompt_layer': ('on', 'off'),  # HERO VR 0.0.78 cut21
                 'world_light': ('game', 'game_soft', 'studio'),  # HERO VR 0.0.78 WORLD LIGHT
                 'world_shadow': ('on', 'vehicles', 'off'),  # HERO VR 0.0.78 WORLD LIGHT
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
@@ -1112,6 +1117,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'boss_y_card': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut15
            'boss_gate': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut16
            'ui_dump': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut18
+           'prompt_layer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut21
            'world_light': {'game': 0, 'game_soft': 1, 'studio': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'world_shadow': {'on': 0, 'vehicles': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
@@ -1487,6 +1493,7 @@ START_ONLY = START_ONLY + ('world_light', 'world_shadow', 'world_light_gain')  #
 START_ONLY = START_ONLY + ('boss_y_card',)  # HERO VR 0.0.78 cut15: kept between sessions
 START_ONLY = START_ONLY + ('boss_gate',)  # HERO VR 0.0.78 cut16: kept between sessions
 START_ONLY = START_ONLY + ('ui_dump',)  # HERO VR 0.0.78 cut18: kept between sessions
+START_ONLY = START_ONLY + ('prompt_layer',)  # HERO VR 0.0.78 cut21: kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

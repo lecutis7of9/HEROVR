@@ -23,6 +23,7 @@
 #include "spidy/taa_jitter.hpp"
 #include "spidy/taa_still.hpp"
 #include "spidy/ui_dump.hpp"
+#include "spidy/prompt_layer.hpp"
 #include "spidy/smaa/area_tex.h"
 #include "spidy/smaa/search_tex.h"
 #include "spidy/smaa/smaa_shader.hpp"
@@ -1210,6 +1211,22 @@ void watchUi(UINT count, const D3D12_RESOURCE_BARRIER* bs) {
         uiTargets.emplace(r, std::move(t));
     }
 }
+// HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE, include/spidy/prompt_layer.hpp): the game's UI layer once found
+// (the cut18 UI DUMP's TARGET #1 - RGBA8 at the back buffer's size, mostly clear, its prompts, waypoint and markers
+// drawn with alpha): its last recorded state and when it last changed state. Read-only on the game's side.
+std::atomic<ID3D12Resource*> layerTracked{};
+std::atomic<uint32_t> layerState{};
+std::atomic<uint64_t> layerSeenMs{}, layerTransitions{};
+void watchLayer(ID3D12Resource* tracked, UINT count, const D3D12_RESOURCE_BARRIER* bs) {
+    if (!bs)
+        return;
+    for (UINT i = 0; i < count; ++i)
+        if (bs[i].Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION && bs[i].Transition.pResource == tracked) {
+            layerState.store(static_cast<uint32_t>(bs[i].Transition.StateAfter), std::memory_order_relaxed);
+            layerSeenMs.store(GetTickCount64(), std::memory_order_relaxed);
+            layerTransitions.fetch_add(1, std::memory_order_relaxed);
+        }
+}
 void STDMETHODCALLTYPE barrier(ID3D12GraphicsCommandList* list, UINT count,
                                const D3D12_RESOURCE_BARRIER* bs) {
     // Update 27: ADDRESS FINDER callout before the early return (read-only).
@@ -1217,7 +1234,9 @@ void STDMETHODCALLTYPE barrier(ID3D12GraphicsCommandList* list, UINT count,
     if (hudHunting.load(std::memory_order_relaxed) || hudTracked.load(std::memory_order_relaxed))
         watchHud(count, bs); // CUT7 WRIST MAP SOURCE: read-only
     if (uiHunting.load(std::memory_order_relaxed))
-        watchUi(count, bs); // cut18 UI DUMP: read-only
+        watchUi(count, bs); // cut18 UI DUMP: read-only (also the cut21 PROMPT LAYER's find)
+    if (auto* layer = layerTracked.load(std::memory_order_relaxed))
+        watchLayer(layer, count, bs); // cut21 PROMPT LAYER: read-only
     if (depthWatchOpen.load(std::memory_order_relaxed))
         watchFlat(list, count, bs); // 0.0.76 TAA WATCH: read-only
     // 0.0.74 test 10 SEE-THROUGH: the scene depth, copied ahead of the game's own barrier.
@@ -6062,13 +6081,347 @@ void uiDumpStep(IDXGISwapChain* swapchain) {
     uiShotLine = std::move(line);
     uiShotReady = true;
 }
+// HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): while game_xr wants it (VR play), the game's UI layer is found with
+// the UI DUMP's hunt (45 presents, read back once, no pictures kept) - the first read-back target that is
+// prompt_layer::isLayer - then copied each present from its readable state (as the HUD panel), and every
+// maskEveryMs read back (no wait: mapped on a later present) into a cell grid of where its alpha is. game_xr cuts
+// that grid's small pieces (prompts, the waypoint, markers) into small cards; never the whole layer.
+enum LayerWhy : uint32_t {
+    layerIdle,
+    layerWaitDump,
+    layerHunting,
+    layerBackingOff,
+    layerGaveUp,
+    layerCopied,
+    layerNotReadable,
+    layerBusy,
+    layerFormat,
+    layerStopped
+};
+const char* layerWhyName(uint32_t w) {
+    static const char* names[] = {"idle (not wanted)", "waiting for a UI DUMP to finish", "finding the layer",
+                                  "not found yet (trying again)", "not found (gave up this session)", "copied",
+                                  "not in a readable state", "copies in flight", "format not readable",
+                                  "stopped (Spidy's GPU path off)"};
+    return w < 10 ? names[w] : "?";
+}
+struct LayerReadback {
+    ComPtr<ID3D12Resource> buffer;
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout{};
+    uint64_t fence{};
+    uint32_t width{}, height{};
+    bool pending{};
+};
+bool layerLocating{};
+std::atomic<bool> layerWantedFlag{};
+ComPtr<ID3D12Resource> layerResource;
+uint32_t layerBackW{}, layerBackH{}, layerFailed{}, layerTries{};
+uint64_t layerNextTry{}, layerMs{}, layerMaskAskedMs{};
+Screen layerShot;
+std::array<CopyCommands, 3> layerCommands;
+std::array<LayerReadback, 2> layerReadbacks;
+std::vector<Retired> retiredLayer;
+std::mutex layerGridLock; // the grid only
+prompt_layer::Grid layerGrid;
+uint64_t layerGridMs{};
+std::atomic<uint32_t> layerWhy{};
+std::atomic<uint64_t> layerFinds{}, layerLost{}, layerCopies{}, layerMasks{}, layerSkipState{}, layerSkipBusy{};
+std::mutex layerLineLock;
+std::string layerFoundLine = "not found yet";
+void dropLayer(uint64_t now) {
+    if (!layerResource && layerShot.texture == nullptr)
+        return;
+    layerTracked = nullptr;
+    std::lock_guard submitLock(submission);
+    if (layerResource)
+        retiredLayer.push_back({layerResource, now + 3000}); // after the copies in flight
+    if (layerShot.texture)
+        retiredLayer.push_back({layerShot.texture, now + 3000});
+    for (auto& r : layerReadbacks) {
+        if (r.buffer)
+            retiredLayer.push_back({r.buffer, now + 3000});
+        r = {};
+    }
+    layerResource.Reset();
+    layerShot = {};
+    std::lock_guard gridLock(layerGridLock);
+    layerGrid = {};
+    layerGridMs = 0;
+}
+void stopLocating() {
+    if (!layerLocating)
+        return;
+    layerLocating = false;
+    uiHunting = false;
+    std::lock_guard lock(uiLock);
+    uiTargets.clear(); // the references go
+    uiLookedAt.clear();
+}
+// The find: the UI DUMP's hunt, then its read-back, the first target that is the layer kept.
+void locateLayer(IDXGISwapChain* swapchain, uint64_t now) {
+    if (!layerLocating) {
+        if (uiReason || uiAsked.load()) {
+            layerWhy = layerWaitDump;
+            return;
+        }
+        if (layerTries >= prompt_layer::maxLocates) {
+            layerWhy = layerGaveUp;
+            return;
+        }
+        if (now < layerNextTry) {
+            layerWhy = layerBackingOff;
+            return;
+        }
+        {
+            std::lock_guard lock(uiLock);
+            uiTargets.clear();
+            uiLookedAt.clear();
+        }
+        uiBackW = layerBackW;
+        uiBackH = layerBackH;
+        uiLooked = 0;
+        uiPresents = 0;
+        uiHunting = true;
+        layerLocating = true;
+        ++layerTries;
+        layerWhy = layerHunting;
+        return;
+    }
+    if (++uiPresents < ui_dump::huntPresents)
+        return;
+    uiHunting = false;
+    layerLocating = false;
+    std::vector<UiTarget> all;
+    {
+        std::lock_guard lock(uiLock);
+        all.reserve(uiTargets.size());
+        for (auto& kv : uiTargets)
+            all.push_back(std::move(kv.second));
+        uiTargets.clear();
+        uiLookedAt.clear();
+    }
+    const uint32_t backW = layerBackW, backH = layerBackH;
+    std::sort(all.begin(), all.end(), [&](const UiTarget& a, const UiTarget& b) {
+        return ui_dump::score(a.format, a.width, a.height, a.toRead, backW, backH) >
+               ui_dump::score(b.format, b.width, b.height, b.toRead, backW, backH);
+    });
+    std::string line;
+    std::vector<UiShot> shots;
+    uiDump(swapchain, all, shots, line);
+    const UiTarget* found{};
+    double share{};
+    for (const auto& shot : shots) {
+        if (shot.backBuffer || !shot.rank || shot.rank > all.size())
+            continue;
+        const auto c = ui_dump::cover(shot.rgba.data(), shot.width, shot.height);
+        if (prompt_layer::isLayer(shot.format, shot.width, shot.height, backW, backH, c.alpha, c.pixels)) {
+            found = &all[shot.rank - 1];
+            share = 100.0 * static_cast<double>(c.alpha) / static_cast<double>(c.pixels ? c.pixels : 1);
+            break;
+        }
+    }
+    char head[200];
+    if (!found) {
+        layerNextTry = now + prompt_layer::locateDelay(layerFailed++);
+        layerWhy = layerTries >= prompt_layer::maxLocates ? layerGaveUp : layerBackingOff;
+        snprintf(head, sizeof(head), "find %u at %ux%u: none of %zu targets is the layer", layerTries, backW, backH,
+                 all.size());
+    } else {
+        layerResource = found->resource; // a reference: let go when lost
+        layerState = found->state;
+        layerSeenMs = now;
+        layerTracked = found->resource.Get();
+        layerFailed = 0;
+        ++layerFinds;
+        snprintf(head, sizeof(head), "find %u: %ux%u %s (format %u), %.2f%% alpha, %llu RT->read in %u presents",
+                 layerTries, found->width, found->height, uiFormatName(found->format), found->format, share,
+                 static_cast<unsigned long long>(found->toRead), ui_dump::huntPresents);
+    }
+    all.clear(); // the other references go
+    std::lock_guard lock(layerLineLock);
+    layerFoundLine = head;
+}
+// Maps the read-backs the GPU has finished: the newest one's alpha into the grid.
+void readLayerMasks(uint64_t now) {
+    const auto completed = fence->GetCompletedValue();
+    if (completed == UINT64_MAX)
+        return;
+    for (auto& r : layerReadbacks) {
+        if (!r.pending || r.fence > completed)
+            continue;
+        r.pending = false;
+        void* data{};
+        if (FAILED(r.buffer->Map(0, nullptr, &data)))
+            continue;
+        prompt_layer::Grid grid;
+        if (grid.begin(r.width, r.height))
+            for (uint32_t y = 0; y < r.height; y += 2)
+                grid.row(static_cast<const uint8_t*>(data) + r.layout.Offset +
+                             static_cast<size_t>(y) * r.layout.Footprint.RowPitch,
+                         y);
+        D3D12_RANGE written{0, 0};
+        r.buffer->Unmap(0, &written);
+        std::lock_guard gridLock(layerGridLock);
+        layerGrid = grid;
+        layerGridMs = now;
+        ++layerMasks;
+    }
+}
+void captureLayer(uint64_t now) {
+    readLayerMasks(now);
+    const auto desc = layerResource->GetDesc();
+    bool linear{};
+    const auto view = screenView(desc.Format, linear);
+    if (view == DXGI_FORMAT_UNKNOWN || !prompt_layer::eightBitAlpha(static_cast<uint32_t>(desc.Format))) {
+        layerWhy = layerFormat;
+        return;
+    }
+    const auto state = static_cast<D3D12_RESOURCE_STATES>(layerState.load());
+    if (!(state & (D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)) ||
+        (state & (D3D12_RESOURCE_STATE_RENDER_TARGET | D3D12_RESOURCE_STATE_UNORDERED_ACCESS))) {
+        ++layerSkipState;
+        layerWhy = layerNotReadable;
+        return;
+    }
+    std::lock_guard submitLock(submission);
+    std::lock_guard recordLock(recording);
+    if (!enabled || fault || now >= deadline) {
+        layerWhy = layerStopped;
+        return;
+    }
+    std::erase_if(retiredLayer, [&](const Retired& old) { return now >= old.releaseMs; });
+    if (!layerShot.texture || layerShot.width != desc.Width || layerShot.height != desc.Height ||
+        layerShot.view != view) {
+        if (layerShot.texture)
+            retiredLayer.push_back({layerShot.texture, now + 3000});
+        layerShot = {};
+        auto copy = desc;
+        copy.Format = typelessFamily(view);
+        copy.Flags = D3D12_RESOURCE_FLAG_NONE;
+        copy.Alignment = 0;
+        D3D12_HEAP_PROPERTIES heap{};
+        heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+        if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &copy,
+                                                   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                                                   IID_PPV_ARGS(&layerShot.texture))))
+            return;
+        layerShot.view = view;
+        layerShot.linear = linear;
+        layerShot.width = static_cast<uint32_t>(desc.Width);
+        layerShot.height = desc.Height;
+    }
+    // A mask read-back every maskEveryMs, into a free buffer (none waited for).
+    LayerReadback* mask{};
+    if (now - layerMaskAskedMs >= prompt_layer::maskEveryMs)
+        for (auto& r : layerReadbacks)
+            if (!r.pending) {
+                mask = &r;
+                break;
+            }
+    if (mask && (!mask->buffer || mask->width != desc.Width || mask->height != desc.Height)) {
+        if (mask->buffer)
+            retiredLayer.push_back({mask->buffer, now + 3000});
+        *mask = {};
+        UINT64 bytes{};
+        device->GetCopyableFootprints(&desc, 0, 1, 0, &mask->layout, nullptr, nullptr, &bytes);
+        D3D12_HEAP_PROPERTIES heap{};
+        heap.Type = D3D12_HEAP_TYPE_READBACK;
+        D3D12_RESOURCE_DESC rb{};
+        rb.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        rb.Width = bytes;
+        rb.Height = rb.DepthOrArraySize = rb.MipLevels = 1;
+        rb.SampleDesc.Count = 1;
+        rb.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        if (!bytes || FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &rb,
+                                                             D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                             IID_PPV_ARGS(&mask->buffer)))) {
+            *mask = {};
+            mask = nullptr;
+        } else {
+            mask->width = static_cast<uint32_t>(desc.Width);
+            mask->height = desc.Height;
+        }
+    }
+    auto* slot = readyCommands(layerCommands);
+    if (!slot) {
+        ++layerSkipBusy;
+        layerWhy = layerBusy;
+        return;
+    }
+    D3D12_RESOURCE_BARRIER b[2]{};
+    b[0].Type = b[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    b[0].Transition = {layerResource.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, state,
+                       D3D12_RESOURCE_STATE_COPY_SOURCE};
+    b[1].Transition = {layerShot.texture.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST};
+    originalBarrier(slot->list.Get(), 2, b);
+    slot->list->CopyResource(layerShot.texture.Get(), layerResource.Get());
+    if (mask) {
+        D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
+        src.pResource = layerResource.Get();
+        src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        dst.pResource = mask->buffer.Get();
+        dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        dst.PlacedFootprint = mask->layout;
+        slot->list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+    }
+    for (auto& barrier : b)
+        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    originalBarrier(slot->list.Get(), 2, b);
+    if (!submitCommands(*slot))
+        return;
+    if (mask) {
+        mask->fence = slot->fence;
+        mask->pending = true;
+        layerMaskAskedMs = now;
+    }
+    ++layerShot.frame;
+    ++layerCopies;
+    layerMs = now;
+    layerWhy = layerCopied;
+}
+void promptLayerStep(IDXGISwapChain* swapchain) {
+    const auto now = GetTickCount64();
+    if (!layerWantedFlag.load()) {
+        stopLocating();
+        if (layerResource)
+            dropLayer(now);
+        layerWhy = layerIdle;
+        return;
+    }
+    DXGI_SWAP_CHAIN_DESC sd{};
+    if (FAILED(swapchain->GetDesc(&sd)) || !sd.BufferDesc.Width || !sd.BufferDesc.Height)
+        return;
+    if (sd.BufferDesc.Width != layerBackW || sd.BufferDesc.Height != layerBackH) {
+        stopLocating();
+        if (layerResource) {
+            dropLayer(now);
+            ++layerLost;
+        }
+        layerBackW = sd.BufferDesc.Width;
+        layerBackH = sd.BufferDesc.Height;
+        layerTries = layerFailed = 0; // a new size: found again
+        layerNextTry = 0;
+    }
+    if (layerResource && now > layerSeenMs.load() + prompt_layer::quietLostMs) {
+        dropLayer(now); // the game let it go or draws elsewhere now: found again
+        ++layerLost;
+    }
+    if (!layerResource) {
+        locateLayer(swapchain, now);
+        return;
+    }
+    captureLayer(now);
+}
 void presentFrame(IDXGISwapChain* swapchain, UINT flags) {
     if (!enabled || (flags & DXGI_PRESENT_TEST))
         return;
     const bool insetOnly = screenInsetOnly.load();
     bootPresent(); // CUT7 BOOT SCREEN diagnostic: counts only
-    if (uiReason || uiAsked.load(std::memory_order_relaxed))
+    if (!layerLocating && (uiReason || uiAsked.load(std::memory_order_relaxed)))
         uiDumpStep(swapchain); // cut18 UI DUMP diagnostic: a few times a session
+    if (layerWantedFlag.load(std::memory_order_relaxed) || layerResource || layerLocating)
+        promptLayerStep(swapchain); // cut21 PROMPT LAYER: the game's UI layer, its copy and its alpha's grid
     if (hudWanted.load())
         captureHud(); // CUT7 WRIST MAP SOURCE: the HUD panel's texture, the minimap's real source
     else
@@ -6257,6 +6610,38 @@ bool takeUiDump(uint32_t& reason, std::vector<UiShot>& shots, std::string& line)
     uiShots.clear();
     line = std::move(uiShotLine);
     return true;
+}
+void wantPromptLayer(bool wanted) {
+    layerWantedFlag = wanted;
+}
+bool latestPromptLayer(Screen& out, prompt_layer::Grid& grid, uint64_t maxAgeMs) {
+    const auto now = GetTickCount64();
+    {
+        std::lock_guard submitLock(submission);
+        if (!layerShot.texture || !layerShot.frame || now < layerMs || now - layerMs > maxAgeMs)
+            return false;
+        out = layerShot;
+    }
+    std::lock_guard gridLock(layerGridLock);
+    if (!layerGridMs || now < layerGridMs || now - layerGridMs > prompt_layer::maskMaxAgeMs ||
+        layerGrid.width != out.width || layerGrid.height != out.height)
+        return false;
+    grid = layerGrid;
+    return true;
+}
+std::string promptLayerLine() {
+    const auto n = [](uint64_t v) { return std::to_string(v); };
+    std::string found;
+    {
+        std::lock_guard lock(layerLineLock);
+        found = layerFoundLine;
+    }
+    char state[16];
+    sprintf_s(state, "%x", layerState.load());
+    return std::string("HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): the game's UI layer ") +
+           layerWhyName(layerWhy.load()) + "; " + found + "; found " + n(layerFinds) + ", lost " + n(layerLost) +
+           ", copies " + n(layerCopies) + ", masks " + n(layerMasks) + ", skipped (state 0x" + state + ") " +
+           n(layerSkipState) + ", busy " + n(layerSkipBusy) + ", transitions " + n(layerTransitions);
 }
 bool latestHud(Screen& out, uint64_t maxAgeMs) {
     std::lock_guard submitLock(submission);

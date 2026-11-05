@@ -150,6 +150,30 @@ class D3D12Renderer {
     };
     void setInset(Inset inset) noexcept;
     void clearInset() noexcept;
+    // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): small cards cut from one source with alpha (the game's UI
+    // layer, premultiplied RGBA8: its prompts, waypoint and markers), drawn by the next renderViews after the
+    // inset, each `rect[card][eye]` {x0, y0, x1, y1} in the view's pixels showing `crop[card][eye]` {u0, v0, u1, v1}
+    // of the source, keyed by the source's own alpha (clear where the game drew nothing). Never the whole source:
+    // game_xr gives only small pieces (prompt_layer.hpp). Its own descriptor; a failure turns the cards off for
+    // the session (cardsFault), never the overlay or the inset.
+    static constexpr unsigned maxCards = 8;
+    struct Cards {
+        ComPtr<ID3D12Resource> source;
+        DXGI_FORMAT view = DXGI_FORMAT_UNKNOWN;
+        bool linear{};
+        unsigned count{};
+        float rect[maxCards][2][4]{};
+        float crop[maxCards][2][4]{};
+        float backdrop{};
+    };
+    void setCards(Cards cards) noexcept;
+    void clearCards() noexcept;
+    const std::string& cardsFault() const {
+        return cardsFault_;
+    }
+    std::uint64_t cardsDrawn() const {
+        return cardsDrawn_;
+    }
     const std::string& insetFault() const {
         return insetFault_;
     }
@@ -193,6 +217,8 @@ class D3D12Renderer {
     void recordBlit(ID3D12Resource* source, DXGI_FORMAT sourceView, bool linearSource, const ViewTarget& target);
     // HERO VR 0.0.77 PROMPT WINDOW: the inset's draw into one view through `rtv` (list_ open).
     bool recordInset(const ViewTarget& target, D3D12_CPU_DESCRIPTOR_HANDLE rtv, unsigned eye);
+    // HERO VR 0.0.78 cut21 PROMPT LAYER: the cards' draws into one view (list_ open); how many were drawn.
+    unsigned recordCards(const ViewTarget& target, D3D12_CPU_DESCRIPTOR_HANDLE rtv, unsigned eye);
     // The grade's pipeline for a target format, and its pass over one view
     // into list_ (open): the image copied aside, then drawn back recoloured
     // through the render target view at `rtv`.
@@ -240,6 +266,12 @@ class D3D12Renderer {
     ComPtr<ID3D12DescriptorHeap> insetHeap_;
     std::string insetFault_;
     std::uint64_t insetsDrawn_{};
+    // HERO VR 0.0.78 cut21 PROMPT LAYER: the cards, the ones drawn last (kept until the GPU is done), their own
+    // descriptor and whether they failed.
+    Cards cards_{}, cardsDrawnSet_{};
+    ComPtr<ID3D12DescriptorHeap> cardHeap_;
+    std::string cardsFault_;
+    std::uint64_t cardsDrawn_{};
     // The grade: its own descriptor, root signature and pipeline, and the
     // copy of a view's image it reads (made like the targets, reused).
     ComPtr<ID3D12DescriptorHeap> gradeHeap_;

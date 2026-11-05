@@ -2494,6 +2494,8 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                                "shows over him (live.txt boss_gate = off: no card, Y as 0.0.77)"},
           {"Prompt pictures (test)", "Up to 3 times a session the game's frame and UI layers are saved to "
                                      "%APPDATA%\\Spidy\\ui-dump, to find its button prompts (live.txt ui_dump = off)"},
+          {"Prompts in VR", "The game's own button prompts, waypoint and markers as small cards where the game puts "
+                            "them, never the whole screen (live.txt prompt_layer = off)"},
           {"LB + RB near a boss", "The game's throw; each one logs the boss's HP over 2 s, the left stick sent, the aim "
                                   "and his distance (live.txt throw_watch = off: no such log)"},
           {"A or a web on a ledge", "Off a ledge or roof edge (the game's floor crawl) as off a wall: RT + A "

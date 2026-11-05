@@ -2,6 +2,24 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut21-cards - the game's own prompts as small VR cards; a quiet launcher log (local, not built)
+
+- QUIET TRIM (CONFIRMED, the launcher noise that led to the Alt+F4): the launcher's log box trimmed itself with
+  `SelectedText = ""`, which on a read-only RichTextBox is a WM_CLEAR the box refuses with the Windows alert sound and
+  keeps the text; the box stayed over its 400000-character cap, so every new line tried again and beeped again. Now the
+  trim replaces the oldest third with EM_REPLACESEL while the box is briefly writable (read-only again in a finally),
+  and clears the box if it is still over the cap. Test: tests/hero078_cut21_quiet_trim_tests.py.
+- PROMPT LAYER (CANDIDATE, include/spidy/prompt_layer.hpp, live.txt prompt_layer - 0 on, the default; 1 off): the UI
+  layer cut18's UI DUMP found (a 1280x720 RGBA8 render target the size of the back buffer, premultiplied, lit only where
+  the game draws its HUD: 0.35-1.4% of it) is found again the same way, copied each frame and its alpha read every
+  100 ms. Each lit piece (button prompts, the gadget wheel, the waypoint, the reticle and threat markers) becomes a small
+  card keyed by that alpha at its place in the game's view, capped at 0.30 x 0.16 of a tangent, at most 8 cards. A layer
+  lit over 20% (a menu or full-screen panel) gives no cards, and pieces over 40% of it are dropped: never the whole
+  layer. Only in VR play; never in menus, the flat or stereo screen modes. Any fault: no cards (console: HERO VR 0.0.78
+  cut21 PROMPT CARDS / PROMPT LAYER, every 10 s).
+- Tests: tests/cut21_tests.cpp (the cut18 dump's alpha grid gives 5 cards covering 0.47% of the eye; a full layer
+  gives none), tests/hero078_cut21_prompt_layer_tests.py.
+
 ## hero-0.0.78-cut20-resume - immersive again after a cutscene's pause; the stick pause too (local, not built)
 
 From the player on cut19 (report 232334): "opening cutscene goes back and fourth from immersive to 2d". The opening

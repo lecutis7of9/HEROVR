@@ -1001,7 +1001,7 @@ namespace Sm2VrLauncher
             if (IsDisposed) return;
             text = Quiet(text);
             if (InvokeRequired) { try { BeginInvoke((Action<string, Color>)Line, text, color); } catch (InvalidOperationException) { } return; }
-            if (box.TextLength > MaxChars) { box.Select(0, box.TextLength / 3); box.SelectedText = ""; }
+            if (box.TextLength > MaxChars) Trim();
             box.SelectionStart = box.TextLength;
             box.SelectionLength = 0;
             box.SelectionColor = color;
@@ -1009,6 +1009,24 @@ namespace Sm2VrLauncher
             box.SelectionStart = box.TextLength;
             box.ScrollToCaret();
             if (FilePath != null) { try { System.IO.File.AppendAllText(FilePath, text + Environment.NewLine); } catch { } }
+        }
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, string lParam);
+        const int EM_REPLACESEL = 0xC2;
+        /// <summary>0.0.78 cut21 QUIET TRIM (CONFIRMED cause of the launcher's alert sound, then the modem-like
+        /// chatter): the old trim set SelectedText = "", which WinForms sends as WM_CLEAR, and a read-only rich edit
+        /// refuses WM_CLEAR with the Windows alert sound. Nothing was cut, so the box stayed over MaxChars and every
+        /// later line tried again: one alert per line, a fast run of them while the log wrote fast (the session log is
+        /// never cleared, so it came once a launcher run passed 400,000 characters: report 235010 crossed it at
+        /// line 1833 of 1893). Now the oldest third is cut with EM_REPLACESEL while the box is briefly writable, and
+        /// if that still leaves it over, the box is emptied (WM_SETTEXT, allowed when read-only): no sound either way.</summary>
+        void Trim()
+        {
+            box.Select(0, box.TextLength / 3);
+            box.ReadOnly = false;
+            try { SendMessage(box.Handle, EM_REPLACESEL, IntPtr.Zero, ""); }
+            finally { box.ReadOnly = true; }
+            if (box.TextLength > MaxChars) box.Clear();
         }
         public static Color ColorFor(string t)
         {

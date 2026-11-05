@@ -73,6 +73,7 @@
 #include "spidy/cut8.hpp" // HERO VR 0.0.77 CUT8 THROW WATCH
 #include "spidy/cut16.hpp" // HERO VR 0.0.78 cut16 SANDMAN: boss pick, gate, Y watch
 #include "spidy/ui_dump.hpp" // HERO VR 0.0.78 cut18 UI DUMP (diagnostic)
+#include "spidy/prompt_layer.hpp" // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE)
 #include "spidy/waypoint_mark.hpp" // HERO VR 0.0.77 WAYPOINT (drawing)
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
@@ -1464,6 +1465,12 @@ std::atomic<uint32_t> bossGateNow{cut16::bossGateOn};
 // written as PNGs to %APPDATA%\Spidy\ui-dump with a log line each, to find where the game draws its prompts), 1 off.
 // uiDumpAsk: the reasons' bits, set where a prompt should be up; the VR loop's ui_dump::Plan takes them.
 std::atomic<uint32_t> uiDumpNow{ui_dump::dumpOn}, uiDumpAsk{};
+// HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE, include/spidy/prompt_layer.hpp): live.txt prompt_layer - 0 on (the
+// default: in VR play the game's own button prompts, waypoint and markers, cut from its UI layer by their alpha, show
+// as small cards where the game puts them in its view; never the whole layer), 1 off. promptLayerFrame: the VR loop's
+// own, whether it is wanted this frame.
+std::atomic<uint32_t> promptLayerNow{prompt_layer::layerOn};
+bool promptLayerFrame{};
 cut16::BossGate bossGate16;
 uint32_t bossFight16 = 0; // a living boss read within cut16::bossFightMetres (3 s grace)
 bool bossHave16{};
@@ -13031,6 +13038,10 @@ DWORD WINAPI run(void*) {
                                                 wristMapHoloNow.load() == 0, wristHudHand.load() ? 1u : 0u) != 0;
                         native_gpu::wantHud(viewing && vrPlay && mapWanted &&
                                             wristMapSourceNow.load() == story077h::sourceHud);
+                        // HERO VR 0.0.78 cut21 PROMPT LAYER: the game's UI layer found, copied and its alpha read.
+                        promptLayerFrame = viewing && vrPlay && !native_gpu::eyesLost() &&
+                                           promptLayerNow.load() == prompt_layer::layerOn;
+                        native_gpu::wantPromptLayer(promptLayerFrame);
                         native_gpu::wantScreen(viewing && (!vrPlay || native_gpu::eyesLost() ||
                                                            promptWindowNow.load() == story077d::windowDebugFull ||
                                                            (mapWanted && wristMapSourceNow.load() == story077h::sourceFrame)));
@@ -17591,6 +17602,70 @@ DWORD WINAPI run(void*) {
                             }
                             if (!promptSet)
                                 overlay.clearInset();
+                            // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE, prompt_layer.hpp): the game's own prompts,
+                            // waypoint and markers as small cards - each lit piece of its UI layer (by the layer's
+                            // alpha, every 100 ms) cut out and shown keyed by that alpha at its place in the game's
+                            // view, capped in size. Never the whole layer (a layer lit over 20% gives no cards), never
+                            // in menus (showScreen) or the flat modes. Any fault: no cards.
+                            {
+                                static uint64_t layerLogMs{}, layerFrames{}, layerFresh{}, layerSets{};
+                                static uint32_t layerLast{}, layerPiecesLast{};
+                                static prompt_layer::Grid layerGrid; // 14 KB: off the stack
+                                bool cardsSet = false;
+                                if (promptLayerFrame && !saved->flatScreen && !saved->stereoScreen && !showScreen &&
+                                    !overlayFault) {
+                                    ++layerFrames;
+                                    native_gpu::Screen layerImage;
+                                    if (native_gpu::latestPromptLayer(layerImage, layerGrid, 250) && layerImage.texture) {
+                                        ++layerFresh;
+                                        prompt_layer::Region pieces[prompt_layer::maxCards];
+                                        const uint32_t n = prompt_layer::regions(layerGrid, pieces);
+                                        layerPiecesLast = n;
+                                        D3D12Renderer::Cards cards;
+                                        cards.source = layerImage.texture;
+                                        cards.view = layerImage.view;
+                                        cards.linear = layerImage.linear;
+                                        for (uint32_t i = 0; i < n && cards.count < D3D12Renderer::maxCards; ++i) {
+                                            bool both = true;
+                                            for (unsigned eye = 0; eye < 2 && both; ++eye)
+                                                both = prompt_layer::cardRect(
+                                                    pieces[i], layerImage.width, layerImage.height,
+                                                    grade.tangents[eye][0], grade.tangents[eye][1],
+                                                    grade.tangents[eye][2], grade.tangents[eye][3], targets[eye].width,
+                                                    targets[eye].height, cards.rect[cards.count][eye],
+                                                    cards.crop[cards.count][eye]);
+                                            if (both)
+                                                ++cards.count;
+                                        }
+                                        layerLast = cards.count;
+                                        if (cards.count) {
+                                            overlay.setCards(std::move(cards));
+                                            cardsSet = true;
+                                            ++layerSets;
+                                        }
+                                    }
+                                }
+                                if (!cardsSet)
+                                    overlay.clearCards();
+                                const uint64_t layerNowMs = GetTickCount64();
+                                if (promptLayerFrame && (!layerLogMs || layerNowMs - layerLogMs >= 10000)) {
+                                    layerLogMs = layerNowMs;
+                                    const auto source = native_gpu::promptLayerLine();
+                                    game_prompts::note(source.c_str());
+                                    consoleLine(source);
+                                    char line[320];
+                                    sprintf_s(line, "HERO VR 0.0.78 cut21 PROMPT CARDS: frames %llu, fresh layer %llu, set "
+                                                    "%llu, drawn %llu; last %u pieces, %u cards%s%s",
+                                              static_cast<unsigned long long>(layerFrames),
+                                              static_cast<unsigned long long>(layerFresh),
+                                              static_cast<unsigned long long>(layerSets),
+                                              static_cast<unsigned long long>(overlay.cardsDrawn()), layerPiecesLast,
+                                              layerLast, overlay.cardsFault().empty() ? "" : "; ",
+                                              overlay.cardsFault().c_str());
+                                    game_prompts::note(line);
+                                    consoleLine(line);
+                                }
+                            }
                             const uint64_t promptNowMs = GetTickCount64();
                             if (promptMode == story077d::windowDebugFull &&
                                 (!promptLogMs || promptNowMs - promptLogMs >= diagEveryMs())) {
@@ -17608,6 +17683,7 @@ DWORD WINAPI run(void*) {
                             }
                         } catch (...) {
                             overlay.clearInset();
+                            overlay.clearCards();
                         }
                         if (!saved->flatScreen && !overlayFault) {
                             // 0.0.74 test 10 SEE-THROUGH: this pair's scene depth for the car's models, only in
@@ -18262,6 +18338,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossYCard(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossGate(void* v) { return setLive(v, 0, 1, 5644, bossGateNow, asU32); }
 // HERO VR 0.0.78 cut18 UI DUMP (diagnostic): live.txt ui_dump, 0 on, 1 off.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyUiDump(void* v) { return setLive(v, 0, 1, 5645, uiDumpNow, asU32); }
+// HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): live.txt prompt_layer, 0 on, 1 off.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptLayer(void* v) { return setLive(v, 0, 1, 5646, promptLayerNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
 }

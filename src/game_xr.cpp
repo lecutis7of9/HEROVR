@@ -5703,6 +5703,20 @@ DWORD WINAPI run(void*) {
                                   cutMenuScreen.frontEnd() ? " or a game loaded from the title" : "");
                         consoleLine(line);
                     }
+                    // HERO VR 0.0.78 cut17 TITLE BLIP: VR play on the front end too short to end it (report 212843).
+                    static uint64_t titleBlips17{};
+                    if (cutMenuScreen.blips() != titleBlips17) {
+                        titleBlips17 = cutMenuScreen.blips();
+                        if (titleBlips17 <= 50) {
+                            char line[200];
+                            sprintf_s(line, "HERO VR 0.0.78 cut17 TITLE BLIP #%llu: VR play for %llu ms on the front end "
+                                            "(under %llu ms) - the menu stays the flat VR screen",
+                                      static_cast<unsigned long long>(titleBlips17),
+                                      static_cast<unsigned long long>(cutMenuScreen.lastBlipMs()),
+                                      static_cast<unsigned long long>(cutscene077::frontEndPlayMs));
+                            consoleLine(line);
+                        }
+                    }
                     const bool immersiveScene = cutscene077::immersiveFrame(immersiveHold, menuScreen, cutFrame);
                     if (immersiveHold.started()) {
                         cutLevel = cutscene077::levelHead(frame.head);
@@ -8824,6 +8838,7 @@ DWORD WINAPI run(void*) {
                                 // HERO VR 0.0.78 cut15 BOSS Y CARD (CANDIDATE): a web strike object on the boss is
                                 // carded out to bossCardMetres (live.txt boss_y_card = off: the usual 30 m only).
                                 static thread_local uint64_t bossYSeenFrames78{}, bossYCardFrames78{}, bossYLogMs78{};
+                                static thread_local uint64_t bossGateCardFrames17{}; // cut17: the gate card's frames
                                 static thread_local uint32_t bossYLines78{};
                                 bool bossYSeen78{}, bossYCard78{};
                                 float bossYMetres78 = -1.f;
@@ -8910,8 +8925,12 @@ DWORD WINAPI run(void*) {
                                                                                 {}}).position;
                                     if (finite(gateAt) && strikeKind16 >= 0) {
                                         promptCardsHere[promptCardCount++] =
-                                            PromptCardNow{static_cast<uint32_t>(strikeKind16), true, gateAt};
-                                        yCardNear = objectShown = true;
+                                            PromptCardNow{static_cast<uint32_t>(strikeKind16), false, gateAt};
+                                        // cut17: the small screen card (low in view), not over him: his read is 74-228 m
+                                        // out (report 212843), where an object card is 0.5 m - too small to see, or
+                                        // behind the eyes (none drawn).
+                                        yCardNear = screenShown = true;
+                                        ++bossGateCardFrames17;
                                     }
                                 }
                                 world_trace::Boss bossY78{};
@@ -8920,14 +8939,17 @@ DWORD WINAPI run(void*) {
                                     bossYNow78 - bossYLogMs78 >= 10000) { // every 10 s while a boss is known
                                     bossYLogMs78 = bossYNow78;
                                     ++bossYLines78;
-                                    char line[240];
+                                    char line[320];
                                     sprintf_s(line, "HERO VR 0.0.78 BOSS Y CARD (CANDIDATE) %s: boss %.28s %.0f m, web strike "
-                                                    "on him %s (%.0f m), seen frames %llu, card frames %llu",
+                                                    "on him %s (%.0f m), seen frames %llu, card frames %llu, gate %s, "
+                                                    "gate card frames %llu",
                                               bossYCardNow.load() == story077d::bossYOn ? "ON" : "OFF",
                                               bossY78.name[0] ? bossY78.name : "?", bossY78.metres,
                                               bossYSeen78 ? "now" : "not seen", bossYMetres78,
                                               static_cast<unsigned long long>(bossYSeenFrames78),
-                                              static_cast<unsigned long long>(bossYCardFrames78));
+                                              static_cast<unsigned long long>(bossYCardFrames78),
+                                              bossGate16.phaseHolding() ? "phase" : bossGate16.holding() ? "throws" : "not held",
+                                              static_cast<unsigned long long>(bossGateCardFrames17));
                                     consoleLine(line);
                                 }
                                 promptCardObjectFrames += objectShown;
@@ -9615,6 +9637,20 @@ DWORD WINAPI run(void*) {
                                                 bossMetres16 = b16.metres;
                                                 bossWorld16 = b16.world;
                                                 bossGate16.hp(bossHave16, bossHp16);
+                                                // HERO VR 0.0.78 cut17 PHASE GATE (cut16.hpp): the Sandman at most x 14/15.
+                                                if (bossGate16.phase(bossHave16, bossHp16, bossMost16,
+                                                                     std::strstr(b16.name, "Sandman") != nullptr)) {
+                                                    char gate[300];
+                                                    sprintf_s(gate, "HERO VR 0.0.78 cut17 BOSS GATE (phase HP, CANDIDATE: his throws stop "
+                                                                    "here in 3 logs): %.28s at %.1f/%.0f (gate #%u) - the small Y card "
+                                                                    "low in view until his HP moves; boss %.0f m, Y card %s",
+                                                              b16.name, static_cast<double>(bossHp16),
+                                                              static_cast<double>(bossMost16), bossGate16.gates,
+                                                              static_cast<double>(bossMetres16),
+                                                              bossGateNow.load() == cut16::bossGateOn ? "on" : "off (boss_gate)");
+                                                    game_prompts::note(gate);
+                                                    consoleLine(gate);
+                                                }
                                             } else if (seenMs16 && ms16 - seenMs16 > 3000) {
                                                 char line[220];
                                                 sprintf_s(line, "HERO VR 0.0.78 BOSS LOST: no living boss read for 3 s (last %.28s hp "

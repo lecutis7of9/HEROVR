@@ -2,7 +2,20 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
-## hero-0.0.78-cut16-sandman - Sandman debris fight: boss tracking, the 233.3 gate, the Y zip (local branch, not built)
+## hero-0.0.78-cut17-menu - the title stays flat, the Sandman Y card at 233.3 (local branch, not built)
+
+From report 212843 (cut16):
+- Main menu: the title no longer goes immersive. A short VR-play blip on the title (the VR loop stalled 1.6 s at 11 s,
+  then the game's screen dropped for 0.4 s, twice) ended the front end, so the title went immersive until the pause
+  press. The front end now ends only after 2 s of VR play in a row (or a game loaded from the title, as before); a
+  console line "cut17 TITLE BLIP" logs each blip it ignored. The pause menu and the title's menus stay flat.
+- Sandman: the Y card shows when his HP reaches 233.3/250 (his phase HP in all three logs), not only after two
+  no-hit throws - in 212843 the Y landed at 233.3 before that gate could fill, so no card ever showed. The card is
+  the small screen card low in view (his position reads 74-228 m away, where a card over him is too small to see).
+  "cut17 BOSS GATE (phase HP)" in the console; BOSS Y CARD lines now add the gate and its card frames.
+- No new live.txt switch (boss_gate = off still turns the card off).
+
+## hero-0.0.78-cut16-sandman - Sandman debris fight: boss tracking, the 233.3 gate, the Y zip (draft built, CI run 41950074442)
 
 In the Sandman fight you do not punch him: you throw his debris back (LB + RB) until he is low, then Y zips to him
 when the game shows its Y on his head.

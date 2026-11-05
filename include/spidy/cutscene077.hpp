@@ -289,6 +289,18 @@ class MenuPanel {
 // It ends with VR gameplay, or when a second new player record (not the one played before the pause) follows a
 // no-record gap of at least 1.5 s (the title's record, then the loading screen, then the loaded game's record).
 // A pause menu stays on the screen to the end of its stretch. Pure; the record is only compared.
+// HERO VR 0.0.78 cut17 TITLE BLIP (report 212843, the owner: "main menu still starts in immersive without being able
+// to see any of the savedgames. only goes to flat screen if you hit the pause button"): SM2's title is its live world
+// with a hero record and a moving camera behind the menu. At 11 s the VR loop stalled 1.6 s (frames 1004-1005),
+// the follow camera committed 110 times meanwhile, the screen dropped for a moment twice (presentation none, 0.4 s
+// each with the 250 ms screen delay, never a VR frame or "VR active") and the title's record 0x26978ed3080 never
+// changed - only the playing branch below can end the front end on one record, so that blip ended it and the title
+// went immersive from 11 s to the pause press at 37 s (SCENE END #1: menu). Now the front end needs frontEndPlayMs of
+// VR play in a row (a game loaded from the title, a new record after a no-record gap, ends it as before), and the
+// title's record must be read titleRecordMs first (CANDIDATE, not seen at the report's 10 Hz: a record read for a
+// moment at boot taken as the title's would make the real title's record look like a game loaded from it).
+inline constexpr uint64_t frontEndPlayMs = 2000;
+inline constexpr uint64_t titleRecordMs = 100;
 class MenuScreen {
   public:
     // True while the stretch stays on the VR screen. nowMs: a clock in ms (0: 11 ms a call).
@@ -301,15 +313,33 @@ class MenuScreen {
         now_ = nowMs ? nowMs : now_ + 11;
         if (menuPressed)
             pressMs_ = now_ ? now_ : 1;
+        if (record != cand_) { // cut17: how long this record has been read
+            cand_ = record;
+            candMs_ = now_;
+        }
         if (!screen) {
             if (playing) {
-                frontEnd_ = paused_ = false;
-                played_ = record;
-                seen_ = 0;
+                paused_ = false;
+                if (!playFrom_)
+                    playFrom_ = now_ ? now_ : 1;
+                // cut17: the front end ends after frontEndPlayMs of VR play in a row, never on a blip of it.
+                if (frontEnd_ && now_ - playFrom_ >= frontEndPlayMs) {
+                    frontEnd_ = false;
+                    played_ = record;
+                    seen_ = 0;
+                }
+                if (!frontEnd_) {
+                    played_ = record;
+                    seen_ = 0;
+                }
+            } else if (playFrom_) {
+                noteBlip();
             }
             inStretch_ = on_ = false;
             return false;
         }
+        if (playFrom_)
+            noteBlip();
         if (!inStretch_) {
             inStretch_ = true;
             paused_ = pressMs_ && now_ - pressMs_ <= 3000;
@@ -326,8 +356,10 @@ class MenuScreen {
                     gapFrom_ = now_;
             } else if (record != played_ && record != first_) {
                 if (seen_ == 0) {
-                    first_ = record; // the title's record
-                    seen_ = 1;
+                    if (now_ - candMs_ >= titleRecordMs) { // cut17: not a record read for a moment at boot
+                        first_ = record; // the title's record
+                        seen_ = 1;
+                    }
                 } else if (last_ == 0 && now_ - gapFrom_ >= 1500) {
                     frontEnd_ = paused_ = false; // a game loaded from the title
                     first_ = 0;
@@ -354,12 +386,27 @@ class MenuScreen {
     int why() const {
         return why_;
     }
+    // cut17: VR play on the front end that ended before frontEndPlayMs (the front end kept), and the last one's ms.
+    uint64_t blips() const {
+        return blips_;
+    }
+    uint64_t lastBlipMs() const {
+        return blipMs_;
+    }
     static const char* whyName(int why) {
         return why == 1 ? "the front end (boot, title, its menus)" : why == 2 ? "the menu button (pause)" : "no player record";
     }
 
   private:
+    void noteBlip() {
+        if (frontEnd_) {
+            ++blips_;
+            blipMs_ = now_ - playFrom_;
+        }
+        playFrom_ = 0;
+    }
     uint64_t now_{}, pressMs_{}, gapFrom_{}, played_{}, first_{}, last_{}, count_{};
+    uint64_t cand_{}, candMs_{}, playFrom_{}, blips_{}, blipMs_{};
     int seen_{}, why_{};
     bool frontEnd_{true}, paused_{}, inStretch_{}, on_{};
 };

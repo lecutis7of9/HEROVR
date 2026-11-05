@@ -87,14 +87,18 @@ int main() {
         uint64_t ms = 1000, count{};
         int why{};
         const bool on = replayTitle(m, true, ms, why, count);
-        check(why == 3 && !on && !m.frontEnd(),
-              "the cut8 behaviour reproduces report 025037: MENU #1 'no player record', the title's record goes immersive");
+        // HERO VR 0.0.78 cut17: boot frames even read as VR play (1.3 s, under frontEndPlayMs) keep the front end now.
+        check(why == 1 && on && m.frontEnd(),
+              "cut17: 1.3 s of boot frames read as VR play (the cut8 case) - still the front end, the title flat");
     }
     // --- headset not on at boot, then VR gameplay before any title: the front end ends only with play ---
     {
         cutscene077::MenuScreen m;
         uint64_t ms = 5000;
         for (int i = 0; i < 50; ++i, ms += 11)
+            m.update(false, gameRecord, false, ms, true);
+        check(m.frontEnd(), "cut17: 0.55 s of VR play is a blip - still the front end");
+        for (int i = 0; i < 150; ++i, ms += 11) // cut17: 2.2 s in a row (frontEndPlayMs)
             m.update(false, gameRecord, false, ms, true);
         check(!m.frontEnd(), "VR gameplay still ends the front end (a save loaded straight into play)");
     }

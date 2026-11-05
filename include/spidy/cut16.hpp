@@ -90,6 +90,9 @@ struct BossPick {
     }
 };
 
+// HERO VR 0.0.78 cut17: the Sandman's phase HP (his throws stop at most x 14/15) and how near a read must be.
+inline constexpr float phaseFraction = 14.f / 15.f;
+inline constexpr float phaseTolerance = .25f;
 struct BossGate {
     // Throws.
     uint32_t still{};      // throws in a row that moved nothing
@@ -113,7 +116,7 @@ struct BossGate {
         }
         if (heldHp >= 0 && std::fabs(hp0 - heldHp) > hpStep)
             heldHp = -1.f;
-        if (++still < gateThrows || heldHp >= 0)
+        if (++still < gateThrows || heldHp >= 0 || phaseHp >= 0) // cut17: not twice over a phase gate
             return false;
         heldHp = hp0;
         ++gates;
@@ -125,12 +128,38 @@ struct BossGate {
             heldHp = -1.f;
             still = 0;
         }
+        if (have && std::isfinite(now) && phaseHp >= 0 && std::fabs(now - phaseHp) > phaseTolerance)
+            phaseHp = -1.f; // the Y landed (or his HP left the phase HP): the phase gate ends
+    }
+    // HERO VR 0.0.78 cut17 PHASE GATE (report 212843: the throws hit 245.5 -> 241 -> 236.5 -> 233.3, then his Y at 233.3
+    // went to 1/250 - "LANDED; gate not held" - before two no-hit throws could fill the throw gate, so no card showed).
+    // 233.3 = most x 14/15 is where the throws stop in all three Sandman logs (public 0.0.77, cut8, cut16). phaseBoss:
+    // the boss is the Sandman (the only boss this is seen on). Each frame with his HP; true once when the gate starts
+    // holding at the phase HP (the card shows until his HP leaves it).
+    bool phase(bool have, float now, float most, bool phaseBoss) {
+        if (!have || !phaseBoss || !std::isfinite(now) || !std::isfinite(most) || most <= 0) {
+            atPhase = false;
+            return false;
+        }
+        const float at = most * phaseFraction;
+        const bool on = std::fabs(now - at) <= phaseTolerance;
+        const bool start = on && !atPhase && phaseHp < 0;
+        atPhase = on;
+        if (!start)
+            return false;
+        phaseHp = now;
+        ++gates;
+        return true;
     }
     void lost() { // no boss read (he is gone, or the fight is)
-        heldHp = -1.f;
+        heldHp = phaseHp = -1.f;
         still = 0;
+        atPhase = false;
     }
-    bool holding() const { return heldHp >= 0; }
+    bool holding() const { return heldHp >= 0 || phaseHp >= 0; }
+    bool phaseHolding() const { return phaseHp >= 0; }
+    float phaseHp{-1.f}; // cut17: the HP the phase gate holds at (-1 none)
+    bool atPhase{};
 
     // Y presses in a boss fight.
     struct YReport {

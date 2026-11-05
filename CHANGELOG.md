@@ -2,6 +2,14 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut16-sandman - Sandman debris fight: boss tracking, the 233.3 gate, the Y zip (local branch, not built)
+
+In the Sandman fight you do not punch him: you throw his debris back (LB + RB) until he is low, then Y zips to him
+when the game shows its Y on his head.
+- **cut15's SANDMAN PUNCHES reverted (5246312's punch part):** built on a wrong premise (punching is not how the fight
+  goes). punch_web is back to cut7's rule (an enemy listed or the boss within 40 m); the BUSY HANDS line drops "boss
+  fight". 5246312's PROP SKIP console lines stay.
+
 ## hero-0.0.78-cut15-diag - prop skip log, Sandman punches, boss Y card (local branch, not built)
 
 - **PROP SKIP log (first person and mirror apart, at most every 10 s each):** every hero prop model (pistol, pump,

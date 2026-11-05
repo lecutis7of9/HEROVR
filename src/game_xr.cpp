@@ -1451,10 +1451,6 @@ std::atomic<uint32_t> punchWebNow{0};
 // and over the next 2 s, the left stick sent, the aim and the boss's distance; 1 off).
 std::atomic<uint32_t> throwWatchNow{cut8::throwWatchOn};
 uint32_t bossNear77 = 0;
-// HERO VR 0.0.78 cut15 SANDMAN PUNCHES: a living boss read within bossFightMetres78 this frame (the boss fight; his
-// record sits 84-130 m from the player all through the public 0.0.77 Sandman fight, never inside 40 m).
-uint32_t bossFight78 = 0;
-constexpr float bossFightMetres78 = 200.f;
 uint64_t punchWebFreed77 = 0;
 std::atomic<uint32_t> ledgeJumpNow{0};
 // HERO VR 0.0.77 X IS THE GAME'S X (story077e.hpp): live.txt x_button - 0 game (the default: VR X tap is the
@@ -9161,11 +9157,7 @@ DWORD WINAPI run(void*) {
                                 // strikes all session against 68 "hand holding or carrying" rejects (and 128 throws,
                                 // 158 web balls): a hand whose swing web held - the fist that punches is the grip that
                                 // webs - punched nothing. With an enemy listed or the boss near, that hand punches.
-                                // HERO VR 0.0.78 cut15 SANDMAN PUNCHES (CONFIRMED in the public 0.0.77 log: every BUSY
-                                // HANDS line read "enemies 0, boss near 0, freed 0" through the fight, 100 "hand holding
-                                // or carrying" rejects, 1 X strike sent): the giant's record is 84-130 m off, never
-                                // within 40 m, and no enemy is listed - so in the boss fight (bossFight78) it frees too.
-                                if (punchWebNow.load() == 0 && (cf.enemyCount > 0 || bossNear77 || bossFight78))
+                                if (punchWebNow.load() == 0 && (cf.enemyCount > 0 || bossNear77))
                                     for (unsigned i = 0; i < 2; ++i)
                                         if (busyWhy77[i] == 1u && cf.hands[i].busy && !grabPhases[i]) {
                                             cf.hands[i].busy = false;
@@ -9175,10 +9167,10 @@ DWORD WINAPI run(void*) {
                                     static ULONGLONG busySaidAt = 0;
                                     if ((cf.hands[0].busy || cf.hands[1].busy) && GetTickCount64() - busySaidAt >= diagEveryMs()) {
                                         busySaidAt = GetTickCount64();
-                                        char line[240];
+                                        char line[200];
                                         sprintf_s(line, "HERO VR 0.0.77 CUT7 BUSY HANDS: left 0x%02x right 0x%02x (1 web, 2 grab, 4 "
-                                                  "ball, 8 climb, 16 hammer, 32 seat), enemies %u, boss near %u, boss fight %u, freed %llu",
-                                                  busyWhy77[0], busyWhy77[1], cf.enemyCount, bossNear77, bossFight78,
+                                                  "ball, 8 climb, 16 hammer, 32 seat), enemies %u, boss near %u, freed %llu",
+                                                  busyWhy77[0], busyWhy77[1], cf.enemyCount, bossNear77,
                                                   static_cast<unsigned long long>(punchWebFreed77));
                                         game_prompts::note(line);
                                     }
@@ -9498,7 +9490,6 @@ DWORD WINAPI run(void*) {
                                     bool bossFacing = false;
                                     uint64_t bossId = 0;
                                     bossNear77 = 0;
-                                    bossFight78 = 0;
                                     {
                                         static uint64_t bossLogMs{}, bossSeenId{}, bossFrames{}, bossFacingFrames{};
                                         static float bossLastMetres{}, bossLastHp{-1.f}, bossLastMost{};
@@ -9515,7 +9506,6 @@ DWORD WINAPI run(void*) {
                                                 ++bossFrames;
                                                 bossId = bossHero ? boss.id : 0;
                                                 bossNear77 = boss.metres < 40.f ? 1u : 0u;
-                                                bossFight78 = boss.metres < bossFightMetres78 ? 1u : 0u; // cut15
                                                 bossLastMetres = boss.metres;
                                                 bossLastHp = boss.vital.have ? boss.vital.hp : -1.f;
                                                 bossLastMost = boss.vital.have ? boss.vital.most : 0.f;

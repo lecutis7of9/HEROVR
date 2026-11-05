@@ -2486,7 +2486,7 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                                                       "that wrist too (live.txt wrist_map_holo = off: not there)"},
           {"Scan", "Hand to temple + trigger: the game's scan. The yellow objective diamond is off "
                    "(live.txt waypoints = scan to try it): its source is not found yet, scans write POI DUMP lines"},
-          {"Punch with a web held", "A hand whose swing web holds still punches near an enemy or in a boss fight "
+          {"Punch with a web held", "A hand whose swing web holds still punches near an enemy or a boss "
                                     "(live.txt punch_web = off: it never does, as cut6)"},
           {"Y on a boss", "A small Y card over the boss when the game offers its web strike on him, for the zip "
                           "to him (live.txt boss_y_card = off: Y cards only within 30 m)"},

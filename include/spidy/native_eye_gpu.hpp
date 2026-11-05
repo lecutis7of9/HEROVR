@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <vector>
 #include <d3d12.h>
 #include <wrl/client.h>
 #include "xr_timing.hpp"
@@ -280,6 +281,17 @@ bool latestScreen(Screen& out, uint64_t maxAgeMs);
 void wantHud(bool wanted);
 bool latestHud(Screen& out, uint64_t maxAgeMs);
 std::string hudSourceLine();
+// HERO VR 0.0.78 cut18 UI DUMP (diagnostic, include/spidy/ui_dump.hpp): requestUiDump(reason) watches the next
+// presents' render targets, then reads back the presented frame and the best of those of its shape once; takeUiDump
+// gives the pictures (RGBA8) and one log line, once. Each a few times a session at most (ui_dump::Plan).
+struct UiShot {
+    uint32_t width{}, height{}, format{}, state{}, rank{};
+    uint64_t toRead{};
+    bool backBuffer{};
+    std::vector<uint8_t> rgba;
+};
+void requestUiDump(uint32_t reason);
+bool takeUiDump(uint32_t& reason, std::vector<UiShot>& shots, std::string& line);
 // HERO VR 0.0.77 CUT7 FPS: whether the see-through models are drawn now (the eyes' depth watched only then).
 void sceneDepthInUse(bool used);
 // HERO VR 0.0.77 CUT7 BOOT SCREEN (diagnostic): presents of any swapchain, screen copies made and skipped since

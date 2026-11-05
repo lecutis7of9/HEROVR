@@ -72,6 +72,7 @@
 #include "spidy/story077h.hpp" // HERO VR 0.0.77 WRIST MAP
 #include "spidy/cut8.hpp" // HERO VR 0.0.77 CUT8 THROW WATCH
 #include "spidy/cut16.hpp" // HERO VR 0.0.78 cut16 SANDMAN: boss pick, gate, Y watch
+#include "spidy/ui_dump.hpp" // HERO VR 0.0.78 cut18 UI DUMP (diagnostic)
 #include "spidy/waypoint_mark.hpp" // HERO VR 0.0.77 WAYPOINT (drawing)
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
@@ -1458,6 +1459,11 @@ uint64_t punchWebFreed77 = 0;
 // small Y card shows over him), 1 off (as 0.0.77). The read below is the VR loop's, last frame's; the BOSS GATE / BOSS
 // Y / BOSS LOST lines are written either way.
 std::atomic<uint32_t> bossGateNow{cut16::bossGateOn};
+// HERO VR 0.0.78 cut18 UI DUMP (diagnostic, include/spidy/ui_dump.hpp): live.txt ui_dump - 0 on (the default in this
+// build: at most 3 times a session, in VR play, the presented frame and the game's frame-shaped render targets are
+// written as PNGs to %APPDATA%\Spidy\ui-dump with a log line each, to find where the game draws its prompts), 1 off.
+// uiDumpAsk: the reasons' bits, set where a prompt should be up; the VR loop's ui_dump::Plan takes them.
+std::atomic<uint32_t> uiDumpNow{ui_dump::dumpOn}, uiDumpAsk{};
 cut16::BossGate bossGate16;
 uint32_t bossFight16 = 0; // a living boss read within cut16::bossFightMetres (3 s grace)
 bool bossHave16{};
@@ -1755,6 +1761,94 @@ std::wstring tabOnlyPath() {
         path = std::wstring(folder) + L"\\Spidy\\spidy_vr.ini";
     CoTaskMemFree(folder);
     return path;
+}
+// HERO VR 0.0.78 cut18 UI DUMP: one dump's pictures as PNGs (WIC, on a thread of its own for COM) in
+// %APPDATA%\Spidy\ui-dump, the last session's removed at the first; the log line kept beside them (ui-dump.txt).
+// Targets are written twice: their colour (opaque) and their alpha (grey), as a UI layer is mostly clear.
+bool uiDumpPng(IWICImagingFactory* factory, const std::wstring& path, const native_gpu::UiShot& shot, bool alpha) {
+    std::vector<uint8_t> bgra(shot.rgba.size());
+    for (size_t i = 0; i + 3 < shot.rgba.size(); i += 4) {
+        const uint8_t* p = shot.rgba.data() + i;
+        uint8_t* q = bgra.data() + i;
+        if (alpha)
+            q[0] = q[1] = q[2] = p[3];
+        else
+            q[0] = p[2], q[1] = p[1], q[2] = p[0];
+        q[3] = 255;
+    }
+    Microsoft::WRL::ComPtr<IWICStream> stream;
+    Microsoft::WRL::ComPtr<IWICBitmapEncoder> encoder;
+    Microsoft::WRL::ComPtr<IWICBitmapFrameEncode> frame;
+    WICPixelFormatGUID format = GUID_WICPixelFormat32bppBGRA;
+    return SUCCEEDED(factory->CreateStream(&stream)) &&
+           SUCCEEDED(stream->InitializeFromFilename(path.c_str(), GENERIC_WRITE)) &&
+           SUCCEEDED(factory->CreateEncoder(GUID_ContainerFormatPng, nullptr, &encoder)) &&
+           SUCCEEDED(encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache)) &&
+           SUCCEEDED(encoder->CreateNewFrame(&frame, nullptr)) && SUCCEEDED(frame->Initialize(nullptr)) &&
+           SUCCEEDED(frame->SetSize(shot.width, shot.height)) && SUCCEEDED(frame->SetPixelFormat(&format)) &&
+           format == GUID_WICPixelFormat32bppBGRA &&
+           SUCCEEDED(frame->WritePixels(shot.height, shot.width * 4, static_cast<UINT>(bgra.size()), bgra.data())) &&
+           SUCCEEDED(frame->Commit()) && SUCCEEDED(encoder->Commit());
+}
+void uiDumpWrite(uint32_t reason, std::vector<native_gpu::UiShot> shots, std::string line) {
+    static std::atomic<bool> cleared{};
+    std::wstring folder;
+    {
+        PWSTR roaming{};
+        if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &roaming)) && roaming)
+            folder = std::wstring(roaming) + L"\\Spidy\\ui-dump";
+        CoTaskMemFree(roaming);
+    }
+    if (folder.empty())
+        return;
+    try {
+        std::thread([reason, folder, shots = std::move(shots), line = std::move(line)]() mutable {
+            CreateDirectoryW((folder.substr(0, folder.size() - 8)).c_str(), nullptr); // ...\Spidy
+            CreateDirectoryW(folder.c_str(), nullptr);
+            if (!cleared.exchange(true)) { // the last session's dump goes
+                WIN32_FIND_DATAW found{};
+                const HANDLE find = FindFirstFileW((folder + L"\\ui-*").c_str(), &found);
+                if (find != INVALID_HANDLE_VALUE) {
+                    do
+                        DeleteFileW((folder + L"\\" + found.cFileName).c_str());
+                    while (FindNextFileW(find, &found));
+                    FindClose(find);
+                }
+            }
+            const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+            Microsoft::WRL::ComPtr<IWICImagingFactory> factory;
+            std::string files;
+            if (SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                                           IID_PPV_ARGS(&factory))))
+                for (const auto& shot : shots) {
+                    wchar_t name[96];
+                    if (shot.backBuffer)
+                        swprintf_s(name, L"ui-%u-frame-%ux%u", reason, shot.width, shot.height);
+                    else
+                        swprintf_s(name, L"ui-%u-t%u-%ux%u-f%u", reason, shot.rank, shot.width, shot.height,
+                                   shot.format);
+                    const std::wstring base = folder + L"\\" + name;
+                    const bool colour = uiDumpPng(factory.Get(), base + L".png", shot, false);
+                    const bool alpha = !shot.backBuffer && uiDumpPng(factory.Get(), base + L"-alpha.png", shot, true);
+                    char n[200];
+                    snprintf(n, sizeof(n), " %ls.png%s%s", name, colour ? "" : " (not written)", alpha ? " +alpha" : "");
+                    files += n;
+                }
+            factory.Reset();
+            if (SUCCEEDED(com))
+                CoUninitialize();
+            const std::string text = line + "\r\nfiles:" + files + "\r\n";
+            const HANDLE log = CreateFileW((folder + L"\\ui-dump.txt").c_str(), FILE_APPEND_DATA, FILE_SHARE_READ,
+                                           nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (log != INVALID_HANDLE_VALUE) {
+                DWORD wrote{};
+                WriteFile(log, text.data(), static_cast<DWORD>(text.size()), &wrote, nullptr);
+                CloseHandle(log);
+            }
+            consoleLine("HERO VR 0.0.78 cut18 UI DUMP written (%APPDATA%\\Spidy\\ui-dump):" + files.substr(0, 300));
+        }).detach();
+    } catch (...) {
+    }
 }
 // 0.0.74 test 1 BATMOBILE: the picked car kept between sessions, Documents\HERO VR\batmobile.txt (one digit, 0-3:
 // batmobile074::names). Read once at the models' load (after the launcher's live.txt has sent its own
@@ -8854,6 +8948,10 @@ DWORD WINAPI run(void*) {
                                 story077d::Card cards[story077d::maxCards];
                                 const uint32_t chosen = story077d::choose(seenNow.data(), seenCount, heroHere,
                                                                           anchorOk || heroScanKnown, cards);
+                                if (chosen) // cut18 UI DUMP: a prompt card in reach, the game's prompt likely up
+                                    uiDumpAsk.fetch_or(1u << ui_dump::reasonPrompt);
+                                if (bossYSeen78) // cut18 UI DUMP: the game's web strike offered on the boss
+                                    uiDumpAsk.fetch_or(1u << ui_dump::reasonBossGate);
                                 const Pose fromWorld = inverse(compose(motion.headPose, inverse(frame.head)));
                                 bool objectShown{}, screenShown{};
                                 for (uint32_t c = 0; c < chosen && promptCardCount < story077d::maxCards; ++c) {
@@ -9650,6 +9748,7 @@ DWORD WINAPI run(void*) {
                                                               bossGateNow.load() == cut16::bossGateOn ? "on" : "off (boss_gate)");
                                                     game_prompts::note(gate);
                                                     consoleLine(gate);
+                                                    uiDumpAsk.fetch_or(1u << ui_dump::reasonBossGate); // cut18
                                                 }
                                             } else if (seenMs16 && ms16 - seenMs16 > 3000) {
                                                 char line[220];
@@ -12913,6 +13012,34 @@ DWORD WINAPI run(void*) {
                         native_gpu::wantScreen(viewing && (!vrPlay || native_gpu::eyesLost() ||
                                                            promptWindowNow.load() == story077d::windowDebugFull ||
                                                            (mapWanted && wristMapSourceNow.load() == story077h::sourceFrame)));
+                        { // HERO VR 0.0.78 cut18 UI DUMP (diagnostic): where the game's prompts are drawn in VR play
+                            static ui_dump::Plan uiPlan;
+                            const uint64_t uiNowMs = GetTickCount64();
+                            const uint32_t asked = uiDumpAsk.exchange(0);
+                            for (uint32_t r = ui_dump::reasonKinds; r-- > 1;) // the boss's Y moment first
+                                if (asked & (1u << r))
+                                    uiPlan.ask(r, uiNowMs);
+                            if (const uint32_t r = uiPlan.frame(uiDumpNow.load() == ui_dump::dumpOn,
+                                                                viewing && vrPlay && !native_gpu::eyesLost(),
+                                                                uiNowMs)) {
+                                native_gpu::requestUiDump(r);
+                                char asking[256];
+                                snprintf(asking, sizeof(asking),
+                                         "HERO VR 0.0.78 cut18 UI DUMP asked (%s, #%u): the presented frame and the "
+                                         "game's render targets of its shape",
+                                         ui_dump::reasonName(r), uiPlan.count);
+                                consoleLine(asking);
+                            }
+                            uint32_t uiWhy = 0;
+                            std::vector<native_gpu::UiShot> uiShots;
+                            std::string uiLine;
+                            if (native_gpu::takeUiDump(uiWhy, uiShots, uiLine)) {
+                                for (size_t at = 0; at < uiLine.size() && at < 3800; at += 380) // the console's 400
+                                    consoleLine((at ? "  ...UI DUMP " : "") + uiLine.substr(at, 380));
+                                game_prompts::note(uiLine.c_str());
+                                uiDumpWrite(uiWhy, std::move(uiShots), std::move(uiLine));
+                            }
+                        }
                         { // HERO VR 0.0.77 CUT7 BOOT SCREEN (diagnostic): for 90 s from the headset's start, every 2 s,
                           // the game's presents a second, the screen copies made of them and the shown copy's age -
                           // the intros' picture against their sound (the owner: a minute behind).
@@ -18111,6 +18238,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldLightGain(void* v) { ret
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossYCard(void* v) { return setLive(v, 0, 1, 5643, bossYCardNow, asU32); }
 // HERO VR 0.0.78 cut16: boss_gate (0 on, 1 off).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossGate(void* v) { return setLive(v, 0, 1, 5644, bossGateNow, asU32); }
+// HERO VR 0.0.78 cut18 UI DUMP (diagnostic): live.txt ui_dump, 0 on, 1 off.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyUiDump(void* v) { return setLive(v, 0, 1, 5645, uiDumpNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
 }

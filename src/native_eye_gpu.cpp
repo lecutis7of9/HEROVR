@@ -22,10 +22,12 @@
 #include "spidy/taa_frame_log.hpp"
 #include "spidy/taa_jitter.hpp"
 #include "spidy/taa_still.hpp"
+#include "spidy/ui_dump.hpp"
 #include "spidy/smaa/area_tex.h"
 #include "spidy/smaa/search_tex.h"
 #include "spidy/smaa/smaa_shader.hpp"
 #include <MinHook.h>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -1151,12 +1153,71 @@ void watchHud(UINT count, const D3D12_RESOURCE_BARRIER* bs) {
         }
     }
 }
+// HERO VR 0.0.78 cut18 UI DUMP (diagnostic, include/spidy/ui_dump.hpp): where the game draws its button prompts in VR
+// play. While a dump is asked for (about 45 presents), each render-target transition's resource is looked at once
+// (GetDesc) and kept, with a reference, when it is a colour target of the frame's shape; its last recorded state and
+// how often it went from RENDER_TARGET to readable are counted. Read-only on the game's side.
+std::atomic<bool> uiHunting{};
+std::atomic<uint32_t> uiAsked{}, uiBackW{}, uiBackH{};
+std::atomic<uint64_t> uiLooked{};
+struct UiTarget {
+    ComPtr<ID3D12Resource> resource;
+    uint32_t state{}, format{}, width{}, height{};
+    uint64_t toRead{}, transitions{};
+};
+std::mutex uiLock; // the targets only (never taken with another lock held)
+std::unordered_map<ID3D12Resource*, UiTarget> uiTargets;
+std::unordered_map<ID3D12Resource*, bool> uiLookedAt;
+void watchUi(UINT count, const D3D12_RESOURCE_BARRIER* bs) {
+    if (!bs)
+        return;
+    const uint32_t backW = uiBackW.load(std::memory_order_relaxed), backH = uiBackH.load(std::memory_order_relaxed);
+    for (UINT i = 0; i < count; ++i) {
+        if (bs[i].Type != D3D12_RESOURCE_BARRIER_TYPE_TRANSITION || !bs[i].Transition.pResource)
+            continue;
+        const auto before = static_cast<uint32_t>(bs[i].Transition.StateBefore);
+        const auto after = static_cast<uint32_t>(bs[i].Transition.StateAfter);
+        if (!((before | after) & D3D12_RESOURCE_STATE_RENDER_TARGET))
+            continue;
+        auto* r = bs[i].Transition.pResource;
+        std::unique_lock lock(uiLock, std::try_to_lock);
+        if (!lock.owns_lock())
+            continue;
+        if (const auto t = uiTargets.find(r); t != uiTargets.end()) {
+            t->second.state = after;
+            ++t->second.transitions;
+            if ((before & D3D12_RESOURCE_STATE_RENDER_TARGET) && ui_dump::readableState(after))
+                ++t->second.toRead;
+            continue;
+        }
+        if (uiTargets.size() >= ui_dump::maxCandidates || uiLookedAt.size() >= 20000 ||
+            !uiLookedAt.emplace(r, true).second)
+            continue;
+        ++uiLooked;
+        const auto d = r->GetDesc();
+        if (d.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || d.MipLevels != 1 || d.SampleDesc.Count != 1 ||
+            d.DepthOrArraySize != 1 || d.Width > 16384 || !ui_dump::bytesPerPixel(d.Format) ||
+            !ui_dump::sized(static_cast<uint32_t>(d.Width), d.Height, backW, backH))
+            continue;
+        UiTarget t;
+        t.resource = r; // a reference: kept alive until the dump
+        t.state = after;
+        t.format = d.Format;
+        t.width = static_cast<uint32_t>(d.Width);
+        t.height = d.Height;
+        t.transitions = 1;
+        t.toRead = (before & D3D12_RESOURCE_STATE_RENDER_TARGET) && ui_dump::readableState(after) ? 1 : 0;
+        uiTargets.emplace(r, std::move(t));
+    }
+}
 void STDMETHODCALLTYPE barrier(ID3D12GraphicsCommandList* list, UINT count,
                                const D3D12_RESOURCE_BARRIER* bs) {
     // Update 27: ADDRESS FINDER callout before the early return (read-only).
     native_address_finder::onBarrier(list, count, bs);
     if (hudHunting.load(std::memory_order_relaxed) || hudTracked.load(std::memory_order_relaxed))
         watchHud(count, bs); // CUT7 WRIST MAP SOURCE: read-only
+    if (uiHunting.load(std::memory_order_relaxed))
+        watchUi(count, bs); // cut18 UI DUMP: read-only
     if (depthWatchOpen.load(std::memory_order_relaxed))
         watchFlat(list, count, bs); // 0.0.76 TAA WATCH: read-only
     // 0.0.74 test 10 SEE-THROUGH: the scene depth, copied ahead of the game's own barrier.
@@ -5759,11 +5820,255 @@ void bootPresent() {
 }
 // Present reaches Present1 in some DXGI builds: one of them handles a frame.
 thread_local bool presenting{};
+// HERO VR 0.0.78 cut18 UI DUMP (diagnostic): after the hunt, one list on the game's queue copies the back buffer
+// (PRESENT) and the best-scored targets in a readable state (their last recorded state, as captureHud) into
+// readback buffers; the present thread waits for it once (at most 2 s, outside the locks), turns each into RGBA8 and
+// hands them to game_xr (takeUiDump), which writes the PNGs off this thread.
+std::array<CopyCommands, 3> uiCommands;
+uint32_t uiReason{}, uiPresents{};
+std::mutex uiShotLock;
+std::vector<UiShot> uiShots;
+uint32_t uiShotReason{};
+std::string uiShotLine;
+std::atomic<bool> uiShotReady{};
+const char* uiFormatName(uint32_t f) {
+    switch (ui_dump::concrete(f)) {
+    case ui_dump::fR16G16B16A16Float:
+        return "RGBA16F";
+    case ui_dump::fR10G10B10A2Unorm:
+        return "RGB10A2";
+    case ui_dump::fR11G11B10Float:
+        return "R11G11B10F";
+    case ui_dump::fR8G8B8A8Unorm:
+    case ui_dump::fR8G8B8A8Srgb:
+        return "RGBA8";
+    case ui_dump::fB8G8R8A8Unorm:
+    case ui_dump::fB8G8R8A8Srgb:
+        return "BGRA8";
+    default:
+        return "?";
+    }
+}
+void uiDump(IDXGISwapChain* swapchain, std::vector<UiTarget>& all, std::vector<UiShot>& shots, std::string& line) {
+    struct Job {
+        ID3D12Resource* resource{};
+        uint32_t state{}, format{}, width{}, height{}, rank{};
+        uint64_t toRead{};
+        bool back{};
+        ComPtr<ID3D12Resource> readback;
+        D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout{};
+    };
+    std::vector<Job> jobs;
+    ComPtr<IDXGISwapChain3> chain;
+    ComPtr<ID3D12Resource> buffer;
+    if (SUCCEEDED(swapchain->QueryInterface(IID_PPV_ARGS(&chain))) &&
+        SUCCEEDED(chain->GetBuffer(chain->GetCurrentBackBufferIndex(), IID_PPV_ARGS(&buffer)))) {
+        const auto d = buffer->GetDesc();
+        ComPtr<ID3D12Device> owner;
+        ComPtr<IUnknown> ownerIdentity, gameIdentity;
+        const bool ours = SUCCEEDED(buffer->GetDevice(IID_PPV_ARGS(&owner))) &&
+                          SUCCEEDED(owner.As(&ownerIdentity)) && SUCCEEDED(device.As(&gameIdentity)) &&
+                          ownerIdentity.Get() == gameIdentity.Get();
+        if (ours && ui_dump::bytesPerPixel(d.Format) && d.SampleDesc.Count == 1 && d.Width <= 16384)
+            jobs.push_back({buffer.Get(), D3D12_RESOURCE_STATE_PRESENT, static_cast<uint32_t>(d.Format),
+                            static_cast<uint32_t>(d.Width), d.Height, 0, 0, true});
+        else
+            line += "; back buffer not read (format " + std::to_string(static_cast<uint32_t>(d.Format)) + ")";
+    }
+    uint32_t rank = 0;
+    for (const auto& t : all) {
+        ++rank;
+        if (rank <= 12) {
+            char c[160];
+            snprintf(c, sizeof(c), "; #%u %ux%u %s state 0x%x, %llu transitions, %llu RT->read", rank, t.width,
+                     t.height, uiFormatName(t.format), t.state, static_cast<unsigned long long>(t.transitions),
+                     static_cast<unsigned long long>(t.toRead));
+            line += c;
+        }
+        if (jobs.size() < ui_dump::maxTargets + 1 && ui_dump::readableState(t.state))
+            jobs.push_back({t.resource.Get(), t.state, t.format, t.width, t.height, rank, t.toRead, false});
+    }
+    if (jobs.empty()) {
+        line += "; nothing to read";
+        return;
+    }
+    uint64_t mine{};
+    {
+        std::lock_guard submitLock(submission);
+        std::lock_guard recordLock(recording);
+        if (!enabled || fault) {
+            line += "; stopped (Spidy's GPU path off)";
+            return;
+        }
+        for (auto& j : jobs) {
+            auto desc = j.resource->GetDesc();
+            UINT64 bytes{};
+            device->GetCopyableFootprints(&desc, 0, 1, 0, &j.layout, nullptr, nullptr, &bytes);
+            D3D12_HEAP_PROPERTIES heap{};
+            heap.Type = D3D12_HEAP_TYPE_READBACK;
+            D3D12_RESOURCE_DESC rb{};
+            rb.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            rb.Width = bytes;
+            rb.Height = 1;
+            rb.DepthOrArraySize = 1;
+            rb.MipLevels = 1;
+            rb.SampleDesc.Count = 1;
+            rb.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &rb,
+                                                       D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                       IID_PPV_ARGS(&j.readback))))
+                j.readback.Reset();
+        }
+        std::erase_if(jobs, [](const Job& j) { return !j.readback; });
+        auto* slot = jobs.empty() ? nullptr : readyCommands(uiCommands);
+        if (!slot) {
+            line += "; no readback or command list";
+            return;
+        }
+        std::vector<D3D12_RESOURCE_BARRIER> b(jobs.size());
+        for (size_t i = 0; i < jobs.size(); ++i) {
+            b[i].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            b[i].Transition = {jobs[i].resource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                               static_cast<D3D12_RESOURCE_STATES>(jobs[i].state), D3D12_RESOURCE_STATE_COPY_SOURCE};
+        }
+        originalBarrier(slot->list.Get(), static_cast<UINT>(b.size()), b.data());
+        for (auto& j : jobs) {
+            D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
+            src.pResource = j.resource;
+            src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            dst.pResource = j.readback.Get();
+            dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+            dst.PlacedFootprint = j.layout;
+            slot->list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+        }
+        for (auto& x : b)
+            std::swap(x.Transition.StateBefore, x.Transition.StateAfter);
+        originalBarrier(slot->list.Get(), static_cast<UINT>(b.size()), b.data());
+        if (!submitCommands(*slot)) {
+            line += "; submit failed";
+            return;
+        }
+        mine = slot->fence;
+    }
+    const auto waitFrom = GetTickCount64();
+    if (fence->GetCompletedValue() < mine) {
+        HANDLE done = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        const bool ok = done && SUCCEEDED(fence->SetEventOnCompletion(mine, done)) &&
+                        WaitForSingleObject(done, 2000) == WAIT_OBJECT_0;
+        if (done)
+            CloseHandle(done);
+        if (!ok) {
+            line += "; the copy did not finish in 2 s";
+            return;
+        }
+    }
+    char waited[64];
+    snprintf(waited, sizeof(waited), "; GPU wait %llu ms",
+             static_cast<unsigned long long>(GetTickCount64() - waitFrom));
+    line += waited;
+    for (auto& j : jobs) {
+        void* data{};
+        if (FAILED(j.readback->Map(0, nullptr, &data)))
+            continue;
+        UiShot shot;
+        shot.width = j.width;
+        shot.height = j.height;
+        shot.format = j.format;
+        shot.state = j.state;
+        shot.rank = j.rank;
+        shot.toRead = j.toRead;
+        shot.backBuffer = j.back;
+        shot.rgba.resize(static_cast<size_t>(j.width) * j.height * 4);
+        bool read = true;
+        for (uint32_t y = 0; y < j.height && read; ++y)
+            read = ui_dump::rowToRgba8(j.format,
+                                       static_cast<const uint8_t*>(data) + j.layout.Offset +
+                                           static_cast<size_t>(y) * j.layout.Footprint.RowPitch,
+                                       j.width, shot.rgba.data() + static_cast<size_t>(y) * j.width * 4, j.back);
+        D3D12_RANGE written{0, 0};
+        j.readback->Unmap(0, &written);
+        if (!read)
+            continue;
+        const auto c = ui_dump::cover(shot.rgba.data(), j.width, j.height);
+        char d[220];
+        if (j.back)
+            snprintf(d, sizeof(d), "; FRAME %ux%u %s: white %.2f%%", j.width, j.height, uiFormatName(j.format),
+                     100.0 * static_cast<double>(c.white) / static_cast<double>(c.pixels ? c.pixels : 1));
+        else
+            snprintf(d, sizeof(d), "; TARGET #%u %ux%u %s: alpha %.2f%% in (%u,%u)-(%u,%u), white %.2f%%", j.rank,
+                     j.width, j.height, uiFormatName(j.format),
+                     100.0 * static_cast<double>(c.alpha) / static_cast<double>(c.pixels ? c.pixels : 1), c.x0, c.y0,
+                     c.x1, c.y1, 100.0 * static_cast<double>(c.white) / static_cast<double>(c.pixels ? c.pixels : 1));
+        line += d;
+        shots.push_back(std::move(shot));
+    }
+}
+void uiDumpStep(IDXGISwapChain* swapchain) {
+    if (!uiReason) {
+        const uint32_t asked = uiAsked.exchange(0);
+        if (!asked)
+            return;
+        ComPtr<IDXGISwapChain3> chain;
+        ComPtr<ID3D12Resource> buffer;
+        if (FAILED(swapchain->QueryInterface(IID_PPV_ARGS(&chain))) ||
+            FAILED(chain->GetBuffer(chain->GetCurrentBackBufferIndex(), IID_PPV_ARGS(&buffer))))
+            return;
+        const auto d = buffer->GetDesc();
+        {
+            std::lock_guard lock(uiLock);
+            uiTargets.clear();
+            uiLookedAt.clear();
+        }
+        uiBackW = static_cast<uint32_t>(d.Width);
+        uiBackH = d.Height;
+        uiLooked = 0;
+        uiReason = asked;
+        uiPresents = 0;
+        uiHunting = true;
+        return;
+    }
+    if (++uiPresents < ui_dump::huntPresents)
+        return;
+    uiHunting = false;
+    const uint32_t reason = uiReason;
+    uiReason = 0;
+    std::vector<UiTarget> all;
+    {
+        std::lock_guard lock(uiLock);
+        all.reserve(uiTargets.size());
+        for (auto& kv : uiTargets)
+            all.push_back(std::move(kv.second));
+        uiTargets.clear();
+        uiLookedAt.clear();
+    }
+    const uint32_t backW = uiBackW.load(), backH = uiBackH.load();
+    std::sort(all.begin(), all.end(), [&](const UiTarget& a, const UiTarget& b) {
+        return ui_dump::score(a.format, a.width, a.height, a.toRead, backW, backH) >
+               ui_dump::score(b.format, b.width, b.height, b.toRead, backW, backH);
+    });
+    char head[320];
+    snprintf(head, sizeof(head),
+             "HERO VR 0.0.78 cut18 UI DUMP (%s): %u presents watched, %llu render targets looked at, %zu "
+             "colour targets of the frame's shape %ux%u",
+             ui_dump::reasonName(reason), ui_dump::huntPresents, static_cast<unsigned long long>(uiLooked.load()),
+             all.size(), backW, backH);
+    std::string line = head;
+    std::vector<UiShot> shots;
+    uiDump(swapchain, all, shots, line);
+    all.clear(); // the references go
+    std::lock_guard lock(uiShotLock);
+    uiShots = std::move(shots);
+    uiShotReason = reason;
+    uiShotLine = std::move(line);
+    uiShotReady = true;
+}
 void presentFrame(IDXGISwapChain* swapchain, UINT flags) {
     if (!enabled || (flags & DXGI_PRESENT_TEST))
         return;
     const bool insetOnly = screenInsetOnly.load();
     bootPresent(); // CUT7 BOOT SCREEN diagnostic: counts only
+    if (uiReason || uiAsked.load(std::memory_order_relaxed))
+        uiDumpStep(swapchain); // cut18 UI DUMP diagnostic: a few times a session
     if (hudWanted.load())
         captureHud(); // CUT7 WRIST MAP SOURCE: the HUD panel's texture, the minimap's real source
     else
@@ -5938,6 +6243,20 @@ void sceneDepthInUse(bool used) {
 }
 void wantHud(bool wanted) {
     hudWanted = wanted;
+}
+void requestUiDump(uint32_t reason) {
+    uint32_t none = 0;
+    uiAsked.compare_exchange_strong(none, reason);
+}
+bool takeUiDump(uint32_t& reason, std::vector<UiShot>& shots, std::string& line) {
+    if (!uiShotReady.exchange(false))
+        return false;
+    std::lock_guard lock(uiShotLock);
+    reason = uiShotReason;
+    shots = std::move(uiShots);
+    uiShots.clear();
+    line = std::move(uiShotLine);
+    return true;
 }
 bool latestHud(Screen& out, uint64_t maxAgeMs) {
     std::lock_guard submitLock(submission);

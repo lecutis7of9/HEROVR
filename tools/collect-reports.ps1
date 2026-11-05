@@ -15,6 +15,8 @@
 # HERO launcher's sm1-session-*.log), and every file is copied first with shared read (the game keeps layer.log
 # and the scan open for writing while it runs; zipping them directly failed with a sharing violation).
 # 0.0.76 SEAM TRACE: and the console / game / prompts logs of every session of the last 12 hours (up to 8).
+# HERO VR 0.0.78 cut18 UI DUMP: the prompt pictures of the newest session that made them (%APPDATA%\Spidy\ui-dump,
+# ui-*.png and ui-dump.txt; the mod clears the folder at a session's first dump), under 200 MB in all.
 param([switch]$NoCrashDump)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -96,6 +98,22 @@ try {
         }
     }
 } catch { Write-Host ('SM1 add-on files not added: ' + $_.Exception.Message) }
+try {
+    if ($env:APPDATA) {
+        $uiDump = Join-Path $env:APPDATA 'Spidy\ui-dump'
+        if (Test-Path -LiteralPath $uiDump) {
+            $uiFiles = @(Get-ChildItem -LiteralPath $uiDump -File | Where-Object { $_.Name -like 'ui-*' })
+            $uiBytes = ($uiFiles | Measure-Object -Property Length -Sum).Sum
+            if ($uiFiles -and $uiBytes -le 200MB) {
+                $files += $uiFiles | ForEach-Object { $_.FullName }
+                Write-Host ('UI dump: ' + $uiFiles.Count + ' file(s)')
+            } elseif ($uiFiles) {
+                Write-Host ('UI dump not added: ' + $uiDump + ' is over 200 MB; send ui-dump.txt and a few PNGs.')
+                $files += $uiFiles | Where-Object { $_.Name -eq 'ui-dump.txt' } | ForEach-Object { $_.FullName }
+            }
+        }
+    }
+} catch { Write-Host ('UI dump not added: ' + $_.Exception.Message) }
 # 0.0.74 test 3: the game's newest crash dump (the game writes one when it crashes; it says where in its log).
 if (-not $NoCrashDump) {
     try {

@@ -242,6 +242,9 @@ add_test(NAME cut16 COMMAND spidy_cut16_tests)
 add_executable(spidy_cut17_tests tests/cut17_tests.cpp) # HERO VR 0.0.78 cut17: title blip, phase gate
 target_include_directories(spidy_cut17_tests PRIVATE include)
 add_test(NAME cut17 COMMAND spidy_cut17_tests)
+add_executable(spidy_cut18_tests tests/cut18_tests.cpp) # HERO VR 0.0.78 cut18: UI DUMP (diagnostic)
+target_include_directories(spidy_cut18_tests PRIVATE include)
+add_test(NAME cut18 COMMAND spidy_cut18_tests)
 add_executable(spidy_cut9_tests tests/cut9_tests.cpp) # HERO VR 0.0.78 CUT9
 target_include_directories(spidy_cut9_tests PRIVATE include)
 add_test(NAME cut9 COMMAND spidy_cut9_tests)

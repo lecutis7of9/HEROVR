@@ -2,6 +2,18 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut18-uidump - UI DUMP: where the game's button prompts are drawn in VR play (local branch, not built)
+
+A diagnostic on top of cut17, to find the game's own prompts (the Y web strike on Sandman, interact prompts) so they
+can be shown as small cards cropped from the game's UI. Nothing on screen changes.
+- Up to 3 times a session in VR play (20 s in; a prompt card in reach; the boss's Y moment) the mod watches the game's
+  render targets for 45 presents, then copies the presented frame and up to 4 colour targets of the frame's shape in a
+  readable state, once (a hitch of at most 2 s), and saves them as PNGs (colour, and alpha for targets) to
+  %APPDATA%\Spidy\ui-dump with ui-dump.txt; console lines "cut18 UI DUMP" say what was found (each target's alpha box
+  and the frame's white share). The previous session's pictures are cleared at the first dump.
+- live.txt ui_dump = off turns it off (live). tools/collect-reports.ps1 adds the ui-dump folder to send-me.zip.
+- Tests: tests/cut18_tests.cpp (formats, pixel conversion, coverage, the plan), tests/hero078_cut18_tests.py.
+
 ## hero-0.0.78-cut17-menu - the title stays flat, the Sandman Y card at 233.3 (local branch, not built)
 
 From report 212843 (cut16):

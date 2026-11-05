@@ -17673,6 +17673,7 @@ DWORD WINAPI run(void*) {
                                 static int splitMatched23{};
                                 static float splitTurn23{-1.f};
                                 static uint32_t splitPieceLines23{};
+                                static uint64_t splitPieceStamp23{}, splitPieceMs23{};
                                 static prompt_split::Lens splitLens23{};
                                 // cut24: each marker held in the game's world from the camera that drew its pixels.
                                 struct HeldMarker {
@@ -17934,28 +17935,35 @@ DWORD WINAPI run(void*) {
                                                 ++cards.count;
                                         }
                                         layerLast = cards.count;
-                                        // cut24: which way the split called each blob, and whether a capture camera
-                                        // was stored. Not a read of the diamond. On change only, 80 lines a session.
-                                        if (splitAnchor && n && splitPieceLines23 < 80) {
-                                            prompt_split::PieceNote notes[prompt_layer::maxCards]{};
-                                            const uint32_t pn = std::min(n, prompt_layer::maxCards);
-                                            for (uint32_t i = 0; i < pn; ++i) {
-                                                const auto b = prompt_split::boxOf(pieces[i], layerImage.width,
-                                                                                   layerImage.height);
-                                                notes[i] = {split23.kind(i), b.x0, b.y0, b.x1, b.y1,
-                                                            split23.kind(i) == prompt_split::kindMarker
-                                                                ? static_cast<uint8_t>(heldMarker23[i].ok ? 2 : 0)
-                                                                : static_cast<uint8_t>(1)};
-                                            }
-                                            char piece[240];
-                                            prompt_split::pieceLine(piece, sizeof piece, splitMatched23, splitTurn23,
-                                                                    splitSrcSerial23, notes, pn);
-                                            static char lastPiece23[240]{};
-                                            if (std::strcmp(piece, lastPiece23) != 0) {
-                                                std::memcpy(lastPiece23, piece, sizeof lastPiece23);
-                                                ++splitPieceLines23;
-                                                game_prompts::note(piece);
-                                                consoleLine(piece);
+                                        // cut25 session 184004: cards+waypoint stayed under 3.1 ms/s while the headset
+                                        // stalled in xrEndFrame. This line is not that stall. It is off the per-frame
+                                        // path: one new grid, then at most one line each 2 s, 16 a session.
+                                        if (splitAnchor && n && layerGrid.stamp != splitPieceStamp23 &&
+                                            splitPieceLines23 < 16) {
+                                            splitPieceStamp23 = layerGrid.stamp;
+                                            const uint64_t pieceNow = GetTickCount64();
+                                            if (!splitPieceMs23 || pieceNow - splitPieceMs23 >= 2000) {
+                                                prompt_split::PieceNote notes[prompt_layer::maxCards]{};
+                                                const uint32_t pn = std::min(n, prompt_layer::maxCards);
+                                                for (uint32_t i = 0; i < pn; ++i) {
+                                                    const auto b = prompt_split::boxOf(pieces[i], layerImage.width,
+                                                                                       layerImage.height);
+                                                    notes[i] = {split23.kind(i), b.x0, b.y0, b.x1, b.y1,
+                                                                split23.kind(i) == prompt_split::kindMarker
+                                                                    ? static_cast<uint8_t>(heldMarker23[i].ok ? 2 : 0)
+                                                                    : static_cast<uint8_t>(1)};
+                                                }
+                                                char piece[240];
+                                                prompt_split::pieceLine(piece, sizeof piece, splitMatched23,
+                                                                        splitTurn23, splitSrcSerial23, notes, pn);
+                                                static char lastPiece23[240]{};
+                                                if (std::strcmp(piece, lastPiece23) != 0) {
+                                                    std::memcpy(lastPiece23, piece, sizeof lastPiece23);
+                                                    splitPieceMs23 = pieceNow ? pieceNow : 1;
+                                                    ++splitPieceLines23;
+                                                    game_prompts::note(piece);
+                                                    consoleLine(piece);
+                                                }
                                             }
                                         }
                                         if (cards.count) {

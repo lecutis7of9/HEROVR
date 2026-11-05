@@ -236,6 +236,9 @@ add_test(NAME cut6_replay COMMAND spidy_cut6_replay_tests ${CMAKE_CURRENT_SOURCE
 add_executable(spidy_cut8_tests tests/cut8_tests.cpp) # HERO VR 0.0.77 CUT8
 target_include_directories(spidy_cut8_tests PRIVATE include)
 add_test(NAME cut8 COMMAND spidy_cut8_tests)
+add_executable(spidy_cut16_tests tests/cut16_tests.cpp) # HERO VR 0.0.78 cut16
+target_include_directories(spidy_cut16_tests PRIVATE include)
+add_test(NAME cut16 COMMAND spidy_cut16_tests)
 add_executable(spidy_cut9_tests tests/cut9_tests.cpp) # HERO VR 0.0.78 CUT9
 target_include_directories(spidy_cut9_tests PRIVATE include)
 add_test(NAME cut9 COMMAND spidy_cut9_tests)

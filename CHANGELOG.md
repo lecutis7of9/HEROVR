@@ -9,6 +9,25 @@ when the game shows its Y on his head.
 - **cut15's SANDMAN PUNCHES reverted (5246312's punch part):** built on a wrong premise (punching is not how the fight
   goes). punch_web is back to cut7's rule (an enemy listed or the boss within 40 m); the BUSY HANDS line drops "boss
   fight". 5246312's PROP SKIP console lines stay.
+- **233.3 is the game's phase gate, not lost damage (CONFIRMED in the 0.0.77 logs; it fits the fight's design):** both
+  logged fights stall at 233.3/250 (14/15) with the last throw clipped to it (cut8 236.5 -> 233.3, public 235.0 ->
+  233.3); THOR's and IRON MAN's 445 HP of blows in the public log left him at 233 too, and in cut8 one Y right after the
+  stall took him to 1/250 and the next phase played. The throws (the game's own LB + RB), the debris and the grab code
+  are unchanged since 0.0.76, and knockback 0 (b8b33ce) never touches SPIDER-MAN.
+- **BOSS GATE (new, live.txt boss_gate, 0 on / 1 off, 5644):** two full throws in a row with no drop while he is hurt
+  log "HERO VR 0.0.78 BOSS GATE: his HP holds at ..." and, with no web strike card already on him, put the small Y card
+  2.5 m over him (Y routed).
+- **Plain Y in a boss fight (CANDIDATE fix):** the Sandman arena is not the game's combat camera, so the public 0.0.77
+  Ys at the gate went through InteractStep (the game got its turn stick, 0 16160, with the player's stick at rest, and
+  a forced 0.6 s Y); none landed, while cut8's landing Y was the Upshot gesture's RB + Y, outside InteractStep. With
+  boss_gate on and a living boss within 200 m, Y goes to the game as pressed. Each Y there logs "BOSS Y #n: hp a ->
+  lowest b over 2 s - LANDED / no change", plain or InteractStep, gate held or not.
+- **BOSS PICK:** world_trace keeps every boss-class record within reach (up to 8) and follows the one whose HP fell
+  last (20 s), else the nearest living one - the public log flipped between two SandmanBot records (250 never hit,
+  233 hit), so THROW WATCH read 250 between throws and the other heroes' blows could go to the wrong one.
+- **Boss status cleared (CONFIRMED stale):** 3 s without a living boss logs BOSS LOST and the status line reads "boss
+  none" instead of his last name and HP. The public log's later "hp -1" was the player loading out of the fight
+  (HERO SWITCH loads at 649 s and 666 s, open world), not a lost boss.
 
 ## hero-0.0.78-cut15-diag - prop skip log, Sandman punches, boss Y card (local branch, not built)
 

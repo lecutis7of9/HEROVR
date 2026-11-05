@@ -5,6 +5,7 @@
 #include "spidy/world_trace.hpp"
 #include "spidy/cut8.hpp" // HERO VR 0.0.77 CUT8 POI TARGET
 #include "spidy/cut10_poi.hpp" // HERO VR 0.0.78 CUT10 GUI2 POI
+#include "spidy/cut16.hpp" // HERO VR 0.0.78 cut16 BOSS PICK
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -87,7 +88,7 @@ uint32_t farCount{};
 constexpr uintptr_t botHealthTable = 0x531b0a0, healthHp = 0xd0, healthMost = 0xa0;
 std::array<Vital, enemySlots> enemyVital{};
 std::array<std::array<char, nameChars>, enemySlots> enemyClassName{}; // 0.0.75 EVERY ENEMY (enemyLock)
-Boss bossNow{}; // HERO VR 0.0.77 BOSS DAMAGE: the nearest boss in farReach (enemyLock; id 0 none)
+Boss bossNow{}; // HERO VR 0.0.77 BOSS DAMAGE: the boss in farReach (cut16: cut16::BossPick; enemyLock; id 0 none)
 std::atomic<uint64_t> healthFound{}, heroNowRecord{};
 // Version 0.0.3 BOT STATE PROBE (read-only; include/spidy/bot_probe.hpp).
 std::atomic<bool> botOn{};
@@ -552,10 +553,14 @@ void run() {
         std::array<Far, 96> farList{};
         uint32_t farN{};
         Boss boss{};
-        float bossMetres = farReach;
+        // HERO VR 0.0.78 cut16 BOSS PICK: every boss-class record within farReach (up to bossKept), then
+        // cut16::BossPick - the one hit last, else the nearest living - not the nearest one alone.
+        constexpr uint32_t bossKept = 8;
+        std::array<Boss, bossKept> bosses{};
+        uint32_t bossN{};
         if (heroRecord && position(heroRecord, heroAt))
             for (const uintptr_t record : enemyRecords) {
-                if (n >= found.size() && farN >= farList.size() && boss.id)
+                if (n >= found.size() && farN >= farList.size() && bossN >= bossKept)
                     break;
                 if (!position(record, at))
                     continue;
@@ -563,10 +568,10 @@ void run() {
                 const float metres = length(rel);
                 if (!finite(rel))
                     continue;
-                // HERO VR 0.0.77 BOSS DAMAGE (CANDIDATE): the nearest boss class within farReach.
-                if (metres <= bossMetres)
+                // HERO VR 0.0.77 BOSS DAMAGE (CANDIDATE): the boss classes within farReach (cut16: all of them).
+                if (metres <= farReach && bossN < bossKept)
                     if (const auto c = enemyNames.find(record); c != enemyNames.end() && isBossClass(c->second.data())) {
-                        bossMetres = metres;
+                        Boss& boss = bosses[bossN++];
                         boss = {};
                         boss.id = static_cast<uint64_t>(record);
                         boss.world = at;
@@ -595,6 +600,17 @@ void run() {
                 if (farN < farList.size() && metres <= farReach)
                     farList[farN++] = {metres, at};
             }
+        { // cut16 BOSS PICK (include/spidy/cut16.hpp)
+            static cut16::BossPick bossPick;
+            std::array<cut16::BossPick::In, bossKept> in{};
+            for (uint32_t i = 0; i < bossN; ++i)
+                in[i] = {bosses[i].id, bosses[i].metres, bosses[i].vital.have != 0, bosses[i].vital.hp,
+                         bosses[i].vital.most};
+            const double bossNowSeconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            if (const int b = bossPick.pick(in.data(), bossN, bossNowSeconds); b >= 0)
+                boss = bosses[static_cast<uint32_t>(b)];
+        }
         std::sort(found.begin(), found.begin() + n, [](const auto& a, const auto& b) { return a.first < b.first; });
         std::sort(farList.begin(), farList.begin() + farN, [](const auto& a, const auto& b) { return a.metres < b.metres; });
         {

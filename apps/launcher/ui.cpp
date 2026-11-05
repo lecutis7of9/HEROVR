@@ -2490,6 +2490,8 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                                     "(live.txt punch_web = off: it never does, as cut6)"},
           {"Y on a boss", "A small Y card over the boss when the game offers its web strike on him, for the zip "
                           "to him (live.txt boss_y_card = off: Y cards only within 30 m)"},
+          {"Sandman's debris", "Throw his debris back (LB + RB) until his health stops falling, then Y when its card "
+                               "shows over him (live.txt boss_gate = off: no card, Y as 0.0.77)"},
           {"LB + RB near a boss", "The game's throw; each one logs the boss's HP over 2 s, the left stick sent, the aim "
                                   "and his distance (live.txt throw_watch = off: no such log)"},
           {"A or a web on a ledge", "Off a ledge or roof edge (the game's floor crawl) as off a wall: RT + A "

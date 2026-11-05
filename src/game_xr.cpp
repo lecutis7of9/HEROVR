@@ -71,6 +71,7 @@
 #include "spidy/story077g.hpp" // HERO VR 0.0.77 WAYPOINT
 #include "spidy/story077h.hpp" // HERO VR 0.0.77 WRIST MAP
 #include "spidy/cut8.hpp" // HERO VR 0.0.77 CUT8 THROW WATCH
+#include "spidy/cut16.hpp" // HERO VR 0.0.78 cut16 SANDMAN: boss pick, gate, Y watch
 #include "spidy/waypoint_mark.hpp" // HERO VR 0.0.77 WAYPOINT (drawing)
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
@@ -1452,6 +1453,19 @@ std::atomic<uint32_t> punchWebNow{0};
 std::atomic<uint32_t> throwWatchNow{cut8::throwWatchOn};
 uint32_t bossNear77 = 0;
 uint64_t punchWebFreed77 = 0;
+// HERO VR 0.0.78 cut16 SANDMAN (include/spidy/cut16.hpp): live.txt boss_gate - 0 on (the default: in a boss fight Y
+// goes to the game as the player presses it, no InteractStep turn or walk, and when his HP holds through the throws a
+// small Y card shows over him), 1 off (as 0.0.77). The read below is the VR loop's, last frame's; the BOSS GATE / BOSS
+// Y / BOSS LOST lines are written either way.
+std::atomic<uint32_t> bossGateNow{cut16::bossGateOn};
+cut16::BossGate bossGate16;
+uint32_t bossFight16 = 0; // a living boss read within cut16::bossFightMetres (3 s grace)
+bool bossHave16{};
+float bossHp16{-1.f}, bossMost16{}, bossMetres16{-1.f};
+Vec3 bossWorld16{};
+const char* bossYVia16 = "Y";
+uint64_t bossBlock16Ms{}; // the boss block ran (bossFight16 is good for a second after)
+bool bossFightNow16() noexcept { return bossFight16 && GetTickCount64() - bossBlock16Ms < 1000; }
 std::atomic<uint32_t> ledgeJumpNow{0};
 // HERO VR 0.0.77 X IS THE GAME'S X (story077e.hpp): live.txt x_button - 0 game (the default: VR X tap is the
 // game's X, the menu button held 0.5 s is the View X sent), 1 view (05e70a2: X tap View, menu pauses on press).
@@ -1572,6 +1586,18 @@ void propSkipNote(const char* pass, PropSkipWatch& w, const hero007::PropSkips& 
         consoleLine(line);
     } catch (...) {
     }
+}
+// HERO VR 0.0.78 cut16 BOSS Y: what a Y in a boss fight did to his HP over cut16::yWatchSeconds.
+void bossYNote16(const cut16::BossGate::YReport& r, bool cutShort) noexcept {
+    const auto f = [](float v) { return static_cast<double>(v); };
+    char line[300];
+    sprintf_s(line, "HERO VR 0.0.78 BOSS Y #%u (%s, %s): boss hp %.1f -> lowest %.1f over %s - %s; gate %s, boss %.0f m",
+              r.no, bossYVia16, r.plain ? "plain" : "InteractStep", f(r.hp0), f(r.lowest),
+              cutShort ? "less than 2 s (the next Y)" : "2 s",
+              !r.have0 ? "hp not read" : cut16::BossGate::landed(r) ? "LANDED" : "no change",
+              r.gated ? "held (the game's Y phase)" : "not held", f(r.metres));
+    game_prompts::note(line);
+    consoleLine(line);
 }
 void drainConsoleLines() noexcept {
     try {
@@ -7986,9 +8012,14 @@ DWORD WINAPI run(void*) {
                         // on, he walks there, until the game takes the press. The
                         // player's own stick goes first.
                         const bool fight = moverTable == config.base + bridge::combatCamera;
+                        // HERO VR 0.0.78 cut16 SANDMAN (CANDIDATE): the Sandman fight is not the game's combat camera,
+                        // so a Y there was InteractStep's (public 0.0.77: 47 ms after Y #2, the player's stick at rest,
+                        // the game got the turn's stick 0 16160 and a 0.6 s Y). In a boss fight it goes out plain, as
+                        // cut8's landing one (RB + Y from the Upshot gesture, no InteractStep) did.
+                        const bool yPlain16 = bossGateNow.load() == cut16::bossGateOn && bossFightNow16();
                         const float stepIn = interactStep.update(
                             frame.seconds, walk.interact,
-                            playing && !mounting && swingState.grounded && !fight && !motion.standing,
+                            playing && !mounting && swingState.grounded && !fight && !motion.standing && !yPlain16,
                             std::hypot(swingState.velocity.x, swingState.velocity.z));
                         if (interactStep.steps() != interactStepsBefore) {
                             interactStepsBefore = interactStep.steps();
@@ -8868,6 +8899,21 @@ DWORD WINAPI run(void*) {
                                             bossYCard78 = true;
                                 bossYSeenFrames78 += bossYSeen78;
                                 bossYCardFrames78 += bossYCard78;
+                                // HERO VR 0.0.78 cut16 BOSS GATE CARD (CANDIDATE): his HP held through the throws (the
+                                // game's Y phase, CONFIRMED) and no web strike card on him - a small Y card over him, Y
+                                // routed. live.txt boss_gate = off: none.
+                                if (bossGateNow.load() == cut16::bossGateOn && bossGate16.holding() && bossFightNow16() &&
+                                    !bossYCard78 && promptCardCount < story077d::maxCards && finite(bossWorld16) &&
+                                    validTrackedPose(motion.headPose)) {
+                                    static const int strikeKind16 = story077d::kindOf(".?AVWebStrikeTarget@@");
+                                    const Vec3 gateAt = compose(fromWorld, Pose{bossWorld16 + Vec3{0, story077d::bossCardLift, 0},
+                                                                                {}}).position;
+                                    if (finite(gateAt) && strikeKind16 >= 0) {
+                                        promptCardsHere[promptCardCount++] =
+                                            PromptCardNow{static_cast<uint32_t>(strikeKind16), true, gateAt};
+                                        yCardNear = objectShown = true;
+                                    }
+                                }
                                 world_trace::Boss bossY78{};
                                 const uint64_t bossYNow78 = GetTickCount64();
                                 if (world_trace::nearestBoss(bossY78) && bossYLines78 < 300 &&
@@ -9549,6 +9595,48 @@ DWORD WINAPI run(void*) {
                                                     consoleLine(hpLine);
                                                 }
                                             }
+                                        }
+                                        { // HERO VR 0.0.78 cut16 SANDMAN: the boss for the gate and the Y watch (boss_damage
+                                          // off too), and the status line cleared when he is gone (CONFIRMED: bossLast* were
+                                          // never cleared, so it kept his last name and HP after the fight).
+                                            static uint64_t seenMs16{};
+                                            static char seenName16[world_trace::nameChars]{};
+                                            const uint64_t ms16 = GetTickCount64();
+                                            bossBlock16Ms = ms16;
+                                            if (bossMode == 1 && bossGateNow.load() == cut16::bossGateOn)
+                                                world_trace::setEnemiesWanted(true);
+                                            world_trace::Boss b16;
+                                            if (world_trace::nearestBoss(b16) && !(b16.vital.have && b16.vital.hp <= 0.f)) {
+                                                seenMs16 = ms16;
+                                                std::memcpy(seenName16, b16.name, sizeof(seenName16));
+                                                bossHave16 = b16.vital.have != 0;
+                                                bossHp16 = bossHave16 ? b16.vital.hp : -1.f;
+                                                bossMost16 = bossHave16 ? b16.vital.most : 0.f;
+                                                bossMetres16 = b16.metres;
+                                                bossWorld16 = b16.world;
+                                                bossGate16.hp(bossHave16, bossHp16);
+                                            } else if (seenMs16 && ms16 - seenMs16 > 3000) {
+                                                char line[220];
+                                                sprintf_s(line, "HERO VR 0.0.78 BOSS LOST: no living boss read for 3 s (last %.28s hp "
+                                                                "%.1f/%.0f at %.0f m) - status reads boss none",
+                                                          seenName16[0] ? seenName16 : "?", static_cast<double>(bossHp16),
+                                                          static_cast<double>(bossMost16), static_cast<double>(bossMetres16));
+                                                game_prompts::note(line);
+                                                consoleLine(line);
+                                                seenMs16 = 0;
+                                                bossHave16 = false;
+                                                bossHp16 = bossMetres16 = -1.f;
+                                                bossMost16 = 0;
+                                                bossGate16.lost();
+                                                bossLastName[0] = 0;
+                                                bossLastHp = bossLastMetres = -1.f;
+                                                bossLastMost = 0;
+                                                bossSeenId = 0;
+                                            }
+                                            bossFight16 = seenMs16 && bossMetres16 >= 0 && bossMetres16 < cut16::bossFightMetres ? 1u : 0u;
+                                            cut16::BossGate::YReport y16;
+                                            if (bossGate16.yUpdate(frame.seconds, bossHave16, bossHp16, y16))
+                                                bossYNote16(y16, false);
                                         }
                                         sm2_damage::watchBoss(bossId, bossMode == 2 ? story077c::bossStrongScale : 1.f);
                                         const uint64_t bossNowMs = GetTickCount64();
@@ -11255,6 +11343,12 @@ DWORD WINAPI run(void*) {
                                                             : g == combat_input::ricochetWeb ? config37.ricochetSlot
                                                             : g == combat_input::webYank     ? config37.yankSlot
                                                                                              : 0;
+                                        if (g == combat_input::upshot && bossFightNow16()) { // cut16: cut8's landing Y was this
+                                            cut16::BossGate::YReport cutY;
+                                            if (bossGate16.yPressed(bossHave16, bossHp16, bossMetres16, true, cutY))
+                                                bossYNote16(cutY, true);
+                                            bossYVia16 = "Upshot RB+Y";
+                                        }
                                         sprintf_s(line, "Update 37: %s gesture -> the game's %s", combat_input::gadgetNames[g],
                                                   g == combat_input::webShooter ? (heroNow() != hero_modes::spiderMan
                                                                                      ? "nothing (no webs for this hero)"
@@ -12016,6 +12110,17 @@ DWORD WINAPI run(void*) {
                                               f(r.aimDegrees), sb::aimName(storyAimNow.load()), r.bossSeen);
                                     game_prompts::note(line);
                                     consoleLine(line);
+                                    // HERO VR 0.0.78 cut16 BOSS GATE: the throws stopped moving his HP.
+                                    if (bossGate16.thrown(r.have0, r.hp0, r.lowest, r.most0, !cut)) {
+                                        char gate[300];
+                                        sprintf_s(gate, "HERO VR 0.0.78 BOSS GATE (CONFIRMED in the 0.0.77 logs: the game's phase): "
+                                                        "his HP holds at %.1f/%.0f through %u throws (gate #%u) - the game wants "
+                                                        "its Y web strike now, when its Y shows on him; boss %.0f m, Y card %s",
+                                                  f(r.hp0), f(r.most0), cut16::gateThrows, bossGate16.gates, f(r.metresEnd),
+                                                  bossGateNow.load() == cut16::bossGateOn ? "on" : "off (boss_gate)");
+                                        game_prompts::note(gate);
+                                        consoleLine(gate);
+                                    }
                                 };
                                 if (watchOn && (throwEdge || throwWatch.active)) {
                                     world_trace::setEnemiesWanted(true); // the scan keeps the boss's list (2 s a call)
@@ -12319,6 +12424,13 @@ DWORD WINAPI run(void*) {
                             aw.sequence = sequence;
                             SpidyAirWatchData = aw;
                             SpidyAirWatchData.sequence = sequence + 1;
+                        }
+                        if (walk.interact && !interacting && bossFightNow16()) { // cut16 BOSS Y watch
+                            cut16::BossGate::YReport cutY;
+                            if (bossGate16.yPressed(bossHave16, bossHp16, bossMetres16,
+                                                    bossGateNow.load() == cut16::bossGateOn, cutY))
+                                bossYNote16(cutY, true);
+                            bossYVia16 = "Y";
                         }
                         if (walk.interact && !interacting) {
                             ++interacts;
@@ -17961,6 +18073,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldShadow(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldLightGain(void* v) { return setLive(v, 25, 400, 5642, worldLightGainNow, asU32); }
 // HERO VR 0.0.78 cut15: boss_y_card (0 on, 1 off).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossYCard(void* v) { return setLive(v, 0, 1, 5643, bossYCardNow, asU32); }
+// HERO VR 0.0.78 cut16: boss_gate (0 on, 1 off).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossGate(void* v) { return setLive(v, 0, 1, 5644, bossGateNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
 }

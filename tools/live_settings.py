@@ -597,7 +597,7 @@ SETTINGS = {
                    "ledge or roof edge as off a wall, with RT + A; 1 game: only off the game's wall crawl, as cut6) - "
                    "live, no restart needed"),
     'punch_web': ((0, 1), 'SpidyPunchWeb', "PUNCH WEB {} (0 on, the default: a hand whose swing web holds still punches "
-                  "while an enemy is near or a boss within 40 m; 1 off: a webbing hand never punches, as cut6) - live, "
+                  "while an enemy is near or in a boss fight (a boss within 200 m); 1 off: a webbing hand never punches, as cut6) - live, "
                   "no restart needed"),
     'throw_watch': ((0, 1), 'SpidyThrowWatch', "THROW WATCH {} (0 on, the default: each LB + RB throw logs the boss's HP "
                     "as it starts and over the next 2 s, the left stick sent, the throw's aim and the boss's distance; "

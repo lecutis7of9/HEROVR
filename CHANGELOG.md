@@ -2,6 +2,18 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut15-diag - prop skip log, Sandman punches (local branch, not built)
+
+- **PROP SKIP log (first person and mirror apart, at most every 10 s each):** every hero prop model (pistol, pump,
+  shield, batons, claws, grapple gun) appendHero007 did not draw, counted by why: model missing, sink full
+  (modelSinkBudget), bad place, size check, out of range, over cap, other - with the model sink's fill. OURS's failure
+  (oursFault, which clears every hero prop) says so too. Logging only: the code does not show the sink overflowing
+  (the props are drawn before the suit in first person; cut14's whole frame is far under modelSinkBudget).
+- **SANDMAN PUNCHES (CONFIRMED cause in the public 0.0.77 log):** the BUSY HANDS lines read "enemies 0, boss near 0,
+  freed 0" all fight, with 100 "hand holding or carrying" rejects and 1 X strike: the hand whose swing web held never
+  punched, because cut7's exemption needs an enemy listed (30 m) or the boss within 40 m and the giant's record is
+  84-130 m off. A web-held hand now punches while a living boss is read within 200 m too (live.txt punch_web, as before).
+
 ## hero-0.0.78-cut14 - back to the cut10 renderer and the old Punisher suit; pistol and pump only (TEST build, private)
 
 From the player's cut13 report (van, black headset, holo portraits, "still look like spiderman"):

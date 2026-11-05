@@ -1449,6 +1449,10 @@ std::atomic<uint32_t> punchWebNow{0};
 // and over the next 2 s, the left stick sent, the aim and the boss's distance; 1 off).
 std::atomic<uint32_t> throwWatchNow{cut8::throwWatchOn};
 uint32_t bossNear77 = 0;
+// HERO VR 0.0.78 cut15 SANDMAN PUNCHES: a living boss read within bossFightMetres78 this frame (the boss fight; his
+// record sits 84-130 m from the player all through the public 0.0.77 Sandman fight, never inside 40 m).
+uint32_t bossFight78 = 0;
+constexpr float bossFightMetres78 = 200.f;
 uint64_t punchWebFreed77 = 0;
 std::atomic<uint32_t> ledgeJumpNow{0};
 // HERO VR 0.0.77 X IS THE GAME'S X (story077e.hpp): live.txt x_button - 0 game (the default: VR X tap is the
@@ -1541,6 +1545,33 @@ void consoleLine(const std::string& text) noexcept {
         std::lock_guard lock(consoleLinesLock);
         if (consoleLinesQueue.size() < 64)
             consoleLinesQueue.push_back(text.substr(0, 400));
+    } catch (...) {
+    }
+}
+// HERO VR 0.0.78 cut15 PROP SKIPS: the hero prop models (guns, shield, ...) one draw pass skipped, by why
+// (hero007::propSkips: model missing, sink full, bad place, size check, out of range, over cap, other), logged on a
+// rise at most every 10 s per pass. `from` / `to`: the counts around that pass's appendHero007; `sinkNow`: the model
+// sink's vertices then.
+struct PropSkipWatch {
+    uint64_t n[hero007::propSkipKinds]{};
+    mirror_props::MissLog log;
+};
+void propSkipNote(const char* pass, PropSkipWatch& w, const hero007::PropSkips& from, const hero007::PropSkips& to,
+                  size_t sinkNow) noexcept {
+    try {
+        uint64_t total = 0;
+        for (uint32_t i = 0; i < hero007::propSkipKinds; ++i)
+            total += (w.n[i] += to.n[i] - from.n[i]);
+        if (!w.log.due(total, GetTickCount64()))
+            return;
+        std::string line = "HERO VR 0.0.78 PROP SKIP (" + std::string(pass) + "): " + std::to_string(w.log.take()) +
+                           " prop model draw(s) skipped since the last line (so far:";
+        for (uint32_t i = 0; i < hero007::propSkipKinds; ++i)
+            if (w.n[i])
+                line += std::string(" ") + hero007::propSkipName(i) + " " + std::to_string(w.n[i]) + ",";
+        line += " last look " + std::to_string(to.lastLook) + "; model sink " + std::to_string(sinkNow) + "/" +
+                std::to_string(hero007::modelSinkBudget) + " vertices)";
+        consoleLine(line);
     } catch (...) {
     }
 }
@@ -9091,7 +9122,11 @@ DWORD WINAPI run(void*) {
                                 // strikes all session against 68 "hand holding or carrying" rejects (and 128 throws,
                                 // 158 web balls): a hand whose swing web held - the fist that punches is the grip that
                                 // webs - punched nothing. With an enemy listed or the boss near, that hand punches.
-                                if (punchWebNow.load() == 0 && (cf.enemyCount > 0 || bossNear77))
+                                // HERO VR 0.0.78 cut15 SANDMAN PUNCHES (CONFIRMED in the public 0.0.77 log: every BUSY
+                                // HANDS line read "enemies 0, boss near 0, freed 0" through the fight, 100 "hand holding
+                                // or carrying" rejects, 1 X strike sent): the giant's record is 84-130 m off, never
+                                // within 40 m, and no enemy is listed - so in the boss fight (bossFight78) it frees too.
+                                if (punchWebNow.load() == 0 && (cf.enemyCount > 0 || bossNear77 || bossFight78))
                                     for (unsigned i = 0; i < 2; ++i)
                                         if (busyWhy77[i] == 1u && cf.hands[i].busy && !grabPhases[i]) {
                                             cf.hands[i].busy = false;
@@ -9101,10 +9136,10 @@ DWORD WINAPI run(void*) {
                                     static ULONGLONG busySaidAt = 0;
                                     if ((cf.hands[0].busy || cf.hands[1].busy) && GetTickCount64() - busySaidAt >= diagEveryMs()) {
                                         busySaidAt = GetTickCount64();
-                                        char line[200];
+                                        char line[240];
                                         sprintf_s(line, "HERO VR 0.0.77 CUT7 BUSY HANDS: left 0x%02x right 0x%02x (1 web, 2 grab, 4 "
-                                                  "ball, 8 climb, 16 hammer, 32 seat), enemies %u, boss near %u, freed %llu",
-                                                  busyWhy77[0], busyWhy77[1], cf.enemyCount, bossNear77,
+                                                  "ball, 8 climb, 16 hammer, 32 seat), enemies %u, boss near %u, boss fight %u, freed %llu",
+                                                  busyWhy77[0], busyWhy77[1], cf.enemyCount, bossNear77, bossFight78,
                                                   static_cast<unsigned long long>(punchWebFreed77));
                                         game_prompts::note(line);
                                     }
@@ -9424,6 +9459,7 @@ DWORD WINAPI run(void*) {
                                     bool bossFacing = false;
                                     uint64_t bossId = 0;
                                     bossNear77 = 0;
+                                    bossFight78 = 0;
                                     {
                                         static uint64_t bossLogMs{}, bossSeenId{}, bossFrames{}, bossFacingFrames{};
                                         static float bossLastMetres{}, bossLastHp{-1.f}, bossLastMost{};
@@ -9440,6 +9476,7 @@ DWORD WINAPI run(void*) {
                                                 ++bossFrames;
                                                 bossId = bossHero ? boss.id : 0;
                                                 bossNear77 = boss.metres < 40.f ? 1u : 0u;
+                                                bossFight78 = boss.metres < bossFightMetres78 ? 1u : 0u; // cut15
                                                 bossLastMetres = boss.metres;
                                                 bossLastHp = boss.vital.have ? boss.vital.hp : -1.f;
                                                 bossLastMost = boss.vital.have ? boss.vital.most : 0.f;
@@ -13820,6 +13857,14 @@ DWORD WINAPI run(void*) {
                         else {
                             saved.hero007 = hero007::Draw{};
                             saved.hero072 = hero072::Look{};
+                            // cut15 PROP SKIPS: OURS failed earlier this session, so no hero prop (gun, shield,
+                            // claws, baton) is drawn at all - first person and mirror; said at most every 10 s.
+                            static uint64_t oursFaultFrames{};
+                            static mirror_props::MissLog oursFaultLog;
+                            if (oursFaultLog.due(++oursFaultFrames, GetTickCount64()))
+                                consoleLine("HERO VR 0.0.78 PROP SKIP (all): " + std::to_string(oursFaultLog.take()) +
+                                            " frame(s) with no hero props - OURS failed this session (oursFault), so the "
+                                            "guns, shield, claws and batons are not drawn");
                         }
                     }
                     {   // Version 0.0.5 SUPERSONIC: the shockwave around the head, the way the hands point.
@@ -15020,14 +15065,20 @@ DWORD WINAPI run(void*) {
                                 heroDraw = &heroNoClaws;
                             }
                         }
+                        static thread_local PropSkipWatch eyeSkips; // cut15 PROP SKIPS: the first-person draw's
                         if (heroDraw->any && heroDraw->beamFade > 0 && validTrackedPose(rendered.headPose)) {
                             // Version 0.0.72 HEAT VISION HEAD LOCK: the beams redrawn from this image's own head
                             // pose along where it looks (0.0.71: drawn to where the beam was aimed a frame ago).
                             hero007::Draw locked = *heroDraw;
                             hero007::headLockBeam(locked, rendered.headPose);
+                            const hero007::PropSkips skipFrom = hero007::propSkips(); // cut15 PROP SKIPS
                             hero007::appendHero007(vertices, locked, travel, viewer, pixelAngle);
-                        } else if (heroDraw->any) // Version 0.0.7 HERO PROFILES
+                            propSkipNote("first person", eyeSkips, skipFrom, hero007::propSkips(), modelVertices.size());
+                        } else if (heroDraw->any) { // Version 0.0.7 HERO PROFILES
+                            const hero007::PropSkips skipFrom = hero007::propSkips(); // cut15 PROP SKIPS
                             hero007::appendHero007(vertices, *heroDraw, travel, viewer, pixelAngle);
+                            propSkipNote("first person", eyeSkips, skipFrom, hero007::propSkips(), modelVertices.size());
+                        }
                         // 0.0.74 test 10 SEE-THROUGH: the Batmobile's / van's own models (the last of hero072's look in
                         // the model sink, seen from outside the car), hidden where the game's scene is nearer.
                         std::size_t seeThroughFirst{}, seeThroughCount{};
@@ -16286,8 +16337,12 @@ DWORD WINAPI run(void*) {
                                     const hero007::ModelMisses missFrom = hero007::modelMisses(); // 0.0.74 test 10
                                     try {
                                         const Vec3 seenFrom = vr_mirror::unreflect(plane, viewer);
-                                        if (saved->hero007.any)
+                                        if (saved->hero007.any) {
+                                            const hero007::PropSkips skipFrom = hero007::propSkips(); // cut15 PROP SKIPS
                                             hero007::appendHero007(mirrorProps, saved->hero007, travel, seenFrom, pixelAngle);
+                                            static thread_local PropSkipWatch mirrorSkips;
+                                            propSkipNote("mirror", mirrorSkips, skipFrom, hero007::propSkips(), modelVertices.size());
+                                        }
                                         for (unsigned i = 0; i < 2; ++i)
                                             if (saved->batonOn[i] > 0 && saved->batonTipApart[i]) { // 0.0.73 DD BATON
                                                 const Vec3 g = saved->batonGrip[i] + travel, tp = saved->batonTip[i] + travel;

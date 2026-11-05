@@ -74,6 +74,7 @@
 #include "spidy/cut16.hpp" // HERO VR 0.0.78 cut16 SANDMAN: boss pick, gate, Y watch
 #include "spidy/ui_dump.hpp" // HERO VR 0.0.78 cut18 UI DUMP (diagnostic)
 #include "spidy/prompt_layer.hpp" // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE)
+#include "spidy/prompt_world.hpp" // HERO VR 0.0.78 cut22 PROMPT WORLD (CANDIDATE)
 #include "spidy/waypoint_mark.hpp" // HERO VR 0.0.77 WAYPOINT (drawing)
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
@@ -1408,10 +1409,16 @@ std::atomic<uint32_t> storyDodgeNow{0};
 std::atomic<uint32_t> headDodgeNow{story077b::headFight};
 std::atomic<uint32_t> storySprintNow{1}; // HERO VR 0.0.77 story_sprint: 0 on, 1 off (CUT5: off by default, as 0.0.76)
 // HERO VR 0.0.77 PROMPT CARDS: prompt_window is a debug view now - 0 off (the default), 1 debug_full (the whole
-// game frame in a window, b8b33ce's view); the button prompts are prompt_cards (0 on, the default; 1 off).
+// game frame in a window, b8b33ce's view); the button prompts are prompt_cards (0 on; 1 off).
+// HERO VR 0.0.78 cut22 (pt1963u: "get rid of those popups for press Y ... only what the game has itself"): prompt_cards
+// is OFF by default and only DRAWS the mod's own cards ("GAME: Y / VR: PRESS Y", the boss gate card). The scan behind
+// them still runs in VR play whatever it says, because it routes Y and the pull to the game (yCardNear, pullCardNear,
+// cineNear, the boss gate): turning the cards off never turns those off.
 std::atomic<uint32_t> promptWindowNow{story077d::windowOff};
-std::atomic<uint32_t> promptCardsNow{story077d::cardsOn};
+std::atomic<uint32_t> promptCardsNow{story077d::cardsOff};
 // HERO VR 0.0.78 cut15 BOSS Y CARD (story077d::BossYCard): live.txt boss_y_card - 0 on (the default), 1 off.
+// cut22: it widens which web strike objects route Y (200 m on the boss, not 30 m); its card is drawn only with
+// prompt_cards on. Kept on: off would only stop Y going to the game at the boss.
 std::atomic<uint32_t> bossYCardNow{story077d::bossYOn};
 // HERO VR 0.0.77 WAYPOINT (story077g.hpp): live.txt waypoints - 0 scan (the default: the game's own objective, about
 // 8 s after each scan), 1 always, 2 off.
@@ -1471,6 +1478,10 @@ std::atomic<uint32_t> uiDumpNow{ui_dump::dumpOff}, uiDumpAsk{}; // cut21: off by
 // as small cards where the game puts them in its view; never the whole layer), 1 off. promptLayerFrame: the VR loop's
 // own, whether it is wanted this frame.
 std::atomic<uint32_t> promptLayerNow{prompt_layer::layerOn};
+// HERO VR 0.0.78 cut22 PROMPT WORLD (CANDIDATE, prompt_world.hpp): live.txt prompt_anchor - 0 room (the default:
+// the game's UI pieces stand still in the room, HUD pieces on a board pulled into view, markers where the game drew
+// them), 1 view (cut21's: at their place in the view, turning with the head).
+std::atomic<uint32_t> promptAnchorNow{prompt_world::anchorRoom};
 bool promptLayerFrame{};
 cut16::BossGate bossGate16;
 uint32_t bossFight16 = 0; // a living boss read within cut16::bossFightMetres (3 s grace)
@@ -8184,6 +8195,29 @@ DWORD WINAPI run(void*) {
                             cineYSent += cineNear && walk.interact;
                             cineYWas = yDown;
                         }
+                        { // HERO VR 0.0.78 cut22 SANDMAN Y WATCH (diagnostic, CANDIDATE): pt1963u, again no zip to him
+                          // after two debris throws. Each physical Y press in a boss fight, and what this frame did
+                          // with it (did the game's Y go out, and if not which gate held it). Up to 60 lines.
+                            static uint64_t sandYPresses22{};
+                            static bool sandYWas22{};
+                            const bool yDown = (origins.play() & buttonY) != 0;
+                            if (yDown && !sandYWas22 && bossFightNow16() && sandYPresses22 < 60) {
+                                ++sandYPresses22;
+                                char note[300];
+                                sprintf_s(note, "HERO VR 0.0.78 cut22 SANDMAN Y #%llu (CANDIDATE): game Y %d, steering %d, "
+                                                "reaching %d, in flight %d, swing owned %d, wall %u, calibrating %d, "
+                                                "pad layer %d, plain %d, gate %s, Y routed near %d",
+                                          static_cast<unsigned long long>(sandYPresses22), walk.interact ? 1 : 0,
+                                          steering ? 1 : 0, reaching ? 1 : 0, inFlight ? 1 : 0,
+                                          swingState.owned ? 1 : 0, swingState.wall, calibrationInput ? 1 : 0,
+                                          layerOn ? 1 : 0, yPlain16 ? 1 : 0,
+                                          bossGate16.phaseHolding() ? "phase" : bossGate16.holding() ? "throws" : "not held",
+                                          yCardNear ? 1 : 0);
+                                game_prompts::note(note);
+                                consoleLine(note);
+                            }
+                            sandYWas22 = yDown;
+                        }
                         // What the game names now, for a pull (below). Not in the pad
                         // layer: there the player presses the game's own buttons.
                         const auto asked = layerOn ? prompt_buttons::Demand{} : game_prompts::demand();
@@ -8874,7 +8908,8 @@ DWORD WINAPI run(void*) {
                         try {
                             perf077::Scope cardsTimed(perf077::cards); // cut4 FRAME TIME
                             const bool vrGameplay = vrPlay && mapping == game_pad::Mapping::gameplay && !flatScreen;
-                            const bool cardsWanted = promptCardsNow.load() == story077d::cardsOn && vrGameplay;
+                            // cut22: the scan runs in VR play (it routes Y and the pull); prompt_cards only draws.
+                            const bool cardsWanted = vrGameplay;
                             // HERO VR 0.0.77 WAYPOINT (story077g.hpp, live.txt waypoints): the same scan finds it.
                             const uint32_t waypointMode = waypointsNow.load();
                             // cut3 (pt1803u): a scan (hand to temple + trigger: the game's R3) shows it for about 8 s.
@@ -17008,7 +17043,10 @@ DWORD WINAPI run(void*) {
                         // HERO VR 0.0.77 PROMPT CARDS (story077d.hpp): the object cards over their objects, facing the
                         // eyes; the screen card a bit below the look. The mod's own cards, never the game's picture.
                         // Should one fail, only the cards go off.
-                        if (!saved->flatScreen && promptCardCount && validTrackedPose(rendered.headPose)) {
+                        // HERO VR 0.0.78 cut22: drawn only with live.txt prompt_cards = on (off by default: the game's
+                        // own prompts, prompt_layer's cards, are shown instead; the routing stays).
+                        if (!saved->flatScreen && promptCardCount && promptCardsNow.load() == story077d::cardsOn &&
+                            validTrackedPose(rendered.headPose)) {
                             const size_t from = translucent.size();
                             try {
                                 Pose eyes = rendered.headPose;
@@ -17612,6 +17650,11 @@ DWORD WINAPI run(void*) {
                                 static uint64_t layerLogMs{}, layerFrames{}, layerFresh{}, layerSets{};
                                 static uint32_t layerLast{}, layerPiecesLast{};
                                 static prompt_layer::Grid layerGrid; // 14 KB: off the stack
+                                // cut22 PROMPT WORLD: the board, the sorter, the last grid's sign and head.
+                                static prompt_world::Board worldBoard22;
+                                static prompt_world::Sorter worldSorter22;
+                                static uint64_t worldStamp22{}, worldLastMs22{}, worldBoardCards22{}, worldMarkerCards22{};
+                                static Pose worldGridHead22{};
                                 bool cardsSet = false;
                                 if (promptLayerFrame && !saved->flatScreen && !saved->stereoScreen && !showScreen &&
                                     !overlayFault) {
@@ -17626,15 +17669,99 @@ DWORD WINAPI run(void*) {
                                         cards.source = layerImage.texture;
                                         cards.view = layerImage.view;
                                         cards.linear = layerImage.linear;
+                                        // HERO VR 0.0.78 cut22 PROMPT WORLD (CANDIDATE, prompt_world.hpp): each card a
+                                        // place in the room (tracking space), projected through each eye's own room
+                                        // pose and lens - the ones this layer is submitted with - so the headset holds
+                                        // it still as the head turns. HUD pieces on the board (pulled in, grown),
+                                        // markers in the direction the game drew them from the head of their grid.
+                                        // live.txt prompt_anchor = view: cut21's (at their place in the view).
+                                        const bool roomAnchor = promptAnchorNow.load() == prompt_world::anchorRoom;
+                                        Pose roomHead{};
+                                        {
+                                            const auto& e0 = saved->trackingEyes[made(0)].pose;
+                                            const auto& e1 = saved->trackingEyes[made(1)].pose;
+                                            roomHead.position = (e0.position + e1.position) * .5f;
+                                            roomHead.orientation = e0.orientation;
+                                        }
+                                        const uint64_t worldNowMs = GetTickCount64();
+                                        const float worldSeconds =
+                                            worldLastMs22 && worldNowMs >= worldLastMs22
+                                                ? static_cast<float>(worldNowMs - worldLastMs22) * .001f
+                                                : 0.f;
+                                        worldLastMs22 = worldNowMs;
+                                        float ptx[prompt_layer::maxCards]{}, pty[prompt_layer::maxCards]{};
+                                        bool pieceOk[prompt_layer::maxCards]{};
+                                        for (uint32_t i = 0; i < n; ++i)
+                                            pieceOk[i] = prompt_world::pieceTangent(pieces[i], layerImage.width,
+                                                                                    layerImage.height, ptx[i], pty[i]);
+                                        if (roomAnchor && layerGrid.stamp != worldStamp22) {
+                                            worldStamp22 = layerGrid.stamp;
+                                            worldSorter22.update(ptx, pty, n, roomHead.orientation);
+                                            worldGridHead22 = roomHead;
+                                        }
+                                        bool anyHud = false;
+                                        for (uint32_t i = 0; roomAnchor && i < n; ++i)
+                                            anyHud |= pieceOk[i] && !worldSorter22.marker(i);
+                                        if (roomAnchor)
+                                            worldBoard22.update(roomHead, worldNowMs, worldSeconds, anyHud);
+                                        std::array<Mat4, 2> roomVp{};
+                                        std::array<std::array<float, 4>, 2> roomTan{};
+                                        for (unsigned eye = 0; eye < 2; ++eye) {
+                                            const auto& te = saved->trackingEyes[made(eye)];
+                                            roomVp[eye] = multiply(projection(te.fov.left, te.fov.right, te.fov.down,
+                                                                              te.fov.up, .03f, 200.f),
+                                                                   viewMatrix(te.pose));
+                                            roomTan[eye] = {std::tan(te.fov.left), std::tan(te.fov.right),
+                                                            std::tan(te.fov.up), std::tan(te.fov.down)};
+                                        }
                                         for (uint32_t i = 0; i < n && cards.count < D3D12Renderer::maxCards; ++i) {
                                             bool both = true;
-                                            for (unsigned eye = 0; eye < 2 && both; ++eye)
-                                                both = prompt_layer::cardRect(
-                                                    pieces[i], layerImage.width, layerImage.height,
-                                                    grade.tangents[eye][0], grade.tangents[eye][1],
-                                                    grade.tangents[eye][2], grade.tangents[eye][3], targets[eye].width,
-                                                    targets[eye].height, cards.rect[cards.count][eye],
-                                                    cards.crop[cards.count][eye]);
+                                            if (!roomAnchor) {
+                                                for (unsigned eye = 0; eye < 2 && both; ++eye)
+                                                    both = prompt_layer::cardRect(
+                                                        pieces[i], layerImage.width, layerImage.height,
+                                                        grade.tangents[eye][0], grade.tangents[eye][1],
+                                                        grade.tangents[eye][2], grade.tangents[eye][3],
+                                                        targets[eye].width, targets[eye].height,
+                                                        cards.rect[cards.count][eye], cards.crop[cards.count][eye]);
+                                            } else {
+                                                if (!pieceOk[i])
+                                                    continue;
+                                                float tw{}, th{};
+                                                prompt_world::pieceSize(pieces[i], layerImage.width, layerImage.height,
+                                                                        tw, th);
+                                                const bool marker = worldSorter22.marker(i);
+                                                Vec3 centre{};
+                                                float widthMetres{};
+                                                if (marker) {
+                                                    centre = prompt_world::markerPoint(worldGridHead22, ptx[i], pty[i]);
+                                                    const float fit = std::min(
+                                                        {1.f, prompt_world::maxCardTan[0] / std::max(tw, 1e-4f),
+                                                         prompt_world::maxCardTan[1] / std::max(th, 1e-4f)});
+                                                    widthMetres = tw * prompt_world::markerScale * fit *
+                                                                  prompt_world::markerDistance;
+                                                    ++worldMarkerCards22;
+                                                } else {
+                                                    centre = worldBoard22.point(ptx[i], pty[i]);
+                                                    float bw{}, bh{};
+                                                    prompt_world::boardSize(tw, th, bw, bh);
+                                                    widthMetres = bw * prompt_world::boardDistance;
+                                                    ++worldBoardCards22;
+                                                }
+                                                const float cropIn[4] = {
+                                                    static_cast<float>(pieces[i].x0) / layerImage.width,
+                                                    static_cast<float>(pieces[i].y0) / layerImage.height,
+                                                    static_cast<float>(pieces[i].x1) / layerImage.width,
+                                                    static_cast<float>(pieces[i].y1) / layerImage.height};
+                                                const float aspect = static_cast<float>(pieces[i].x1 - pieces[i].x0) /
+                                                                     static_cast<float>(pieces[i].y1 - pieces[i].y0);
+                                                for (unsigned eye = 0; eye < 2 && both; ++eye)
+                                                    both = prompt_world::cardRect(
+                                                        roomVp[eye], centre, widthMetres, aspect, roomTan[eye][0],
+                                                        roomTan[eye][1], roomTan[eye][2], roomTan[eye][3],
+                                                        targets[eye].width, targets[eye].height, cropIn,
+                                                        cards.rect[cards.count][eye], cards.crop[cards.count][eye]);
+                                            }
                                             if (both)
                                                 ++cards.count;
                                         }
@@ -17665,6 +17792,18 @@ DWORD WINAPI run(void*) {
                                               overlay.cardsFault().c_str());
                                     game_prompts::note(line);
                                     consoleLine(line);
+                                    char worldLine[300];
+                                    sprintf_s(worldLine, "HERO VR 0.0.78 cut22 PROMPT WORLD (CANDIDATE) %s: board cards %llu, "
+                                                         "marker cards %llu, grids sorted %llu, board put %u, glided %u, "
+                                                         "board yaw %.0f deg",
+                                              promptAnchorNow.load() == prompt_world::anchorRoom ? "ROOM" : "VIEW",
+                                              static_cast<unsigned long long>(worldBoardCards22),
+                                              static_cast<unsigned long long>(worldMarkerCards22),
+                                              static_cast<unsigned long long>(worldSorter22.grids()),
+                                              worldBoard22.puts(), worldBoard22.glides(),
+                                              static_cast<double>(worldBoard22.yaw() * 57.29578f));
+                                    game_prompts::note(worldLine);
+                                    consoleLine(worldLine);
                                 }
                             }
                             const uint64_t promptNowMs = GetTickCount64();
@@ -18341,6 +18480,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossGate(void* v) { return se
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyUiDump(void* v) { return setLive(v, 0, 1, 5645, uiDumpNow, asU32); }
 // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): live.txt prompt_layer, 0 on, 1 off.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptLayer(void* v) { return setLive(v, 0, 1, 5646, promptLayerNow, asU32); }
+// HERO VR 0.0.78 cut22 PROMPT WORLD (CANDIDATE): live.txt prompt_anchor, 0 room, 1 view.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptAnchor(void* v) { return setLive(v, 0, 1, 5647, promptAnchorNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
 }

@@ -6694,6 +6694,7 @@ bool latestPromptLayer(Screen& out, prompt_layer::Grid& grid, uint64_t maxAgeMs)
         layerGrid.width != out.width || layerGrid.height != out.height)
         return false;
     grid = layerGrid;
+    grid.stamp = layerGridMs; // cut22 PROMPT WORLD: a new grid's sign
     return true;
 }
 std::string promptLayerLine() {

@@ -559,7 +559,9 @@ SETTINGS = {
     'prompt_cards': ((0, 1), 'SpidyPromptCards', "PROMPT CARDS {} (small VR cards for the game's button prompts and "
                      "QTEs - over debris you can throw and a web strike target, or a small card a bit below the "
                      "centre for a QTE - each naming the game's button and the VR control that sends it, never a "
-                     "picture of the game; 0 on; 1 off) - live, no restart needed"),
+                     "picture of the game; 0 on: the mod's own cards drawn; 1 off, the default since cut22: only "
+                     "the game's own prompts show (prompt_layer), and Y and the pull still go to the game near "
+                     "what they offer either way) - live, no restart needed"),
     # HERO VR 0.0.77 WAYPOINT (include/spidy/story077g.hpp)
     'waypoints': ((0, 2), 'SpidyWaypoints', "WAYPOINTS {} (a yellow diamond in VR over the game's own objective "
                   "marker, with its distance, for about 8 seconds after you scan - hand to temple + trigger; 0 scan; "
@@ -614,8 +616,9 @@ SETTINGS = {
                          "the models, percent 25-400, default 100) - live, no restart needed"),
     # HERO VR 0.0.78 cut15 BOSS Y CARD (include/spidy/story077d.hpp)
     'boss_y_card': ((0, 1), 'SpidyBossYCard', "BOSS Y CARD {} (0 on, the default: the game's web strike target on a "
-                    "boss gets the small Y card over him out to 200 m, for the Y zip to him; 1 off: Y cards only "
-                    "within 30 m, as 0.0.77) - live, no restart needed"),
+                    "boss routes Y to the game out to 200 m, for the Y zip to him - its small Y card is drawn only with "
+                    "prompt_cards = on (off by default since cut22); 1 off: only within 30 m, as 0.0.77) - live, "
+                    "no restart needed"),
     # HERO VR 0.0.78 cut16 SANDMAN (include/spidy/cut16.hpp)
     'boss_gate': ((0, 1), 'SpidyBossGate', "BOSS GATE {} (0 on, the default: in a boss fight Y goes to the game as "
                   "pressed, and when his health stops falling to the debris throws a small Y card over him says it is "
@@ -627,8 +630,14 @@ SETTINGS = {
                 "to 2 s; 1 off, the default since cut21) - live, no restart needed"),
     # HERO VR 0.0.78 cut21 PROMPT LAYER (include/spidy/prompt_layer.hpp), CANDIDATE
     'prompt_layer': ((0, 1), 'SpidyPromptLayer', "PROMPT LAYER {} (0 on, the default: in VR play the game's own button "
-                     "prompts, waypoint and markers show as small cards where the game puts them, cut from its UI "
-                     "layer, never the whole screen; 1 off) - live, no restart needed"),
+                     "prompts, waypoint and markers show as small cards cut from its UI layer, never the whole "
+                     "screen and nothing the mod made up; 1 off) - live, no restart needed"),
+    # HERO VR 0.0.78 cut22 PROMPT WORLD (include/spidy/prompt_world.hpp), CANDIDATE
+    'prompt_anchor': ((0, 1), 'SpidyPromptAnchor', "PROMPT ANCHOR {} (where prompt_layer's cards of the game's own "
+                      "UI stand: 0 room, the default - still in the room while you look around, its HUD (the Y "
+                      "prompt too) on a board in front of you pulled in from the screen's edges and a bit larger, "
+                      "which follows only a turn or step you hold; its markers where the game drew them; 1 view: "
+                      "cut21's, at their place in your view, turning with your head) - live, no restart needed"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
                     "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
@@ -829,6 +838,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'boss_gate': ('on', 'off'),  # HERO VR 0.0.78 cut16
                 'ui_dump': ('on', 'off'),  # HERO VR 0.0.78 cut18
                 'prompt_layer': ('on', 'off'),  # HERO VR 0.0.78 cut21
+                'prompt_anchor': ('room', 'view'),  # HERO VR 0.0.78 cut22
                 'world_light': ('game', 'game_soft', 'studio'),  # HERO VR 0.0.78 WORLD LIGHT
                 'world_shadow': ('on', 'vehicles', 'off'),  # HERO VR 0.0.78 WORLD LIGHT
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
@@ -1118,6 +1128,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'boss_gate': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut16
            'ui_dump': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut18
            'prompt_layer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut21
+           'prompt_anchor': {'room': 0, 'view': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut22
            'world_light': {'game': 0, 'game_soft': 1, 'studio': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'world_shadow': {'on': 0, 'vehicles': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
@@ -1494,6 +1505,7 @@ START_ONLY = START_ONLY + ('boss_y_card',)  # HERO VR 0.0.78 cut15: kept between
 START_ONLY = START_ONLY + ('boss_gate',)  # HERO VR 0.0.78 cut16: kept between sessions
 START_ONLY = START_ONLY + ('ui_dump',)  # HERO VR 0.0.78 cut18: kept between sessions
 START_ONLY = START_ONLY + ('prompt_layer',)  # HERO VR 0.0.78 cut21: kept between sessions
+START_ONLY = START_ONLY + ('prompt_anchor',)  # HERO VR 0.0.78 cut22: kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',
@@ -2118,6 +2130,44 @@ def migrate_078_cutscenes(path):
 
 
 HEADER += MIGRATED_078_CUTSCENES + '\n'
+
+# HERO VR 0.0.78 cut22 (pt1963u: "get rid of those popups for press Y ... only what the game has itself"): the mod's
+# own prompt cards are off by default now (the DLL starts with prompt_cards off). An older live.txt's prompt_cards on
+# is moved to off once (the marker); a value chosen after the marker stays. Y and the pull routing do not depend on it.
+MIGRATED_078_CUT22_CARDS = ('# HERO VR 0.0.78 cut22: prompt_cards set once to off, the new default - only the game\'s '
+                            'own prompts (migrated; a prompt_cards value chosen after this line stays)')
+
+
+def migrate_078_cut22_cards(path):
+    """Once: an existing live.txt without MIGRATED_078_CUT22_CARDS whose prompt_cards line is on gets it off; the
+    marker is added either way. No live.txt: nothing (the DLL's default, off, applies; HEADER carries the marker).
+    The line to show, or None. Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_078_CUT22_CARDS in text:
+        return None
+    try:
+        old = parse(text)[0].get('prompt_cards')
+        changed = old is not None and export_value('prompt_cards', old) == 0
+        if changed:
+            text = write_back(text, {'prompt_cards': 'off'})
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_078_CUT22_CARDS + '\n')
+    except (OSError, ValueError, KeyError):
+        return None
+    if not changed:
+        return None
+    return ("live.txt: prompt_cards set once to off, the cut22 default (only the game's own prompts show); "
+            'prompt_cards = on brings the mod\'s cards back.')
+
+
+HEADER += MIGRATED_078_CUT22_CARDS + '\n'
 
 
 # 0.0.73 lights (the owner after test 4: "street lights still flicker and headlights still ghosting"; his

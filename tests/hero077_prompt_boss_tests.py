@@ -17,7 +17,7 @@ import live_settings as L  # noqa: E402
 NEW = ('include/spidy/story077c.hpp', 'tests/story077c_tests.cpp', 'tests/hero077_prompt_boss_tests.py',
        'include/spidy/story077d.hpp', 'tests/story077d_tests.cpp', 'include/spidy/prompt_cards.hpp',
        'src/prompt_cards.cpp')
-# HERO VR 0.0.77 PROMPT CARDS: prompt_window 0 off (default) / 1 debug_full; prompt_cards 0 on (default) / 1 off.
+# HERO VR 0.0.77 PROMPT CARDS: prompt_window 0 off (default) / 1 debug_full; prompt_cards 0 on / 1 off (default since cut22).
 KEYS = {'prompt_window': ('SpidyPromptWindow', 5566, ('off', 'debug_full')),
         'prompt_cards': ('SpidyPromptCards', 5568, ('on', 'off')),
         'boss_damage': ('SpidyBossDamage', 5567, ('on', 'off', 'strong'))}
@@ -49,7 +49,8 @@ class Wiring(unittest.TestCase):
                              ', ' + str(code) + r', \w+, asU32\); \}')
             self.assertEqual(len(re.findall(r'\b%d\b' % code, self.game)), 1, code)
         self.assertIn('std::atomic<uint32_t> promptWindowNow{story077d::windowOff};', self.game)
-        self.assertIn('std::atomic<uint32_t> promptCardsNow{story077d::cardsOn};', self.game)
+        # HERO VR 0.0.78 cut22: the mod's own cards off by default (only the game's own prompts).
+        self.assertIn('std::atomic<uint32_t> promptCardsNow{story077d::cardsOff};', self.game)
         self.assertIn('std::atomic<uint32_t> bossDamageNow{0};', self.game)  # 0 = on by default
         # CUT7: the boss is read for every hero (1 = off); the stand-in only for the others.
         self.assertIn('const bool bossHero = heroNow() != hero_modes::spiderMan;', self.game)
@@ -101,7 +102,9 @@ class Wiring(unittest.TestCase):
         # only in VR gameplay: never at the menus, never flat
         # HERO VR 0.0.77 WAYPOINT: the same scan serves the cards and the waypoint (tests/hero077_waypoint_tests.py).
         self.assertIn('const bool vrGameplay = vrPlay && mapping == game_pad::Mapping::gameplay && !flatScreen;', body)
-        self.assertIn('promptCardsNow.load() == story077d::cardsOn && vrGameplay;', body)
+        # cut22: the scan (Y / pull routing) runs in VR play whatever prompt_cards says; prompt_cards only draws.
+        self.assertIn('const bool cardsWanted = vrGameplay;', body)
+        self.assertNotIn('promptCardsNow.load() == story077d::cardsOn && vrGameplay;', body)
         self.assertIn('world_trace::setPromptsWanted(cardsWanted || waypointWanted);', body)
         self.assertIn('catch (...)', body)
         self.assertIn('HERO VR 0.0.77 PROMPT CARDS (CANDIDATE) %s', body)
@@ -109,6 +112,7 @@ class Wiring(unittest.TestCase):
         draw = g.index('HERO VR 0.0.77 PROMPT CARDS (story077d.hpp): the object cards')
         dbody = g[draw:g.index('// The T-pose calibration', draw)]
         self.assertIn('prompt_cards::append(translucent', dbody)
+        self.assertIn('promptCardsNow.load() == story077d::cardsOn &&', g[draw:draw + 900])
         self.assertNotIn('Inset', dbody)
         self.assertNotIn('latestScreen', dbody)
         self.assertIn('translucent.resize(from);', dbody)

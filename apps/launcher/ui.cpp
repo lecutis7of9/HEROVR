@@ -2488,15 +2488,19 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                    "(live.txt waypoints = scan to try it): its source is not found yet, scans write POI DUMP lines"},
           {"Punch with a web held", "A hand whose swing web holds still punches near an enemy or a boss "
                                     "(live.txt punch_web = off: it never does, as cut6)"},
-          {"Y on a boss", "A small Y card over the boss when the game offers its web strike on him, for the zip "
-                          "to him (live.txt boss_y_card = off: Y cards only within 30 m)"},
+          {"Y on a boss", "Y goes to the game when it offers its web strike on the boss, for the zip to him; its "
+                          "small Y card only with live.txt prompt_cards = on (live.txt boss_y_card = off: only "
+                          "within 30 m)"},
           {"Sandman's debris", "Throw his debris back (LB + RB) until his health stops falling, then Y when its card "
                                "shows over him (live.txt boss_gate = off: no card, Y as 0.0.77)"},
           {"Prompt pictures (test)", "Off by default, as each save can hitch the game up to 2 s; live.txt "
                                      "ui_dump = on saves the game's frame and UI layers up to 3 times a session to "
                                      "%APPDATA%\\Spidy\\ui-dump (live.txt ui_dump = off)"},
-          {"Prompts in VR", "The game's own button prompts, waypoint and markers as small cards where the game puts "
-                            "them, never the whole screen (live.txt prompt_layer = off)"},
+          {"Prompts in VR", "Only the game's own button prompts, waypoint and markers, cut from its UI, never the "
+                            "whole screen; they stand still in the room, the HUD on a board in front of you pulled "
+                            "in from the edges so the Y prompt is in view (live.txt prompt_anchor = view: cut21's, "
+                            "turning with your head; live.txt prompt_layer = off: none; prompt_cards = on: the "
+                            "mod's own Y cards too)"},
           {"LB + RB near a boss", "The game's throw; each one logs the boss's HP over 2 s, the left stick sent, the aim "
                                   "and his distance (live.txt throw_watch = off: no such log)"},
           {"A or a web on a ledge", "Off a ledge or roof edge (the game's floor crawl) as off a wall: RT + A "

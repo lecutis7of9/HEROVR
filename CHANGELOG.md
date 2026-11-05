@@ -10,6 +10,20 @@ carries no launcher_build. HERO_TEST_BUILD stays OFF, Revert unchanged, still EX
 build. What's new and the known bugs: RELEASE-NOTES-v0.0.78.md. The 0.0.77 / 0.0.77.1 stamp pins relaxed;
 tests/release0078_tests.py.
 
+## hero-0.0.78-cut22-world - only the game's own UI in VR play, standing still in the room (test cut, not a release)
+
+- COOKED CARDS OFF: live.txt prompt_cards is off by default (the mod's "GAME: Y / VR: PRESS Y" cards and the boss
+  gate card are not drawn); an older live.txt's prompt_cards = on is moved to off once. Y and the pull still go to the
+  game near what it offers (the scan behind the cards runs in VR play either way; prompt_cards only draws). boss_y_card
+  stays on: it is Y routing out to 200 m at a boss; its card shows only with prompt_cards = on.
+- PROMPT WORLD (CANDIDATE, include/spidy/prompt_world.hpp, live.txt prompt_anchor): prompt_layer's cards of the game's
+  own UI are places in the room, projected through each eye's room pose, so they no longer turn with the head. HUD
+  pieces stand on a board 1.4 m in front of where you faced, the game's screen pulled in to 55% and each piece grown
+  (at least ~4.3 degrees high) so the bottom-left Y prompt is in a Quest's view; the board follows only a turn past
+  50 degrees or a step of 0.6 m held 0.8 s. Pieces that move across the game's view as the head turns are markers,
+  placed where the game drew them. prompt_anchor = view: cut21's head-placed cards. Never the whole screen.
+- SANDMAN Y WATCH (diagnostic): each Y press in a boss fight logs whether the game's Y went out and which gate held it.
+
 ## hero-0.0.78-cut21-cards - the game's own prompts as small VR cards; a quiet launcher log (local, not built)
 
 - QUIET TRIM (CONFIRMED, the launcher noise that led to the Alt+F4): the launcher's log box trimmed itself with

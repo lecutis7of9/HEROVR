@@ -299,8 +299,17 @@ class MenuPanel {
 // VR play in a row (a game loaded from the title, a new record after a no-record gap, ends it as before), and the
 // title's record must be read titleRecordMs first (CANDIDATE, not seen at the report's 10 Hz: a record read for a
 // moment at boot taken as the title's would make the real title's record look like a game loaded from it).
+// HERO VR 0.0.78 cut19 LOADED GAME (report 223845, the owner on cut18: "oh look immersive cutscenes gone again"): he
+// loaded slot 3 from the title. The title's record 0x21431703080 went to no record for only ~0.57 s (39.34-39.91 s,
+// under cut7's 1.5 s gap) before the loaded game's record 0x21431dab5c0, and his first VR play on it lasted 1235 ms
+// (under frontEndPlayMs) - cut17 TITLE BLIP #3, then MENU SCREEN #3 "the front end (record yes)", so every scene after
+// it stayed on the flat VR screen. The front end now also ends on VR play on a record that is not the title's (once
+// the title's is known and the record has been read titleRecordMs), and on a new record that follows any no-record
+// gap after the title and is read loadRecordMs with the screen up. Play on the title's own record (report 212843's
+// blips) still needs frontEndPlayMs, so the title stays flat.
 inline constexpr uint64_t frontEndPlayMs = 2000;
 inline constexpr uint64_t titleRecordMs = 100;
+inline constexpr uint64_t loadRecordMs = 1000;
 class MenuScreen {
   public:
     // True while the stretch stays on the VR screen. nowMs: a clock in ms (0: 11 ms a call).
@@ -328,6 +337,9 @@ class MenuScreen {
                     played_ = record;
                     seen_ = 0;
                 }
+                // cut19: VR play on a game loaded from the title (not the title's record) ends it at once.
+                if (frontEnd_ && seen_ == 1 && record != 0 && record != first_ && now_ - candMs_ >= titleRecordMs)
+                    endFrontEnd();
                 if (!frontEnd_) {
                     played_ = record;
                     seen_ = 0;
@@ -349,21 +361,21 @@ class MenuScreen {
             frontEnd_ = true;
             seen_ = 0;
             gapFrom_ = now_;
+            titleGap_ = false;
         }
         if (frontEnd_) {
             if (record == 0) {
                 if (last_ != 0 || !gapFrom_)
                     gapFrom_ = now_;
+                titleGap_ |= seen_ == 1; // cut19: a no-record gap after the title's record (a load)
             } else if (record != played_ && record != first_) {
                 if (seen_ == 0) {
                     if (now_ - candMs_ >= titleRecordMs) { // cut17: not a record read for a moment at boot
                         first_ = record; // the title's record
                         seen_ = 1;
                     }
-                } else if (last_ == 0 && now_ - gapFrom_ >= 1500) {
-                    frontEnd_ = paused_ = false; // a game loaded from the title
-                    first_ = 0;
-                    seen_ = 0;
+                } else if ((last_ == 0 && now_ - gapFrom_ >= 1500) || (titleGap_ && now_ - candMs_ >= loadRecordMs)) {
+                    endFrontEnd(); // a game loaded from the title (cut19: after any gap, its record read 1 s)
                 }
             }
         }
@@ -398,6 +410,12 @@ class MenuScreen {
     }
 
   private:
+    void endFrontEnd() {
+        frontEnd_ = paused_ = false;
+        first_ = 0;
+        seen_ = 0;
+        titleGap_ = false;
+    }
     void noteBlip() {
         if (frontEnd_) {
             ++blips_;
@@ -408,7 +426,7 @@ class MenuScreen {
     uint64_t now_{}, pressMs_{}, gapFrom_{}, played_{}, first_{}, last_{}, count_{};
     uint64_t cand_{}, candMs_{}, playFrom_{}, blips_{}, blipMs_{};
     int seen_{}, why_{};
-    bool frontEnd_{true}, paused_{}, inStretch_{}, on_{};
+    bool frontEnd_{true}, paused_{}, inStretch_{}, on_{}, titleGap_{};
 };
 
 // HERO VR 0.0.78 cut14: game_xr.cpp's two per-frame cutscene decisions, moved here unchanged so tests/cut14_tests.cpp

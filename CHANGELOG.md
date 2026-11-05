@@ -2,6 +2,17 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut19-loaded - cutscenes immersive again after a game loaded from the title (local branch, not built)
+
+From the player on cut18 (report 223845): "oh look immersive cutscenes gone again". He loaded slot 3 from the title:
+the title's record dropped for only ~0.57 s before the loaded game's record (cut7 wanted a 1.5 s gap), and his first
+VR play on it lasted 1235 ms (cut17 wants 2 s), so cut17 logged TITLE BLIP #3 and MENU SCREEN #3 "the front end" and
+every scene after it stayed on the flat VR screen. Now the front end (the title and its menus, always flat) also ends:
+- on VR play on a record that is not the title's (the title's own record still needs 2 s, report 212843's blips);
+- on a new record after any no-record gap from the title, read 1 s with the screen up (a load straight into a scene).
+The title, its menus, the pause menu and the title after a quit stay flat; immersive cutscenes stay the default.
+- Tests: tests/cut19_tests.cpp (report 223845 replayed; it fails on cut18), tests/cut17_tests.cpp unchanged and passing.
+
 ## hero-0.0.78-cut18-quiet - no Windows sounds from the report/log windows (local branch, not built)
 
 From the player: the error report window plays the Windows alert sound as it starts writing, and a modem-like

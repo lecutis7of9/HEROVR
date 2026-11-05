@@ -2501,7 +2501,7 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                             "view, pulled in from the edges so it is in view; a marker the split calls a world icon is held "
                             "1024 m along the latched eye command's ray (not a read of the game's destination; that "
                             "this command is the game's projector is not confirmed). live.txt prompt_anchor = view: "
-                            "cut21's, all in your view; = room: cut22's board; prompt_layer = off: none; "
+                            "cut21's, all in your view; = room: cut22's board; live.txt prompt_layer = off: none; "
                             "prompt_cards = on: the mod's own Y cards too"},
           {"LB + RB near a boss", "The game's throw; each one logs the boss's HP over 2 s, the left stick sent, the aim "
                                   "and his distance (live.txt throw_watch = off: no such log)"},

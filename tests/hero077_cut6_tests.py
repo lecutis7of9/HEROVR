@@ -34,9 +34,10 @@ class Cut6(unittest.TestCase):
         # CUT7: the clock; 0.0.78 cut14 moved the call to cutscene077::menuScreenFrame (the same arguments)
         self.assertIn('cutFrame.record = player.record;', g)
         self.assertIn('cutFrame.menuPressed = (frame.buttons & buttonMenu) != 0;', g)
-        self.assertIn('f.record, f.menuPressed, f.nowMs,', src('include/spidy/cutscene077.hpp'))
+        # 0.0.78 cut20: the menu press includes the both-thumbsticks pause (still no stick steering)
+        self.assertIn('f.record, f.menuPressed || f.stickPause, f.nowMs,', src('include/spidy/cutscene077.hpp'))
         # 0.0.78 CUT9 TITLE FLAT adds `playing` (only VR gameplay ends the front end)
-        self.assertIn('bool update(bool screen, uint64_t record, bool menuPressed, uint64_t nowMs = 0, bool playing = true)', src('include/spidy/cutscene077.hpp'))
+        self.assertIn('bool update(bool screen, uint64_t record, bool menuPressed, uint64_t nowMs = 0, bool playing = true', src('include/spidy/cutscene077.hpp'))
 
     def test_standing_is_076(self):
         h = src('include/spidy/swing077.hpp')

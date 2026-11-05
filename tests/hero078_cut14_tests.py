@@ -210,8 +210,9 @@ class MenuProofTests(unittest.TestCase):
         self.assertIn('cutscene077::immersiveFrame(immersiveHold, menuScreen, cutFrame)', g)
         self.assertIn('cutFrame.mode = cutMode;', g)
         h = src('include/spidy/cutscene077.hpp')
-        self.assertIn('f.screen && f.mode == immersive, f.record, f.menuPressed, f.nowMs, f.viewing && f.vrPlay && '
-                      'f.gameplay', h)
+        # cut20: the menu press includes the both-thumbsticks pause; the resume inputs follow (tests/cut20_tests.cpp)
+        self.assertIn('f.screen && f.mode == immersive, f.record, f.menuPressed || f.stickPause, f.nowMs,', h)
+        self.assertIn('f.viewing && f.vrPlay && f.gameplay, f.timeRuns, f.shownBefore, f.closePressed', h)
         self.assertIn('bool frontEnd_{true}', h)
 
 

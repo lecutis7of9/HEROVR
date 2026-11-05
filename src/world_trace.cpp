@@ -1213,6 +1213,17 @@ void run() {
                         if (!seenNow.placed || !heroKnown)
                             continue;
                         score = length(at - heroAt);
+                        // HERO VR 0.0.78 cut15 BOSS Y CARD (CANDIDATE): a web strike object on the boss (his record,
+                        // or within bossAnchorMetres of his place) is kept out to bossCardMetres, ahead of the rest.
+                        if (anchorOn && story077d::webStrikeKind(l.kind) &&
+                            (l.record == anchorBoss.id ||
+                             length(at - anchorBoss.world) <= story077d::bossAnchorMetres)) {
+                            if (!std::isfinite(score) || score > story077d::bossCardMetres)
+                                continue;
+                            seenNow.onBoss = true;
+                            pick.push_back({score - 400.f, {seenNow, l.record}});
+                            continue;
+                        }
                         if (!std::isfinite(score) || score > 60.f)
                             continue;
                         // HERO VR 0.0.77 INTERACT CARDS: an interactable only within its reach (+2 m), the catch-all

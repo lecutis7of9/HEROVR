@@ -612,6 +612,10 @@ SETTINGS = {
                      "- live, no restart needed"),
     'world_light_gain': ((25, 400), 'SpidyWorldLightGain', "WORLD LIGHT GAIN {} (how bright the game's light makes "
                          "the models, percent 25-400, default 100) - live, no restart needed"),
+    # HERO VR 0.0.78 cut15 BOSS Y CARD (include/spidy/story077d.hpp)
+    'boss_y_card': ((0, 1), 'SpidyBossYCard', "BOSS Y CARD {} (0 on, the default: the game's web strike target on a "
+                    "boss gets the small Y card over him out to 200 m, for the Y zip to him; 1 off: Y cards only "
+                    "within 30 m, as 0.0.77) - live, no restart needed"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
                     "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
@@ -808,6 +812,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'ledge_jump': ('all', 'game'),  # HERO VR 0.0.77 CUT7
                 'punch_web': ('on', 'off'),  # HERO VR 0.0.77 CUT7
                 'throw_watch': ('on', 'off'),  # HERO VR 0.0.77 CUT8
+                'boss_y_card': ('on', 'off'),  # HERO VR 0.0.78 cut15
                 'world_light': ('game', 'game_soft', 'studio'),  # HERO VR 0.0.78 WORLD LIGHT
                 'world_shadow': ('on', 'vehicles', 'off'),  # HERO VR 0.0.78 WORLD LIGHT
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
@@ -1093,6 +1098,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'ledge_jump': {'all': 0, 'game': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
            'punch_web': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
            'throw_watch': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT8
+           'boss_y_card': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut15
            'world_light': {'game': 0, 'game_soft': 1, 'studio': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'world_shadow': {'on': 0, 'vehicles': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
@@ -1465,6 +1471,7 @@ START_ONLY = START_ONLY + ('wrist_map_source', 'wrist_map_holo', 'see_through_de
                            'cut_note', 'wall_view', 'ledge_jump', 'punch_web')  # HERO VR 0.0.77 CUT7: kept between sessions
 START_ONLY = START_ONLY + ('throw_watch',)  # HERO VR 0.0.77 CUT8: kept between sessions
 START_ONLY = START_ONLY + ('world_light', 'world_shadow', 'world_light_gain')  # HERO VR 0.0.78 WORLD LIGHT: kept
+START_ONLY = START_ONLY + ('boss_y_card',)  # HERO VR 0.0.78 cut15: kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

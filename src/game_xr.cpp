@@ -1408,6 +1408,8 @@ std::atomic<uint32_t> storySprintNow{1}; // HERO VR 0.0.77 story_sprint: 0 on, 1
 // game frame in a window, b8b33ce's view); the button prompts are prompt_cards (0 on, the default; 1 off).
 std::atomic<uint32_t> promptWindowNow{story077d::windowOff};
 std::atomic<uint32_t> promptCardsNow{story077d::cardsOn};
+// HERO VR 0.0.78 cut15 BOSS Y CARD (story077d::BossYCard): live.txt boss_y_card - 0 on (the default), 1 off.
+std::atomic<uint32_t> bossYCardNow{story077d::bossYOn};
 // HERO VR 0.0.77 WAYPOINT (story077g.hpp): live.txt waypoints - 0 scan (the default: the game's own objective, about
 // 8 s after each scan), 1 always, 2 off.
 std::atomic<uint32_t> waypointsNow{story077g::waypointsOff}; // CUT5: off by default, no POI source proven
@@ -8792,6 +8794,21 @@ DWORD WINAPI run(void*) {
                                     world_trace::prompts(seenNow, heroScan, heroScanKnown, seenAge), world_trace::promptSlots);
                                 const bool anchorOk = finite(motion.anchor);
                                 const Vec3 heroHere = anchorOk ? motion.anchor : heroScan;
+                                // HERO VR 0.0.78 cut15 BOSS Y CARD (CANDIDATE): a web strike object on the boss is
+                                // carded out to bossCardMetres (live.txt boss_y_card = off: the usual 30 m only).
+                                static thread_local uint64_t bossYSeenFrames78{}, bossYCardFrames78{}, bossYLogMs78{};
+                                static thread_local uint32_t bossYLines78{};
+                                bool bossYSeen78{}, bossYCard78{};
+                                float bossYMetres78 = -1.f;
+                                for (uint32_t q = 0; q < seenCount; ++q)
+                                    if (seenNow[q].onBoss) {
+                                        if (bossYCardNow.load() != story077d::bossYOn)
+                                            seenNow[q].onBoss = false;
+                                        else if (!bossYSeen78) {
+                                            bossYSeen78 = true;
+                                            bossYMetres78 = length(seenNow[q].world - heroHere);
+                                        }
+                                    }
                                 story077d::Card cards[story077d::maxCards];
                                 const uint32_t chosen = story077d::choose(seenNow.data(), seenCount, heroHere,
                                                                           anchorOk || heroScanKnown, cards);
@@ -8848,6 +8865,28 @@ DWORD WINAPI run(void*) {
                                         }
                                     }
                                     promptCardsHere[promptCardCount++] = card;
+                                }
+                                for (uint32_t c = 0; c < chosen; ++c)
+                                    for (uint32_t q = 0; q < seenCount; ++q)
+                                        if (seenNow[q].onBoss && seenNow[q].id == cards[c].id && cards[c].onObject)
+                                            bossYCard78 = true;
+                                bossYSeenFrames78 += bossYSeen78;
+                                bossYCardFrames78 += bossYCard78;
+                                world_trace::Boss bossY78{};
+                                const uint64_t bossYNow78 = GetTickCount64();
+                                if (world_trace::nearestBoss(bossY78) && bossYLines78 < 300 &&
+                                    bossYNow78 - bossYLogMs78 >= 10000) { // every 10 s while a boss is known
+                                    bossYLogMs78 = bossYNow78;
+                                    ++bossYLines78;
+                                    char line[240];
+                                    sprintf_s(line, "HERO VR 0.0.78 BOSS Y CARD (CANDIDATE) %s: boss %.28s %.0f m, web strike "
+                                                    "on him %s (%.0f m), seen frames %llu, card frames %llu",
+                                              bossYCardNow.load() == story077d::bossYOn ? "ON" : "OFF",
+                                              bossY78.name[0] ? bossY78.name : "?", bossY78.metres,
+                                              bossYSeen78 ? "now" : "not seen", bossYMetres78,
+                                              static_cast<unsigned long long>(bossYSeenFrames78),
+                                              static_cast<unsigned long long>(bossYCardFrames78));
+                                    consoleLine(line);
                                 }
                                 promptCardObjectFrames += objectShown;
                                 promptCardScreenFrames += screenShown;
@@ -17930,6 +17969,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyThrowWatch(void* v) { return 
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldLight(void* v) { return setLive(v, 0, 2, 5640, worldLightNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldShadow(void* v) { return setLive(v, 0, 2, 5641, worldShadowNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldLightGain(void* v) { return setLive(v, 25, 400, 5642, worldLightGainNow, asU32); }
+// HERO VR 0.0.78 cut15: boss_y_card (0 on, 1 off).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossYCard(void* v) { return setLive(v, 0, 1, 5643, bossYCardNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
 }

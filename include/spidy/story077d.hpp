@@ -55,6 +55,11 @@ inline const char* vrControl(const char* gameButtons) {
 inline constexpr Kind kinds[] = {
     // Object prompts (world-anchored).
     {".?AVWebStrikePrompt@@", "Y", "Y (WEB STRIKE)", object, 0, 30},
+    // HERO VR 0.0.78 cut15 BOSS Y CARD (CANDIDATE): the public 0.0.77 report never saw a WebStrikePrompt object (0 of
+    // its 44 sessions' "first seen" notes, the Sandman one too), so the Y card never had a source. The game's own
+    // web strike component (.?AVWebStrikeTarget@@, its RTTI name in the same report's world trace) is the
+    // candidate: on the boss himself it is the Y zip to him (bossCardMetres), elsewhere the usual 30 m.
+    {".?AVWebStrikeTarget@@", "Y", "Y (WEB STRIKE)", object, 0, 30},
     {".?AVGrabAndThrowable@@", "LB+RB", "HOLD RIGHT STICK CLICK / TWO-HAND YANK", object, 0, 12},
     {".?AVThrowablePickupPoint@@", "LB+RB", "HOLD RIGHT STICK CLICK / TWO-HAND YANK", object, 0, 12},
     {".?AVWebSnatchSpecialThrowable@@", "LB+RB", "HOLD RIGHT STICK CLICK / TWO-HAND YANK", object, 0, 15},
@@ -155,7 +160,20 @@ struct Seen {
     float age{};        // seconds since it appeared in the scan
     uint32_t kind{};
     bool placed{}, before{}; // before: already there when the cards' scan began (never a screen card)
+    bool onBoss{};           // cut15: a web strike kind on the boss (his record, or within bossAnchorMetres of him)
 };
+// HERO VR 0.0.78 cut15 BOSS Y CARD: the web strike kinds (the Y on a target).
+inline bool webStrikeKind(uint32_t i) {
+    const Kind* k = kind(i);
+    return k && (!std::strcmp(k->cls, ".?AVWebStrikeTarget@@") || !std::strcmp(k->cls, ".?AVWebStrikePrompt@@"));
+}
+// Sandman's record read 84-130 m from the hero all fight (public 0.0.77 report), past every card reach (30 m) and
+// the scan's 60 m pick: a web strike object on the boss is carded out to this, ahead of the other cards.
+inline constexpr float bossCardMetres = 200.f;
+inline constexpr float bossAnchorMetres = 6.f; // a web strike object this close to the boss's place is on him
+inline constexpr float bossCardLift = 2.5f;    // over the boss's place, metres (CANDIDATE: his record is his feet)
+// BOSS Y CARD (live.txt boss_y_card): 0 on (the default), 1 off.
+enum BossYCard : uint32_t { bossYOn = 0, bossYOff = 1 };
 inline constexpr uint32_t maxCards = 3;
 struct Card {
     uint32_t kind{};
@@ -200,8 +218,16 @@ inline uint32_t choose(const Seen* seen, uint32_t n, Vec3 hero, bool heroKnown, 
             if (!s.placed || !heroKnown || !finite(s.world))
                 continue;
             const float m = length(s.world - hero);
-            if (!std::isfinite(m) || m > k->reach)
+            const bool boss = s.onBoss && webStrikeKind(s.kind); // cut15 BOSS Y CARD
+            if (!std::isfinite(m) || m > (boss ? bossCardMetres : k->reach))
                 continue;
+            if (boss) { // the Y on the boss: the first object card
+                objects[1] = objects[0];
+                objectMetres[1] = objectMetres[0];
+                objects[0] = static_cast<int>(i);
+                objectMetres[0] = -1.f;
+                continue;
+            }
             if (m < nearHeroMetres && interactKind(s.kind))
                 continue; // an offer on the hero himself: none
             if (m < nearHeroMetres) {
@@ -235,7 +261,7 @@ inline uint32_t choose(const Seen* seen, uint32_t n, Vec3 hero, bool heroKnown, 
     for (int o : objects)
         if (o >= 0 && count < maxCards) {
             const Seen& s = seen[o];
-            out[count++] = Card{s.kind, true, s.world + Vec3{0, cardLift, 0}, s.id};
+            out[count++] = Card{s.kind, true, s.world + Vec3{0, s.onBoss ? bossCardLift : cardLift, 0}, s.id};
         }
     // One screen card: a QTE / mash first, else the scene's Y (CUT5).
     if (bestScreen >= 0 && count < maxCards)

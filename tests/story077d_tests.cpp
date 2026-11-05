@@ -123,6 +123,23 @@ int main() {
     for (uint32_t k = 0; k < kindCount; ++k)
         check(std::strlen(kinds[k].game) + 6 < 96 && std::strlen(kinds[k].vr) + 4 < 96, "lines fit the buffers");
     check(kindCount <= 64, "kinds fit the 64-bit noted mask");
+    // HERO VR 0.0.78 cut15 BOSS Y CARD: the web strike target on the boss is carded out to 200 m, first.
+    const int target = kindOf(".?AVWebStrikeTarget@@");
+    check(target >= 0 && kinds[target].where == object && !std::strcmp(vrLine(target), vrControl("Y")) &&
+              webStrikeKind(static_cast<uint32_t>(target)) && webStrikeKind(static_cast<uint32_t>(strike)) &&
+              !webStrikeKind(static_cast<uint32_t>(truck)),
+          "web strike target kind");
+    Seen b[2]{};
+    b[0] = Seen{41, {200, 0, 100}, 3.f, static_cast<uint32_t>(target), true, true}; // 100 m (Sandman: 84-130 m)
+    check(choose(b, 1, hero, true, out) == 0, "web strike target 100 m, not on the boss: none");
+    b[0].onBoss = true;
+    b[1] = Seen{42, {110, 0, 100}, 3.f, static_cast<uint32_t>(truck), true, true}; // 10 m
+    check(choose(b, 2, hero, true, out) == 2 && out[0].id == 41 && out[0].onObject &&
+              std::fabs(out[0].world.y - bossCardLift) < 1e-4f && out[1].id == 42,
+          "on the boss 100 m: the first card, lifted");
+    b[0].world = {320, 0, 100}; // 220 m
+    check(choose(b, 1, hero, true, out) == 0, "on the boss past 200 m: none");
+    check(bossYOn == 0 && bossCardMetres >= 200.f, "boss Y card: on by default, 200 m");
     // The settings: the full frame off by default, the cards on.
     check(windowOff == 0 && cardsOn == 0, "defaults: no full frame, cards on");
     if (failures)

@@ -2,7 +2,7 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
-## hero-0.0.78-cut15-diag - prop skip log, Sandman punches (local branch, not built)
+## hero-0.0.78-cut15-diag - prop skip log, Sandman punches, boss Y card (local branch, not built)
 
 - **PROP SKIP log (first person and mirror apart, at most every 10 s each):** every hero prop model (pistol, pump,
   shield, batons, claws, grapple gun) appendHero007 did not draw, counted by why: model missing, sink full
@@ -13,6 +13,14 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
   freed 0" all fight, with 100 "hand holding or carrying" rejects and 1 X strike: the hand whose swing web held never
   punched, because cut7's exemption needs an enemy listed (30 m) or the boss within 40 m and the giant's record is
   84-130 m off. A web-held hand now punches while a living boss is read within 200 m too (live.txt punch_web, as before).
+- **BOSS Y CARD (CANDIDATE fix; CONFIRMED causes in the public 0.0.77 report):** the Y zip to Sandman never got a card
+  because (1) the Y card's only source, .?AVWebStrikePrompt@@, was never seen in any of the report's 44 sessions, and
+  (2) object cards stop at the scan's 60 m pick and the kind's 30 m reach, while Sandman was 84-130 m off all fight.
+  The game's own .?AVWebStrikeTarget@@ (in that report's RTTI) is now a Y kind too; one on the boss (his record, or
+  within 6 m of him) gets the small Y card 2.5 m over him out to 200 m, before the other cards. live.txt boss_y_card
+  (on by default). "HERO VR 0.0.78 BOSS Y CARD" console lines every 10 s while a boss is read prove or refute it.
+  Small cards only - no 2D projection of the game. Waypoint / beacon: unchanged, still waiting on a log with CUT9
+  ANCHOR / CUT10 GUI2 POI lines (the 0.0.77 report predates them).
 
 ## hero-0.0.78-cut14 - back to the cut10 renderer and the old Punisher suit; pistol and pump only (TEST build, private)
 

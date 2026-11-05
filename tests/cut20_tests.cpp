@@ -30,7 +30,7 @@ void check(bool ok, const char* what) {
 constexpr uint64_t title = 0x20ab210dd00ull, gameRecord = 0x20ab26ba540ull, liveRecord = 0x1ff577fe0c0ull;
 
 struct Press {
-    bool menu, stick, b, a;
+    bool menu{}, stick{}, b{}, a{}; // all false unless set (MSVC left them uninitialized)
 };
 struct Session {
     uint32_t mode = cutscene077::defaultMode;

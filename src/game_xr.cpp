@@ -17757,15 +17757,19 @@ DWORD WINAPI run(void*) {
                                                 } else {
                                                     splitMatched23 = 1;
                                                     splitSrcSerial23 = srcSerial;
-                                                const Pose srcEyes[2] = {src->trackingEyes[0].pose,
-                                                                         src->trackingEyes[1].pose};
+                                                // The capture command's own two eyes, not the headset layer. SAME PICTURE
+                                                // (made) gives the right layer the left eye's picture; the game still
+                                                // rendered both eyes (eye_debug). The head lens is these two.
+                                                const unsigned commandEye[2] = {0u, 1u};
+                                                const Pose srcEyes[2] = {src->trackingEyes[commandEye[0]].pose,
+                                                                         src->trackingEyes[commandEye[1]].pose};
                                                 float srcFov[2][4]{};
-                                                for (unsigned eye = 0; eye < 2; ++eye) {
-                                                    const auto& f = src->trackingEyes[eye].fov;
-                                                    srcFov[eye][0] = f.left;
-                                                    srcFov[eye][1] = f.right;
-                                                    srcFov[eye][2] = f.down;
-                                                    srcFov[eye][3] = f.up;
+                                                for (unsigned i = 0; i < 2; ++i) {
+                                                    const auto& f = src->trackingEyes[commandEye[i]].fov;
+                                                    srcFov[i][0] = f.left;
+                                                    srcFov[i][1] = f.right;
+                                                    srcFov[i][2] = f.down;
+                                                    srcFov[i][3] = f.up;
                                                 }
                                                 const Pose srcTracking = prompt_split::headOf(srcEyes[0], srcEyes[1]);
                                                 prompt_split::Lens srcLens{};

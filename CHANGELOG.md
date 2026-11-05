@@ -2,6 +2,24 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut20-resume - immersive again after a cutscene's pause; the stick pause too (local, not built)
+
+From the player on cut19 (report 232334): "opening cutscene goes back and fourth from immersive to 2d". The opening
+scene went immersive at 28.20 s; the menu button at 30.83 s paused it (the flat VR screen, as it should) and B at
+31.91 s closed the pause menu, but cut7's rule kept a pause on the screen to the end of its stretch, so the rest of the
+scene (to 86 s, a second pause in it) stayed flat. Now:
+- A pause pressed in an immersive scene goes back to immersive once the pause menu closes and the same scene runs on:
+  the scene's clock frozen 250 ms after the press, then B or the menu button, then the clock running 1 s in a row on the
+  same player record (console: HERO VR 0.0.78 cut20 PAUSE RESUME #n). A only picks a menu item (Suits keeps a moving
+  camera), and the clock still frozen 0.5 s after B (back to the pause menu) takes the close back.
+- Under SteamVR the menu button opens SteamVR's dashboard, so the pause is both thumbsticks held in (report 233224, a
+  live player); that pause never reached the cutscene code (an immersive scene would hold the pause menu as a frozen
+  QTE up to 15 s). It is a pause there now, the same as the menu button.
+The title, its menus, a pause from VR play, a pause menu that is never closed and the quit to the title stay flat;
+immersive cutscenes stay the default. No new live.txt switch.
+- Tests: tests/cut20_tests.cpp (both reports replayed; -DCUT20_OLD against cut19's header fails 4 of 8), cut14/17/19
+  and cut6 replay unchanged and passing.
+
 ## hero-0.0.78-cut19-loaded - cutscenes immersive again after a game loaded from the title (local branch, not built)
 
 From the player on cut18 (report 223845): "oh look immersive cutscenes gone again". He loaded slot 3 from the title:

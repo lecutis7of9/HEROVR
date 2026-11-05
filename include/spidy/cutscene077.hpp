@@ -310,6 +310,20 @@ class MenuPanel {
 inline constexpr uint64_t frontEndPlayMs = 2000;
 inline constexpr uint64_t titleRecordMs = 100;
 inline constexpr uint64_t loadRecordMs = 1000;
+// HERO VR 0.0.78 cut20 PAUSE RESUME (report 232334, cut19 284711b, the owner: "opening cutscene goes back and fourth
+// from immersive to 2d"): the opening scene was immersive 28.20-30.75 s, the menu button at 30.83 s paused it (MENU
+// SCREEN #4, the normal VR screen, as it should), B at 31.91 s closed the pause menu and the scene ran on - the next
+// 30 s CUTFIX line has 2529 screen frames of which only 324 had a still camera, none refused for anything else - but
+// cut7's rule keeps a pause on the screen to the end of its stretch, so the rest of the scene stayed flat (to the
+// session's end at 86 s). Now a pause pressed in an immersive scene goes back to immersive once the pause menu is
+// closed and the same scene runs on: the scene's clock frozen pauseFreezeMs after the press (the pause menu up), then
+// B or the menu button (its close; A only picks a menu item, as Suits, whose camera moves), then the clock running
+// resumeRunMs in a row on the same player record; the clock still frozen closeWaitMs after the close (B back out of a
+// menu to the pause menu) takes the close back. A pause from VR play (the 3 s rule), a quit or a load (no record or a new one: the front
+// end) and a pause menu whose clock never froze stay on the screen as before; a menu stays the flat VR screen.
+inline constexpr uint64_t pauseFreezeMs = 250;
+inline constexpr uint64_t resumeRunMs = 1000;
+inline constexpr uint64_t closeWaitMs = 500;
 class MenuScreen {
   public:
     // True while the stretch stays on the VR screen. nowMs: a clock in ms (0: 11 ms a call).
@@ -318,8 +332,13 @@ class MenuScreen {
     // the menu button; report 025037 logged MENU SCREEN #1 as "no player record", not the front end, then the title's
     // record went immersive): a boot frame with the screen down ended the front end before the title came up. Only VR
     // gameplay ends it now (and a game loaded from the title, as before).
-    bool update(bool screen, uint64_t record, bool menuPressed, uint64_t nowMs = 0, bool playing = true) {
+    // cut20: clockRuns the scene's clock (SceneClock), shownBefore the last frame was shown immersive, closePressed
+    // B down (a pause menu's close; the menu button's own press counts too).
+    bool update(bool screen, uint64_t record, bool menuPressed, uint64_t nowMs = 0, bool playing = true,
+                bool clockRuns = false, bool shownBefore = false, bool closePressed = false) {
         now_ = nowMs ? nowMs : now_ + 11;
+        const bool menuEdge = menuPressed && !menuWas_;
+        menuWas_ = menuPressed;
         if (menuPressed)
             pressMs_ = now_ ? now_ : 1;
         if (record != cand_) { // cut17: how long this record has been read
@@ -348,6 +367,7 @@ class MenuScreen {
                 noteBlip();
             }
             inStretch_ = on_ = false;
+            scenePause_ = false;
             return false;
         }
         if (playFrom_)
@@ -355,8 +375,18 @@ class MenuScreen {
         if (!inStretch_) {
             inStretch_ = true;
             paused_ = pressMs_ && now_ - pressMs_ <= 3000;
+            scenePause_ = false;
         }
+        const bool wasPaused = paused_;
         paused_ |= menuPressed;
+        if (menuPressed && !wasPaused) { // cut20: a pause; resumable only from an immersive scene
+            scenePause_ = shownBefore && !frontEnd_ && record != 0;
+            pauseRecord_ = record;
+            frozeMs_ = runFrom_ = closeMs_ = 0;
+            armed_ = closed_ = false;
+        } else if (paused_ && scenePause_) {
+            resumeStep(record, clockRuns, menuEdge || (closePressed && !menuPressed));
+        }
         if (paused_ && record == 0 && !frontEnd_) {
             frontEnd_ = true;
             seen_ = 0;
@@ -391,6 +421,10 @@ class MenuScreen {
     uint64_t count() const {
         return count_;
     }
+    // cut20: pauses of an immersive scene that went back to it (PAUSE RESUME).
+    uint64_t resumes() const {
+        return resumes_;
+    }
     bool frontEnd() const {
         return frontEnd_;
     }
@@ -410,6 +444,37 @@ class MenuScreen {
     }
 
   private:
+    // cut20 PAUSE RESUME: the pause menu up (the clock frozen pauseFreezeMs), closed (B, the menu button), then
+    // the same record's scene running resumeRunMs in a row: the stretch leaves the screen (ImmersiveHold starts anew).
+    void resumeStep(uint64_t record, bool clockRuns, bool close) {
+        if (record == 0 || record != pauseRecord_) {
+            scenePause_ = false; // a quit or a load: the screen (the front end's own rules)
+            return;
+        }
+        if (!clockRuns) {
+            runFrom_ = 0;
+            if (!frozeMs_)
+                frozeMs_ = now_ ? now_ : 1;
+            armed_ |= now_ - frozeMs_ >= pauseFreezeMs;
+            if (closed_ && !close && now_ - closeMs_ >= closeWaitMs)
+                closed_ = false; // still frozen closeWaitMs after the close: a menu still (B out of Suits)
+        } else {
+            frozeMs_ = 0;
+        }
+        if (armed_ && close) {
+            closed_ = true;
+            closeMs_ = now_;
+        }
+        if (!armed_ || !closed_ || !clockRuns)
+            return;
+        if (!runFrom_)
+            runFrom_ = now_ ? now_ : 1;
+        if (now_ - runFrom_ >= resumeRunMs) {
+            paused_ = scenePause_ = armed_ = closed_ = false;
+            frozeMs_ = runFrom_ = 0;
+            ++resumes_;
+        }
+    }
     void endFrontEnd() {
         frontEnd_ = paused_ = false;
         first_ = 0;
@@ -425,8 +490,10 @@ class MenuScreen {
     }
     uint64_t now_{}, pressMs_{}, gapFrom_{}, played_{}, first_{}, last_{}, count_{};
     uint64_t cand_{}, candMs_{}, playFrom_{}, blips_{}, blipMs_{};
+    uint64_t pauseRecord_{}, frozeMs_{}, runFrom_{}, resumes_{}, closeMs_{}; // cut20
     int seen_{}, why_{};
     bool frontEnd_{true}, paused_{}, inStretch_{}, on_{}, titleGap_{};
+    bool menuWas_{}, scenePause_{}, armed_{}, closed_{}; // cut20
 };
 
 // HERO VR 0.0.78 cut14: game_xr.cpp's two per-frame cutscene decisions, moved here unchanged so tests/cut14_tests.cpp
@@ -437,6 +504,11 @@ struct FrameInput {
     bool screen{};               // the game's screen is up (no VR gameplay view)
     bool viewing{}, vrPlay{}, gameplay{};
     bool menuPressed{};          // the controller's menu button this frame
+    // HERO VR 0.0.78 cut20: SteamVR keeps the menu button for its dashboard, so there the pause is both thumbsticks
+    // held in (game_pad::PausePress, its Start sent the frame before) - a pause exactly as the menu button.
+    bool stickPause{};
+    bool closePressed{};         // cut20: B down (a pause menu's close; A picks an item)
+    bool shownBefore{};          // cut20: the last frame was shown immersive
     bool heroOk{};               // cutHero.present: a player (or a scene riding a short record gap)
     bool bridge{}, flatScreen{}, head{}, eyesLost{}, fault{};
     bool timeRuns{};             // the scene's clock ran (a pre-rendered video or a pause: the camera is still)
@@ -444,13 +516,14 @@ struct FrameInput {
 };
 // The frame is the normal VR screen for a menu (the front end, a pause, no player record).
 inline bool menuScreenFrame(MenuScreen& m, const FrameInput& f) {
-    return m.update(f.screen && f.mode == immersive, f.record, f.menuPressed, f.nowMs, f.viewing && f.vrPlay && f.gameplay);
+    return m.update(f.screen && f.mode == immersive, f.record, f.menuPressed || f.stickPause, f.nowMs,
+                    f.viewing && f.vrPlay && f.gameplay, f.timeRuns, f.shownBefore, f.closePressed);
 }
 // The frame is shown immersive (ImmersiveHold: a frozen clock holds a started scene, a menu press ends it).
 inline bool immersiveFrame(ImmersiveHold& h, bool menuScreen, const FrameInput& f) {
     return h.update(f.mode == immersive && !f.fault && f.screen && f.heroOk && !menuScreen && f.bridge && !f.gameplay &&
                         !f.flatScreen && f.head && !f.eyesLost,
-                    f.timeRuns, f.menuPressed, f.nowMs);
+                    f.timeRuns, f.menuPressed || f.stickPause, f.nowMs);
 }
 // The panel's rectangle in one eye's pixels (y down) from that eye's tangents (left and down negative). eye 0 is
 // the left eye; eyeDist the two eyes' distance (metres); aspect the copied part's own width over height.

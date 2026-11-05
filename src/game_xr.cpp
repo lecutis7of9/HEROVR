@@ -3312,6 +3312,7 @@ DWORD WINAPI run(void*) {
         cutscene077::RefusalNote cutNote;
         cutscene077::HeroGrace cutHero;
         bool cutNoteShow{}, cutWasShown{};
+        uint32_t cutStickPauses{}; // HERO VR 0.0.78 cut20: pausePress.pauses() the cutscene code has seen
         char cutNoteText[160]{};
         uint64_t cutSamplesSeen{};
         bool cutImmersiveFault{}, cutPanelFault{}, cutStripFault{};
@@ -5778,6 +5779,14 @@ DWORD WINAPI run(void*) {
                     cutFrame.vrPlay = vrPlay;
                     cutFrame.gameplay = gameplay;
                     cutFrame.menuPressed = (frame.buttons & buttonMenu) != 0;
+                    // HERO VR 0.0.78 cut20: the both-thumbsticks pause (SteamVR's menu button opens its dashboard)
+                    // is a pause here too (its Start went out last frame), and the pause menu's close (B; A picks an
+                    // item, as Suits) and the last frame's immersive let a scene's pause go back to immersive
+                    // (MenuScreen PAUSE RESUME).
+                    cutFrame.stickPause = pausePress.pauses() != cutStickPauses;
+                    cutStickPauses = pausePress.pauses();
+                    cutFrame.closePressed = (frame.buttons & buttonB) != 0;
+                    cutFrame.shownBefore = cutWasShown;
                     cutFrame.heroOk = cutHeroOk;
                     cutFrame.bridge = bridgeRunning;
                     cutFrame.flatScreen = flatScreen;
@@ -5796,6 +5805,19 @@ DWORD WINAPI run(void*) {
                                   cutscene077::MenuScreen::whyName(cutMenuScreen.why()), player.record ? "yes" : "none",
                                   cutMenuScreen.frontEnd() ? " or a game loaded from the title" : "");
                         consoleLine(line);
+                    }
+                    // HERO VR 0.0.78 cut20 PAUSE RESUME: a scene's pause closed and the same scene running again.
+                    static uint64_t pauseResumes20{};
+                    if (cutMenuScreen.resumes() != pauseResumes20) {
+                        pauseResumes20 = cutMenuScreen.resumes();
+                        if (pauseResumes20 <= 50) {
+                            char line[220];
+                            sprintf_s(line, "HERO VR 0.0.78 cut20 PAUSE RESUME #%llu: the pause menu closed and the "
+                                            "scene ran %llu ms - immersive again (the menu stayed the flat VR screen)",
+                                      static_cast<unsigned long long>(pauseResumes20),
+                                      static_cast<unsigned long long>(cutscene077::resumeRunMs));
+                            consoleLine(line);
+                        }
                     }
                     // HERO VR 0.0.78 cut17 TITLE BLIP: VR play on the front end too short to end it (report 212843).
                     static uint64_t titleBlips17{};

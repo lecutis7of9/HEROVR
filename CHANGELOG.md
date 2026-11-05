@@ -42,14 +42,16 @@ brick building, looking up carried it into the clouds, and dropping off a roof l
 - **Still not runtime proof:** session 162732 shows the blob was view-locked. It does not show the new rule on a
   headset. A pair of layer frames whose diamond pixel matches unprojection through the serial's head lens, and a
   confirmed field tying the 1237 m POI place to that diamond, are still missing. No pointer was added.
-- **Session 184004 (cut25 5f64c7d) felt like 2 fps. Not the waypoint log.** `cards+waypoint` was 0.76-3.1 ms/s, peak
-  0.33 ms. PIECE/LOCK counts match the playable cut24 session. The gaps are the game not presenting (9.0 s, 5.1 s,
-  2.6 s, 12.4 s and 1.9 s screen stretches, presents 0/s, camera_still) and Virtual Desktop holding xrEndFrame (142
-  rounds, 14.2 s: "the stream to the headset, not the game"). An earlier session had already lost the GPU device
-  (0x887A002B); the monitor copy stays skipped. The commit after the playable cut24 tip only changed the split's
-  travel rule. The per-frame PIECE format is now one new grid, then at most one line each 2 s, 16 a session. That
-  does not remove the stream hold. The web-zip white circle had no placement line (reticles 0, zip_mode spidyvr);
-  it is the game's own marker in this same layer, and 1024 m is the wrong depth for a near zip point. Not moved.
+- **Session 184004 (cut25 5f64c7d) felt like 2 fps. Not this tip's code.** `cards+waypoint` was 0.76-3.1 ms/s, peak
+  0.33 ms. PIECE/LOCK counts match playable cut24 `56b1780` (session 162732, 0 stream stalls). The only commits after
+  that tip are the travel rule and this log throttle. Neither submits GPU work, waits on the GPU, or stops presents.
+  The gaps are the game not presenting (9.0 s, 5.1 s, 2.6 s, 12.4 s and 1.9 s screen stretches, presents 0/s,
+  camera_still) and Virtual Desktop holding xrEndFrame (142 rounds, 14.2 s: "the stream to the headset, not the
+  game"). An earlier session had already lost the GPU device (0x887A002B); the monitor copy stays skipped. Do not
+  package this tip as a playability build. The last headset build that was hitch-light on that machine is `56b1780`.
+- **Web-zip circle cannot be given its own depth yet.** reticles were 0, so the white circle is the game's UI blob,
+  not `game_swing::Aim.point`. No confirmed read of the game's LT+RT zip point exists, and the layer does not name
+  the blob, so it still shares the 1024 m far-diamond stand-in. That stand-in is wrong for a near point. Not split.
 
 ## hero-0.0.78-cut23-split - the game's HUD stays in your view, its world markers stay in its world; lights A/B (test cut, not a release)
 

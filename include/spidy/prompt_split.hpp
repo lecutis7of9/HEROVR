@@ -171,6 +171,11 @@ inline Vec3 trackingOfWorld(const Pose& worldFromTracking, Vec3 world) {
 // the icon at markerLockMetres along the capture ray: from that camera the whole ray is one pixel, and after the
 // head moves an 8 m translation stays within about a degree of a 1173 m objective. Not the game's destination; that
 // position is not a confirmed read.
+// There is no second distance for the web-zip white circle. Session 184004 has reticles 0, so that circle is the
+// game's own UI blob in this same layer, not the mod's aim marker (game_swing::Aim.point is the swing-web hit, and
+// it is not drawn when reticles are off). No existing hook has a confirmed world position for the game's LT+RT zip
+// point (pointLaunch in swing.hpp is the grounded leap window, not that aim). Putting this 1024 m stand-in on a
+// near zip point makes the circle slide. It is not separated here, because the layer does not say which blob it is.
 inline constexpr float markerMetres = 6.f;
 inline constexpr float markerLockMetres = 1024.f;
 inline constexpr uint32_t markerPadPixels = 12; // the crop and card grown this much each way, both alike: a marker

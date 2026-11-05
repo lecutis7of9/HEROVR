@@ -2498,8 +2498,9 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                                      "%APPDATA%\\Spidy\\ui-dump (live.txt ui_dump = off)"},
           {"Prompts in VR", "Only the game's own button prompts, waypoint and markers, cut from its UI, never the "
                             "whole screen; its HUD (health, ability circles, map, the Y prompt) stays still in your "
-                            "view, pulled in from the edges so it is in view; its markers sit where the game drew "
-                            "them in its world (live.txt prompt_anchor = view: cut21's, all in your view; = room: "
+                            "view, pulled in from the edges so it is in view; its markers stay on the world point "
+                            "the camera that drew them had them on, so looking or falling does not drag them "
+                            "(live.txt prompt_anchor = view: cut21's, all in your view; = room: "
                             "cut22's board; live.txt prompt_layer = off: none; prompt_cards = on: the mod's own Y "
                             "cards too)"},
           {"LB + RB near a boss", "The game's throw; each one logs the boss's HP over 2 s, the left stick sent, the aim "

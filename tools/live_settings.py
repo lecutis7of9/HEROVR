@@ -637,9 +637,10 @@ SETTINGS = {
     'prompt_anchor': ((0, 2), 'SpidyPromptAnchor', "PROMPT ANCHOR {} (where prompt_layer's cards of the game's own "
                       "UI stand: 0 split, the default - its HUD (health, ability and gadget circles, map, the Y "
                       "prompt) stays still in your view, pulled in from the screen's edges and a bit larger; its "
-                      "world markers (waypoints, threat and objective icons) sit where the game drew them in its "
-                      "world; 1 view: cut21's, everything at its place in your view; 2 room: cut22's room board, "
-                      "left behind as you move) - live, no restart needed"),
+                      "world markers (waypoints, threat and objective icons) stay on the world ray of the camera "
+                      "that drew them, 1024 m out, so a head turn or a fall does not drag them (the game's own "
+                      "destination position is not read); 1 view: cut21's, everything at its place in your view; "
+                      "2 room: cut22's room board, left behind as you move) - live, no restart needed"),
     # HERO VR 0.0.78 cut23 LIGHTS A/B (stereo_probe gameViewLiftStep, shared_lod::gameViewLift), CANDIDATE
     'game_view_lift': ((0, 1), 'SpidyGameViewLift', "GAME VIEW LIFT {} (0 off, the cut23 default: the game's own view "
                        "keeps the game's detail, as in 0.0.77, a test for the bridge and car lights shining through "

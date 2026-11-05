@@ -4863,6 +4863,11 @@ extern "C" uint32_t SpidyEngineTaaNow() {
 extern "C" float SpidyFlatAspect() {
     return flatAspect.load();
 }
+// HERO VR 0.0.78 cut24: the eye-command serial latched for the frame being drawn (placeEyes). The present that
+// copies the UI layer reads it so a marker can be unprojected through that frame's camera, not a later head.
+extern "C" uint64_t SpidyLatchedEyeSerial() {
+    return latchedSerial.load(std::memory_order_acquire);
+}
 uint32_t spidy::native_hud::eyes(Head& out) {
     if (!enabled || !(config.createViews & 4) || lateEyes || GetCurrentThreadId() != mainThread.load())
         return 0;

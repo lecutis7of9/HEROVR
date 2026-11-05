@@ -17669,7 +17669,15 @@ DWORD WINAPI run(void*) {
                                 // cut23 PROMPT SPLIT: the classifier, its grid's sign and counts.
                                 static prompt_split::Split split23;
                                 static uint64_t splitStamp23{}, splitHudCards23{}, splitMarkerCards23{}, splitNoLens23{};
+                                static uint64_t splitLocks23{}, splitLockMiss23{};
                                 static prompt_split::Lens splitLens23{};
+                                // cut24: each marker held in the game's world from the camera that drew its pixels.
+                                struct HeldMarker {
+                                    Vec3 world{};
+                                    float tw{}, th{}, crop[4]{};
+                                    bool ok{};
+                                };
+                                static HeldMarker heldMarker23[prompt_layer::maxCards];
                                 bool cardsSet = false;
                                 if (promptLayerFrame && !saved->flatScreen && !saved->stereoScreen && !showScreen &&
                                     !overlayFault) {
@@ -17724,13 +17732,62 @@ DWORD WINAPI run(void*) {
                                                     static_cast<float>(std::max(layerImage.height, 1u)));
                                             if (!splitLensOk)
                                                 ++splitNoLens23;
+                                            // cut24: a new grid was drawn by one camera. Lock markers through THAT
+                                            // camera (the latched eye command), not through the head showing them.
                                             if (layerGrid.stamp != splitStamp23) {
                                                 splitStamp23 = layerGrid.stamp;
+                                                const uint64_t srcSerial = native_gpu::promptLayerSourceSerial();
+                                                const NativeEyeFrame* src =
+                                                    srcSerial ? history.find(srcSerial, displayTime) : nullptr;
+                                                if (!src) {
+                                                    ++splitLockMiss23;
+                                                    src = saved;
+                                                }
+                                                const Pose srcEyes[2] = {src->trackingEyes[0].pose,
+                                                                         src->trackingEyes[1].pose};
+                                                float srcFov[2][4]{};
+                                                for (unsigned eye = 0; eye < 2; ++eye) {
+                                                    const auto& f = src->trackingEyes[eye].fov;
+                                                    srcFov[eye][0] = f.left;
+                                                    srcFov[eye][1] = f.right;
+                                                    srcFov[eye][2] = f.down;
+                                                    srcFov[eye][3] = f.up;
+                                                }
+                                                const Pose srcTracking = prompt_split::headOf(srcEyes[0], srcEyes[1]);
+                                                prompt_split::Lens srcLens{};
+                                                const bool srcLensOk = prompt_split::headLens(
+                                                    srcTracking, srcEyes, srcFov,
+                                                    static_cast<float>(promptCullDegrees23.load()), srcLens,
+                                                    native_gpu::screenRequested() ? 0
+                                                                                  : promptRecordingFov23.load(),
+                                                    static_cast<float>(layerImage.width) /
+                                                        static_cast<float>(std::max(layerImage.height, 1u)));
+                                                const Pose worldHead = compose(src->worldFromTracking, srcTracking);
                                                 prompt_split::Box boxes[prompt_layer::maxCards];
                                                 for (uint32_t i = 0; i < n; ++i)
                                                     boxes[i] = prompt_split::boxOf(pieces[i], layerImage.width,
                                                                                    layerImage.height);
-                                                split23.update(boxes, n, splitHead.orientation);
+                                                split23.update(boxes, n, srcTracking.orientation);
+                                                for (uint32_t i = 0; i < prompt_layer::maxCards; ++i)
+                                                    heldMarker23[i] = {};
+                                                for (uint32_t i = 0; i < n; ++i) {
+                                                    if (!srcLensOk || split23.kind(i) != prompt_split::kindMarker)
+                                                        continue;
+                                                    float cx{}, cy{}, tw{}, th{}, crop[4]{};
+                                                    if (!prompt_split::markerPlace(pieces[i], layerImage.width,
+                                                                                   layerImage.height, srcLens, cx, cy,
+                                                                                   tw, th, crop) ||
+                                                        !prompt_split::lockPoint(worldHead, cx, cy,
+                                                                                 prompt_split::markerLockMetres,
+                                                                                 heldMarker23[i].world))
+                                                        continue;
+                                                    heldMarker23[i].tw = tw;
+                                                    heldMarker23[i].th = th;
+                                                    for (int k = 0; k < 4; ++k)
+                                                        heldMarker23[i].crop[k] = crop[k];
+                                                    heldMarker23[i].ok = true;
+                                                    ++splitLocks23;
+                                                }
                                             }
                                         }
                                         const uint64_t worldNowMs = GetTickCount64();
@@ -17767,29 +17824,36 @@ DWORD WINAPI run(void*) {
                                         for (uint32_t i = 0; i < n && cards.count < D3D12Renderer::maxCards; ++i) {
                                             bool both = true;
                                             if (splitAnchor) {
-                                                // cut23: HUD locked to the view (a point of the head's frame), markers
-                                                // where the game drew them (through its head lens, from this head).
-                                                const bool marker =
-                                                    splitLensOk && split23.kind(i) == prompt_split::kindMarker;
+                                                // cut24: HUD locked to the view (a point of the head's frame). A world
+                                                // marker is the capture camera's point, projected for this frame.
+                                                const bool marker = heldMarker23[i].ok &&
+                                                                    split23.kind(i) == prompt_split::kindMarker;
                                                 float cx{}, cy{}, tw{}, th{}, metres{};
                                                 float cropIn[4] = {
                                                     static_cast<float>(pieces[i].x0) / layerImage.width,
                                                     static_cast<float>(pieces[i].y0) / layerImage.height,
                                                     static_cast<float>(pieces[i].x1) / layerImage.width,
                                                     static_cast<float>(pieces[i].y1) / layerImage.height};
+                                                Vec3 centre{};
                                                 if (marker) {
-                                                    if (!prompt_split::markerPlace(pieces[i], layerImage.width,
-                                                                                   layerImage.height, splitLens23, cx,
-                                                                                   cy, tw, th, cropIn))
+                                                    centre = prompt_split::trackingOfWorld(saved->worldFromTracking,
+                                                                                           heldMarker23[i].world);
+                                                    if (!finite(centre))
                                                         continue;
-                                                    metres = prompt_split::markerMetres;
+                                                    tw = heldMarker23[i].tw;
+                                                    th = heldMarker23[i].th;
+                                                    metres = prompt_split::markerLockMetres;
+                                                    for (int k = 0; k < 4; ++k)
+                                                        cropIn[k] = heldMarker23[i].crop[k];
+                                                } else if (split23.kind(i) == prompt_split::kindMarker) {
+                                                    continue; // no capture lock: do not glue it to this head
                                                 } else {
                                                     if (!prompt_split::hudPlace(pieces[i], layerImage.width,
                                                                                 layerImage.height, cx, cy, tw, th))
                                                         continue;
                                                     metres = prompt_split::hudMetres;
+                                                    centre = prompt_split::headPoint(splitHead, cx, cy, metres);
                                                 }
-                                                const Vec3 centre = prompt_split::headPoint(splitHead, cx, cy, metres);
                                                 const float aspect = tw / th;
                                                 for (unsigned eye = 0; eye < 2 && both; ++eye)
                                                     both = prompt_world::cardRect(
@@ -17889,14 +17953,18 @@ DWORD WINAPI run(void*) {
                                               static_cast<double>(worldBoard22.yaw() * 57.29578f));
                                     game_prompts::note(worldLine);
                                     consoleLine(worldLine);
-                                    char splitLine[360];
-                                    sprintf_s(splitLine, "HERO VR 0.0.78 cut23 PROMPT SPLIT (CANDIDATE) %s: HUD cards %llu "
-                                                         "(view-locked), marker cards %llu (world), grids %llu, votes "
-                                                         "marker %llu / HUD %llu, new pieces %llu, no lens %llu; lens "
+                                    char splitLine[480];
+                                    sprintf_s(splitLine, "HERO VR 0.0.78 cut24 WAYPOINT LOCK (CANDIDATE) %s: HUD cards %llu "
+                                                         "(view-locked), marker cards %llu (world, %.0f m on the capture "
+                                                         "ray), locks %llu, source miss %llu, grids %llu, votes marker "
+                                                         "%llu / HUD %llu, new pieces %llu, no lens %llu; lens "
                                                          "L%.2f R%.2f D%.2f U%.2f (cull %u, recording %d)",
                                               promptAnchorNow.load() == prompt_split::anchorSplit ? "ON" : "OFF",
                                               static_cast<unsigned long long>(splitHudCards23),
                                               static_cast<unsigned long long>(splitMarkerCards23),
+                                              static_cast<double>(prompt_split::markerLockMetres),
+                                              static_cast<unsigned long long>(splitLocks23),
+                                              static_cast<unsigned long long>(splitLockMiss23),
                                               static_cast<unsigned long long>(split23.grids()),
                                               static_cast<unsigned long long>(split23.markerVotes()),
                                               static_cast<unsigned long long>(split23.hudVotes()),

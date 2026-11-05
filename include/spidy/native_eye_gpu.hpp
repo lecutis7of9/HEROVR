@@ -299,6 +299,9 @@ bool takeUiDump(uint32_t& reason, std::vector<UiShot>& shots, std::string& line)
 // copy (PIXEL_SHADER_RESOURCE, premultiplied RGBA8) and the grid when both are fresh; promptLayerLine one log line.
 void wantPromptLayer(bool wanted);
 bool latestPromptLayer(Screen& out, prompt_layer::Grid& grid, uint64_t maxAgeMs);
+// The eye-command serial latched when the current grid's read-back was submitted (0: none). The pixels and this
+// serial are one frame; a later head is not.
+uint64_t promptLayerSourceSerial();
 std::string promptLayerLine();
 // HERO VR 0.0.77 CUT7 FPS: whether the see-through models are drawn now (the eyes' depth watched only then).
 void sceneDepthInUse(bool used);

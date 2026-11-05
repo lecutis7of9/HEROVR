@@ -24,9 +24,12 @@
 //    pulled in toward the middle (pull) and the piece grown (grow, at least minCardTan high, at most maxCardTan) so
 //    an edge piece - the bottom-left Y prompt - lands well inside a Quest's view at a readable size; hudDrop lower.
 //  - WORLD MARKER (waypoints, threat and objective icons, a prompt on a thing in the world): the game moves it across
-//    its screen as its view turns or travels. Drawn exactly where the game drew it: its layer place through the head
-//    lens of the frame (headLens) as a direction from the head, markerMetres out, its own size - so it sits on its
-//    target in the game's world and moves with it, never with the room.
+//    its screen as its view turns or travels. cut23 re-read that screen place through the head that is showing the
+//    picture, 6 m out, so a turn of the head after the pixels were drawn dragged the icon across the city and a fall
+//    left a far objective on the roof under the headset. cut24 locks the icon to the camera that produced those
+//    pixels (lockPoint), in that camera's world, and the frame that shows it only projects that world point. The
+//    game's own destination position is not a confirmed read (story077g's POI places are CANDIDATE and off; cut10's
+//    record scan was never matched to the diamond), so the hold is markerLockMetres along the capture ray.
 // Which is which (Split): a piece tracked over the grids (100 ms) keeps a reference place and the head's orientation
 // there. When the head has since turned over turnDegrees, a piece still at its place (within moveUv by its steadiest
 // edge, so a health bar that shrinks from one side stays still) is HUD-voted, one that moved marker-voted; a piece
@@ -142,13 +145,32 @@ inline bool hudPlace(const prompt_layer::Region& r, uint32_t w, uint32_t h, floa
     th *= fit;
     return std::isfinite(cx + cy + tw + th) && tw > 0 && th > 0;
 }
-// A head-local point at tangent (tx, ty), `metres` ahead of `head`, in the room.
+// A head-local point at tangent (tx, ty), `metres` ahead of `head` (the -1 axis scaled by `metres`, so the depth
+// along the head's forward is `metres`). HUD pieces still use this on the head that is showing them.
 inline Vec3 headPoint(const Pose& head, float tx, float ty, float metres) {
     return head.position + head.orientation.rotate(Vec3{tx, ty, -1} * metres);
 }
+// The capture camera's ray through a marker's tangent, `metres` deep along that camera's forward, in the same
+// space as `source`. False when the pose or the tangent is not a place. Holding this point, and projecting it
+// later, does not follow a head that has since turned or moved.
+inline bool lockPoint(const Pose& source, float tx, float ty, float metres, Vec3& world) {
+    world = {};
+    if (!(metres > 0) || !std::isfinite(tx + ty + metres) || !finite(source.position))
+        return false;
+    world = headPoint(source, tx, ty, metres);
+    return finite(world);
+}
+// A game-world point as a tracking-space point of the frame whose world-from-tracking pose is `worldFromTracking`.
+inline Vec3 trackingOfWorld(const Pose& worldFromTracking, Vec3 world) {
+    return compose(inverse(worldFromTracking), Pose{world, {}}).position;
+}
 
-// WORLD MARKER placement: its own size, where the game drew it.
-inline constexpr float markerMetres = 6.f;   // out from the head (far enough to sit on a far target comfortably)
+// WORLD MARKER placement. markerMetres is cut23's (a point 6 m out, which a fall puts on a nearby roof). cut24 holds
+// the icon at markerLockMetres along the capture ray: from that camera the whole ray is one pixel, and after the
+// head moves an 8 m translation stays within about a degree of a 1173 m objective. Not the game's destination; that
+// position is not a confirmed read.
+inline constexpr float markerMetres = 6.f;
+inline constexpr float markerLockMetres = 1024.f;
 inline constexpr uint32_t markerPadPixels = 12; // the crop and card grown this much each way, both alike: a marker
                                                 // that moved since the 100 ms grid stays whole (the alpha keys it)
 // A marker piece's centre and size (head tangents) and its padded crop of the layer {u0, v0, u1, v1}.

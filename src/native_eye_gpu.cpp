@@ -6113,9 +6113,11 @@ struct LayerReadback {
     ComPtr<ID3D12Resource> buffer;
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout{};
     uint64_t fence{};
+    uint64_t sourceSerial{}; // the eye command latched when this read-back was submitted
     uint32_t width{}, height{};
     bool pending{};
 };
+extern "C" uint64_t SpidyLatchedEyeSerial();
 bool layerLocating{};
 std::atomic<bool> layerWantedFlag{};
 ComPtr<ID3D12Resource> layerResource;
@@ -6128,6 +6130,7 @@ std::vector<Retired> retiredLayer;
 std::mutex layerGridLock; // the grid only
 prompt_layer::Grid layerGrid;
 uint64_t layerGridMs{};
+std::atomic<uint64_t> layerSourceSerial{}; // cut24: the command serial of the grid now published
 std::atomic<uint32_t> layerWhy{};
 std::atomic<bool> layerVerified{};  // layerResource is the layer (its alpha read back and isLayer), not a candidate
 std::vector<UiTarget> layerCandidates; // a find's, best first; the present thread's
@@ -6156,6 +6159,7 @@ void dropLayer(uint64_t now) {
     std::lock_guard gridLock(layerGridLock);
     layerGrid = {};
     layerGridMs = 0;
+    layerSourceSerial.store(0, std::memory_order_release);
 }
 void stopLocating() {
     layerCandidates.clear(); // the references go
@@ -6316,6 +6320,7 @@ bool readLayerMasks(uint64_t now) {
         std::lock_guard gridLock(layerGridLock);
         layerGrid = grid;
         layerGridMs = now;
+        layerSourceSerial.store(r.sourceSerial, std::memory_order_release);
     }
     return got;
 }
@@ -6402,8 +6407,10 @@ void captureLayer(uint64_t now) {
             mask->height = desc.Height;
         }
     }
-    if (!verified && !mask)
-        return; // a candidate's read-back in flight: nothing to copy
+    // cut24: the colour copy and the alpha grid are one frame. Copying the colour every present left the grid's
+    // crop on a newer texture, so the icon's pixels walked out of the card while its place was still the old one.
+    if (!mask)
+        return;
     auto* slot = readyCommands(layerCommands); // never waits: a free slot or none
     if (!slot) {
         ++layerSkipBusy;
@@ -6433,6 +6440,8 @@ void captureLayer(uint64_t now) {
     for (UINT i = 0; i < barriers; ++i)
         std::swap(b[i].Transition.StateBefore, b[i].Transition.StateAfter);
     originalBarrier(slot->list.Get(), barriers, b);
+    if (mask)
+        mask->sourceSerial = SpidyLatchedEyeSerial(); // before the GPU can finish the copy
     if (!submitCommands(*slot))
         return;
     if (mask) {
@@ -6696,6 +6705,9 @@ bool latestPromptLayer(Screen& out, prompt_layer::Grid& grid, uint64_t maxAgeMs)
     grid = layerGrid;
     grid.stamp = layerGridMs; // cut22 PROMPT WORLD: a new grid's sign
     return true;
+}
+uint64_t promptLayerSourceSerial() {
+    return layerSourceSerial.load(std::memory_order_acquire);
 }
 std::string promptLayerLine() {
     const auto n = [](uint64_t v) { return std::to_string(v); };

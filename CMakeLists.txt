@@ -260,6 +260,9 @@ add_test(NAME cut22 COMMAND spidy_cut22_tests)
 add_executable(spidy_cut23_tests tests/cut23_tests.cpp) # HERO VR 0.0.78 cut23: PROMPT SPLIT, HUD in view, markers in world (CANDIDATE)
 target_include_directories(spidy_cut23_tests PRIVATE include)
 add_test(NAME cut23 COMMAND spidy_cut23_tests)
+add_executable(spidy_cut24_tests tests/cut24_tests.cpp) # HERO VR 0.0.78 cut24: waypoint locked to the capture camera's world ray
+target_include_directories(spidy_cut24_tests PRIVATE include)
+add_test(NAME cut24 COMMAND spidy_cut24_tests)
 add_executable(spidy_cut9_tests tests/cut9_tests.cpp) # HERO VR 0.0.78 CUT9
 target_include_directories(spidy_cut9_tests PRIVATE include)
 add_test(NAME cut9 COMMAND spidy_cut9_tests)

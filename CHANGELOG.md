@@ -2,6 +2,27 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut24 - the game's waypoint stays on the camera that drew it (test cut, not a release)
+
+From the cut23 headset video (the yellow objective diamond, 1237 m then 1173 m): a right head turn dragged it onto the
+brick building, looking up carried it into the clouds, and dropping off a roof left it pointing at the roof.
+- **Cause in this code (not a new HUD guess):** cut23 took the icon's place in the UI layer and aimed it from the head
+  that is showing the picture, 6 m out (`headPoint` + `markerMetres`). The layer's alpha grid is a later read-back of
+  an earlier frame, so that aim follows the head. A point 6 m along the ray also sits on a nearby roof once the hero
+  falls, while the objective is still about a kilometre out. tests/cut24_tests.cpp: yaw, pitch, an 8 m fall, stereo
+  against a 1173 m point, and the health bar staying in the head. That is code evidence. No headset has run this cut.
+- **What is not a confirmed read:** the game's destination position. story077g's POI places are CANDIDATE and off
+  (cut7's GUI2 POI dump was at the origin). cut10's record scan was never matched to the diamond. No new pointer or
+  offset. The icon is the game's own pixels, held `markerLockMetres` (1024 m) along the ray of the eye command latched
+  when that frame's layer was copied (`SpidyLatchedEyeSerial`), then projected with the frame that shows it. If that
+  command is not in the history, the log's source-miss count goes up and the displayed frame's camera is used for
+  that one sample; the point is still not glued to later heads.
+- **HUD unchanged:** health, ability circles, map and the Y prompt stay view-locked. prompt_cards stays off. No new
+  live.txt switch (`prompt_anchor` split remains the default).
+- **Not claimed:** that cohtml projects through the latched head view. cut23 already called that a CANDIDATE, and the
+  video showed the current-head aim was wrong. This cut removes that aim. If the game projects the diamond with a
+  different camera, the icon can still miss; the log line is `cut24 WAYPOINT LOCK (CANDIDATE)`.
+
 ## hero-0.0.78-cut23-split - the game's HUD stays in your view, its world markers stay in its world; lights A/B (test cut, not a release)
 
 From the owner's cut22 video and report ("the HUD should remain stationary in your view", icons "run off the side",

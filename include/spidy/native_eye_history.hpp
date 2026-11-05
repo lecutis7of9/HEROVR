@@ -177,6 +177,15 @@ class NativeEyeHistory {
                    ? &frame
                    : nullptr;
     }
+    // The frame stored for `serial`, with no image-hold window. The hold in find() is how long an eye picture may
+    // be shown. The camera pose stored with a command is still that command's pose after that window. Zero, or a
+    // slot overwritten by a later command, is not a camera.
+    const NativeEyeFrame* findSerial(uint64_t serial) const {
+        if (!serial)
+            return nullptr;
+        const auto& frame = frames_[serial % frames_.size()];
+        return frame.serial == serial ? &frame : nullptr;
+    }
     void clear() {
         for (auto& frame : frames_)
             frame.serial = 0;

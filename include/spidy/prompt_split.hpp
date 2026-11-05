@@ -233,6 +233,11 @@ inline Kind prior(const Box& b) {
     const float cx = b.cx(), cy = b.cy();
     return cx < bandU || cx > 1 - bandU || cy < bandV || cy > 1 - bandV ? kindHud : kindMarker;
 }
+// The command serial stored with the layer pixels, when it is the serial of the frame we still have. Zero, or any
+// other frame (including the one on the headset now), is not that camera: 0 means there is nothing to lock from.
+inline uint64_t matchedCapture(uint64_t pixelSerial, uint64_t storedSerial) {
+    return pixelSerial != 0 && pixelSerial == storedSerial ? storedSerial : 0;
+}
 
 class Split {
 public:

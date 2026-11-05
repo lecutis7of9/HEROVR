@@ -14,14 +14,25 @@ brick building, looking up carried it into the clouds, and dropping off a roof l
 - **What is not a confirmed read:** the game's destination position. story077g's POI places are CANDIDATE and off
   (cut7's GUI2 POI dump was at the origin). cut10's record scan was never matched to the diamond. No new pointer or
   offset. The icon is the game's own pixels, held `markerLockMetres` (1024 m) along the ray of the eye command latched
-  when that frame's layer was copied (`SpidyLatchedEyeSerial`), then projected with the frame that shows it. If that
-  command is not in the history, the log's source-miss count goes up and the displayed frame's camera is used for
-  that one sample; the point is still not glued to later heads.
-- **HUD unchanged:** health, ability circles, map and the Y prompt stay view-locked. prompt_cards stays off. No new
-  live.txt switch (`prompt_anchor` split remains the default).
-- **Not claimed:** that cohtml projects through the latched head view. cut23 already called that a CANDIDATE, and the
-  video showed the current-head aim was wrong. This cut removes that aim. If the game projects the diamond with a
-  different camera, the icon can still miss; the log line is `cut24 WAYPOINT LOCK (CANDIDATE)`.
+  when that frame's layer was copied (`SpidyLatchedEyeSerial`), then projected with the frame that shows it. 1024 m is
+  a stand-in depth so a kilometre-scale objective does not sit on a roof; it is not the distance drawn on the diamond.
+- **Missing capture camera:** if that serial is 0 or no longer the frame stored for it, the marker holds are dropped
+  and the classifier is not voted from the headset's camera. The displayed frame is not used as a substitute. The
+  diamond is absent for that sample (HUD pieces still draw). The log counts these as source miss.
+- **Classifier (unchanged, still a hole):** an outer-band piece starts as HUD, and a piece that stays on the layer
+  while the tracked head turns is voted HUD. The yellow diamond and a health bar are the same kind of alpha blob.
+  Nothing in the layer's pixels, and no confirmed game field, says which blob is the objective. If the diamond is
+  voted HUD it stays head-locked, which is the video's failure mode. tests/cut24_tests.cpp records that path as a
+  known hole. It does not show which way the video's diamond was voted, and the bearing tests supply their own pose
+  and tangent: they do not prove the latched command is cohtml's camera.
+- **HUD unchanged:** health, ability circles, map and the Y prompt stay view-locked when the classifier calls them
+  HUD. prompt_cards stays off. No new live.txt switch (`prompt_anchor` split remains the default).
+- **Not claimed:** that cohtml projects through the latched head view. cut23 already called that a CANDIDATE. The log
+  line is `cut24 WAYPOINT LOCK (CANDIDATE)`.
+- **Runtime evidence that would close the hole:** a VR-play log of that line while the diamond is on screen and the
+  head yaws (marker cards above 0, and the diamond stable in the world — a HUD-only count while it slides means the
+  classifier called it HUD). And one pair of layer frames whose diamond pixel agrees with unprojecting through the
+  head lens of the serial stored with those frames. We do not have either.
 
 ## hero-0.0.78-cut23-split - the game's HUD stays in your view, its world markers stay in its world; lights A/B (test cut, not a release)
 

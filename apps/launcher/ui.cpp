@@ -2498,11 +2498,11 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                                      "%APPDATA%\\Spidy\\ui-dump (live.txt ui_dump = off)"},
           {"Prompts in VR", "Only the game's own button prompts, waypoint and markers, cut from its UI, never the "
                             "whole screen; its HUD (health, ability circles, map, the Y prompt) stays still in your "
-                            "view, pulled in from the edges so it is in view; its markers stay on the world point "
-                            "the camera that drew them had them on, so looking or falling does not drag them "
-                            "(live.txt prompt_anchor = view: cut21's, all in your view; = room: "
-                            "cut22's board; live.txt prompt_layer = off: none; prompt_cards = on: the mod's own Y "
-                            "cards too)"},
+                            "view, pulled in from the edges so it is in view; a marker the split calls a world icon is held "
+                            "1024 m along the latched eye command's ray (not a read of the game's destination; that "
+                            "this command is the game's projector is not confirmed). live.txt prompt_anchor = view: "
+                            "cut21's, all in your view; = room: cut22's board; prompt_layer = off: none; "
+                            "prompt_cards = on: the mod's own Y cards too"},
           {"LB + RB near a boss", "The game's throw; each one logs the boss's HP over 2 s, the left stick sent, the aim "
                                   "and his distance (live.txt throw_watch = off: no such log)"},
           {"A or a web on a ledge", "Off a ledge or roof edge (the game's floor crawl) as off a wall: RT + A "

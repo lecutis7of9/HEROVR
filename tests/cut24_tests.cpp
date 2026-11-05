@@ -143,6 +143,22 @@ int main() {
     const Vec3 localB = away.orientation.conjugate().rotate(hudB - away.position);
     check(length(localA - localB) < 1e-3f, "health stays at the same place in the head while the head turns");
 
+    // These poses and tangents are supplied by the test. Nothing here reads the game's classifier output or proves
+    // the latched eye command is the camera cohtml used.
+    check(matchedCapture(0, 0) == 0 && matchedCapture(5, 0) == 0 && matchedCapture(5, 9) == 0 &&
+              matchedCapture(5, 5) == 5,
+          "a marker locks only from the serial stored with its pixels; the frame on the headset is not a substitute");
+    const Box edge{.1f, .4f, .14f, .44f}; // outer band: the same shape as cut23's "edge waypoint"
+    check(prior(edge) == kindHud, "KNOWN HOLE: an outer-band piece starts as HUD, diamond or health bar alike");
+    Split hole;
+    Box center[1] = {{.45f, .40f, .50f, .45f}};
+    hole.update(center, 1, headAt(0).orientation);
+    check(hole.kind(0) == kindMarker, "a centre piece starts as a marker, before any vote");
+    hole.update(center, 1, headAt(15).orientation);
+    check(hole.kind(0) == kindHud,
+          "KNOWN HOLE: a piece that stays put while the tracked head turns is voted HUD; this is not evidence the "
+          "objective diamond did or did not");
+
     std::printf("%s (%d)\n", failures ? "FAILED" : "passed", failures);
     return failures ? 1 : 0;
 }

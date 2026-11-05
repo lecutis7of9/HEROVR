@@ -17737,12 +17737,18 @@ DWORD WINAPI run(void*) {
                                             if (layerGrid.stamp != splitStamp23) {
                                                 splitStamp23 = layerGrid.stamp;
                                                 const uint64_t srcSerial = native_gpu::promptLayerSourceSerial();
+                                                const NativeEyeFrame* slot = history.findSerial(srcSerial);
                                                 const NativeEyeFrame* src =
-                                                    srcSerial ? history.find(srcSerial, displayTime) : nullptr;
+                                                    prompt_split::matchedCapture(srcSerial, slot ? slot->serial : 0)
+                                                        ? slot
+                                                        : nullptr;
                                                 if (!src) {
+                                                    // The headset's camera is not the one that drew this grid. Do not
+                                                    // lock from it, and do not vote the classifier from it either.
                                                     ++splitLockMiss23;
-                                                    src = saved;
-                                                }
+                                                    for (uint32_t i = 0; i < prompt_layer::maxCards; ++i)
+                                                        heldMarker23[i] = {};
+                                                } else {
                                                 const Pose srcEyes[2] = {src->trackingEyes[0].pose,
                                                                          src->trackingEyes[1].pose};
                                                 float srcFov[2][4]{};
@@ -17788,6 +17794,7 @@ DWORD WINAPI run(void*) {
                                                     heldMarker23[i].ok = true;
                                                     ++splitLocks23;
                                                 }
+                                                } // a matched capture serial: lock from that frame only
                                             }
                                         }
                                         const uint64_t worldNowMs = GetTickCount64();

@@ -157,8 +157,41 @@ int main() {
     check(hole.kind(0) == kindMarker, "a centre piece starts as a marker, before any vote");
     hole.update(center, 1, headAt(15).orientation);
     check(hole.kind(0) == kindHud,
-          "KNOWN HOLE: a piece that stays put while the tracked head turns is voted HUD; this is not evidence the "
-          "objective diamond did or did not");
+          "KNOWN HOLE: a centre piece that never leaves its first place is voted HUD when the head turns");
+    // Session 162732 prompts log: one blob left the left edge, was locked, then the same box was view-locked on the
+    // next sample. A piece that has left its first place stays a marker through that still sample.
+    Split logged;
+    const Box seen[] = {
+        {.02f, .48f, .08f, .56f}, {.03f, .62f, .09f, .69f}, {.16f, .57f, .20f, .67f},
+        {.23f, .53f, .29f, .63f}, {.30f, .51f, .35f, .58f}, {.46f, .39f, .52f, .49f},
+        {.46f, .42f, .52f, .52f}, {.46f, .42f, .52f, .52f}, {.02f, .46f, .08f, .56f},
+    };
+    logged.update(seen + 0, 1, headAt(0).orientation);
+    check(logged.kind(0) == kindHud, "the logged blob starts at the left edge as HUD, before it has travelled");
+    bool becameMarker = false;
+    for (int i = 1; i < 7; ++i) {
+        logged.update(seen + i, 1, headAt(0).orientation);
+        becameMarker = logged.kind(0) == kindMarker;
+    }
+    check(becameMarker, "after the logged travel to mid-screen the blob is a marker");
+    logged.update(seen + 7, 1, headAt(15).orientation); // same box, head turned: the sample that view-locked it
+    check(logged.kind(0) == kindMarker, "a still sample after that travel does not put it back on the head");
+    // The log walked back to the left edge in small steps (still one piece). A jump bigger than the match window
+    // would be a new piece; these steps stay inside that window.
+    const Box walked[] = {{.40f, .48f, .46f, .58f}, {.34f, .48f, .40f, .58f}, {.28f, .48f, .34f, .58f},
+                          {.22f, .48f, .28f, .58f}, {.16f, .48f, .22f, .58f}, {.10f, .46f, .16f, .56f},
+                          {.04f, .46f, .10f, .56f}};
+    for (const Box& b : walked) {
+        const Box one[1] = {b};
+        logged.update(one, 1, headAt(40).orientation);
+    }
+    check(logged.kind(0) == kindMarker, "walked back to the left edge, still the world piece");
+    Split bar;
+    Box health[1] = {{.05f, .06f, .30f, .10f}};
+    bar.update(health, 1, headAt(0).orientation);
+    health[0] = {.05f, .06f, .18f, .10f}; // lost from the right end only
+    bar.update(health, 1, headAt(20).orientation);
+    check(bar.kind(0) == kindHud, "a health bar that shrinks from one end stays view-locked");
     PieceNote notes[2] = {{kindHud, .04f, .05f, .28f, .11f, 1}, {kindMarker, .61f, .40f, .66f, .48f, 0}};
     char line[240];
     const uint32_t got = pieceLine(line, sizeof line, 0, -1.f, 0, notes, 2);

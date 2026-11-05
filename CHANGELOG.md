@@ -19,12 +19,16 @@ brick building, looking up carried it into the clouds, and dropping off a roof l
 - **Missing capture camera:** if that serial is 0 or no longer the frame stored for it, the marker holds are dropped
   and the classifier is not voted from the headset's camera. The displayed frame is not used as a substitute. The
   diamond is absent for that sample (HUD pieces still draw). The log counts these as source miss.
-- **Classifier (unchanged, still a hole):** an outer-band piece starts as HUD, and a piece that stays on the layer
-  while the tracked head turns is voted HUD. The yellow diamond and a health bar are the same kind of alpha blob.
-  Nothing in the layer's pixels, and no confirmed game field, says which blob is the objective. If the diamond is
-  voted HUD it stays head-locked, which is the video's failure mode. tests/cut24_tests.cpp records that path as a
-  known hole. It does not show which way the video's diamond was voted, and the bearing tests supply their own pose
-  and tangent: they do not prove the latched command is cohtml's camera.
+- **Session 162732 (cut24 56b1780, source miss 0, every PIECE line match=1):** the one moving blob was view-locked
+  (`H` / `view`) for long stretches, including after it had already been `M` / `lock`, on a sample whose box had not
+  moved while the capture head had turned. `turn` on those lines is only the capture-versus-display gap (about 0 to
+  0.3 degrees), not the player's turn between grids. A piece that has left its first place is no longer treated as
+  screen-fixed, so that still sample cannot put it back on the head. A bar that only shrinks from one end still can.
+  This is not a read of which blob is the diamond, and it is not a headset confirmation.
+- **POI at 1237 m is not used.** POI DUMP 22 and CUT8 POI TARGET both report `.?AVPOIGame@GUI2@@` at 2594 20 -896.5,
+  1237 m from the hero, and icon record 7's first word is the same handle the target line names. The world-to-screen
+  projection is still not found, and that place is not a confirmed identity of the diamond. No new offset. Depth
+  stays the 1024 m stand-in.
 - **HUD unchanged:** health, ability circles, map and the Y prompt stay view-locked when the classifier calls them
   HUD. prompt_cards stays off. No new live.txt switch (`prompt_anchor` split remains the default).
 - **Not claimed:** that cohtml projects through the latched head view. cut23 already called that a CANDIDATE. The log
@@ -35,11 +39,9 @@ brick building, looking up carried it into the clouds, and dropping off a roof l
   name the diamond. A line taken while the diamond is visibly sliding, with that blob's box on it, says which cause
   it was: `H` and `view` means the split head-locked it; `M` and `lock` with `match=1` means the lock ran and the
   miss is the camera or the 1024 m depth; `match=0` and `drop` means the capture serial was not stored.
-- **Runtime evidence still required:** that log during the yaw, the look-up and the roof drop, and one pair of layer
-  frames whose diamond pixel agrees with unprojecting through the head lens of the serial on the matching line. The
-  existing CUT10 GUI2 POI lines (disassembly-confirmed layout only; the world-triple scan is not a confirmed offset)
-  from the same session, next to the diamond's on-screen metres, are what would show whether a record's place is the
-  objective. We do not have those. No pointer was added.
+- **Still not runtime proof:** session 162732 shows the blob was view-locked. It does not show the new rule on a
+  headset. A pair of layer frames whose diamond pixel matches unprojection through the serial's head lens, and a
+  confirmed field tying the 1237 m POI place to that diamond, are still missing. No pointer was added.
 
 ## hero-0.0.78-cut23-split - the game's HUD stays in your view, its world markers stay in its world; lights A/B (test cut, not a release)
 

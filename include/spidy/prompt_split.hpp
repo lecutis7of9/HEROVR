@@ -287,11 +287,11 @@ inline uint32_t pieceLine(char* out, uint32_t cap, int matched, float turnDeg, u
 class Split {
 public:
     struct Track {
-        Box now{}, ref{};
+        Box now{}, ref{}, home{};
         Quat refHead{};
         int score{};  // marker votes minus HUD votes
         Kind kind{kindHud};
-        bool voted{};
+        bool voted{}, travelled{};
     };
     // A new grid's pieces (`n`, their layer boxes) with the head's room orientation as it was read.
     void update(const Box boxes[], uint32_t n, const Quat& head) {
@@ -319,7 +319,7 @@ public:
             Track t;
             t.now = b;
             if (best < 0) {
-                t.ref = b;
+                t.ref = t.home = b;
                 t.refHead = head;
                 t.kind = prior(b);
                 ++fresh_;
@@ -327,13 +327,18 @@ public:
                 taken[static_cast<uint32_t>(best)] = true;
                 t = last_[static_cast<uint32_t>(best)];
                 t.now = b;
+                // cut24 session 162732: the diamond's box travelled from the left edge to mid-screen, then one
+                // still sample while the capture head turned voted it HUD and the view lock held it there. A piece
+                // that has left its first place is not screen-fixed. Health that only shrinks from one end has not.
+                if (!t.travelled && movedBy(t.home, b) > moveUv)
+                    t.travelled = true;
                 const float moved = movedBy(t.ref, b);
                 const float turned = turnedDegrees(t.refHead, head);
                 int vote = 0;
                 if (moved > moveUv)
                     vote = 1; // it travelled across the screen: with the head or with the world
-                else if (turned > turnDegrees)
-                    vote = -1; // the head turned and it stayed put: screen-fixed
+                else if (turned > turnDegrees && !t.travelled)
+                    vote = -1; // still at its first place while the head turned: screen-fixed
                 if (vote) {
                     t.score = std::clamp(t.score + vote, -maxScore, maxScore);
                     t.ref = b;
@@ -341,7 +346,7 @@ public:
                     t.voted = true;
                     if (t.score >= markerAt)
                         t.kind = kindMarker;
-                    else if (t.score <= hudAt)
+                    else if (t.score <= hudAt && !t.travelled)
                         t.kind = kindHud;
                     vote > 0 ? ++markerVotes_ : ++hudVotes_;
                 }

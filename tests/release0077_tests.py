@@ -12,22 +12,20 @@ def src(p):
 
 class Release0077(unittest.TestCase):
     def test_versions(self):
-        self.assertEqual(src('VERSION').strip(), '0.0.77')
-        self.assertEqual(src('PORT-VERSION').strip(), 'Update 39.10')
+        # v0.0.78 moved VERSION to 0.0.78 and PORT-VERSION to Update 39.11 (release0078_tests pins them)
+        self.assertGreaterEqual(tuple(int(x) for x in src('VERSION').strip().split('.')), (0, 0, 77))
         c = src('CMakeLists.txt')
-        self.assertIn('project(Spidy VERSION 0.0.77 ', c)
+        self.assertRegex(c, r'project\(Spidy VERSION 0\.0\.7[7-9] ')
         self.assertRegex(c, r'option\(HERO_TEST_BUILD "[^"]*" OFF\)')
         v = src('include/spidy/version.hpp')
-        self.assertIn('#define SPIDY_PUBLIC_VERSION "0.0.77"', v)
-        self.assertIn('build = "39.10";', v)
-        self.assertIn('Mod Version 0.0.77 (build Update 39.10)', src('SOURCE.txt'))
+        self.assertRegex(v, r'#define SPIDY_PUBLIC_VERSION "0\.0\.7[7-9]"')
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'RELEASE-NOTES-v0.0.77.md')))
 
     def test_launcher_build_19_or_later(self):
         # 0.0.77.1 build 19 shipped with v0.0.77; launcher-only hotfixes of 0.0.77 (0.0.77.2 build 20, tag v0.0.77.1) follow.
         import re
         m = src('tools/launcher/src/ModVersion.cs')
-        self.assertRegex(m, r'public const string Version = "0\.0\.77\.\d+";')
+        self.assertRegex(m, r'public const string Version = "0\.0\.7[7-9]\.\d+";')
         self.assertGreaterEqual(int(re.search(r'public const int Build = (\d+);', m).group(1)), 19)
         self.assertIn('PreviousTags = { "v0.0.75", "v0.0.74", "v0.0.73", "v0.0.63", "v0.0.62", "v0.0.6", "v0.0.5" };', m)
 

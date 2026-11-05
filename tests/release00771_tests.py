@@ -12,14 +12,12 @@ def src(p):
 
 class Release00771(unittest.TestCase):
     def test_versions(self):
-        self.assertEqual(src('VERSION').strip(), '0.0.77')
-        self.assertEqual(src('PORT-VERSION').strip(), 'Update 39.10')
+        # v0.0.78 moved VERSION to 0.0.78, PORT-VERSION to Update 39.11 and the launcher to 0.0.78.1 build 21
+        # (release0078_tests pins them); the 0.0.77.2 build 20 stamps only need to be at or past it.
+        self.assertGreaterEqual(tuple(int(x) for x in src('VERSION').strip().split('.')), (0, 0, 77))
         m = src('tools/launcher/src/ModVersion.cs')
-        self.assertIn('public const string Version = "0.0.77.2";', m)
-        self.assertIn('public const int Build = 20;', m)
-        a = src('tools/launcher/src/AssemblyInfo.cs')
-        self.assertIn('[assembly: AssemblyVersion("0.0.77.2")]', a)
-        self.assertIn('[assembly: AssemblyInformationalVersion("0.0.77.2 (launcher build 20)")]', a)
+        self.assertRegex(m, r'public const string Version = "0\.0\.7[7-9]\.\d+";')
+        self.assertGreaterEqual(int(re.search(r'public const int Build = (\d+);', m).group(1)), 20)
 
     def test_thanks_block(self):
         c = src('tools/launcher/src/Cinematic.cs')

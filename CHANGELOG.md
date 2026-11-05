@@ -2,6 +2,14 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## 0.0.78 (tag v0.0.78) - immersive cutscenes by default, prompts as small VR cards, a quiet launcher (EXPERIMENTAL release)
+
+The cut21 build (1434d58) with the release stamps: VERSION 0.0.78 (newer than 0.0.77 in every shipped launcher, so it
+is offered once; equal after install, so no loop), PORT-VERSION Update 39.11, launcher 0.0.78.1 build 21; version.json
+carries no launcher_build. HERO_TEST_BUILD stays OFF, Revert unchanged, still EXPERIMENTAL with 0.0.63 the STABLE
+build. What's new and the known bugs: RELEASE-NOTES-v0.0.78.md. The 0.0.77 / 0.0.77.1 stamp pins relaxed;
+tests/release0078_tests.py.
+
 ## hero-0.0.78-cut21-cards - the game's own prompts as small VR cards; a quiet launcher log (local, not built)
 
 - QUIET TRIM (CONFIRMED, the launcher noise that led to the Alt+F4): the launcher's log box trimmed itself with

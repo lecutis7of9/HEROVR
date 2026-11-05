@@ -19,8 +19,8 @@ def tracked():
 
 class Version(unittest.TestCase):
     def test_version(self):
-        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.77')  # 0.0.77 (tag v0.0.77) = build 39.10; 0.0.76 (tag v0.0.76.1) = build 39.9; 0.0.75 = build 39.8 (the 0.0.75 work, the motorcycle, the launcher's Spider-Man 1 option); 0.0.74 = build 39.7 (the 0.0.74 test 1-10 work, SM1STYLE eye AA, the window-edge lights fix, the multiplayer server list); 0.0.73 = build 39.6 (the 0.0.73 fixes, GAME TAA off by default, no MP SOLO TEST); 0.0.72 = build 39.5 (the 0.0.72 heroes, models and suits); 0.0.71 = 0.0.70 ("0.0.7") + the Stop VR fix (build 39.4 unchanged; 0.0.70 was 39.4, 0.0.63 was 39.3, 0.0.62 was 39.2)
-        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.10')
+        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.78')  # 0.0.78 (tag v0.0.78) = build 39.11; 0.0.77 (tag v0.0.77) = build 39.10; 0.0.76 (tag v0.0.76.1) = build 39.9; 0.0.75 = build 39.8 (the 0.0.75 work, the motorcycle, the launcher's Spider-Man 1 option); 0.0.74 = build 39.7 (the 0.0.74 test 1-10 work, SM1STYLE eye AA, the window-edge lights fix, the multiplayer server list); 0.0.73 = build 39.6 (the 0.0.73 fixes, GAME TAA off by default, no MP SOLO TEST); 0.0.72 = build 39.5 (the 0.0.72 heroes, models and suits); 0.0.71 = 0.0.70 ("0.0.7") + the Stop VR fix (build 39.4 unchanged; 0.0.70 was 39.4, 0.0.63 was 39.3, 0.0.62 was 39.2)
+        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.11')
 
 
 class Credit(unittest.TestCase):

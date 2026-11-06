@@ -4,12 +4,18 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 ## hero-0.0.78-cut26 reset - tip matches cut24 `56b1780` (no package)
 
-Headset sessions of `5f64c7d` (cut25) and `89bccbf` (cut26 / HV077-89bccbf) were slower than cut24, cut26 took much
-longer to enter VR and the image was worse, and neither fixed the objective diamond or the web-zip circle.
+**Do not package.** Session `game-vr-20261105-191940` was stamped `89bccbf` / HV077-89bccbf (no MIXED INSTALL) and
+was worse than cut24: hitch including 17902 ms; new_scene_fps 6.5 vs 29.4; unique/dropped 771/773 vs 2796/391;
+render_memory 83 vs 49 MB; stream outside 13.5 s / 135 rounds; headset_fps about 67.9 vs 89.8. MODELS were prepared
+6.2 s before the session. The same DEVICE_REMOVED monitor-copy skip note is in the log. PIECE printed 12 lines
+(the throttle). reticles=0. The final WAYPOINT LOCK line still says markers at 1024 m. That line prints
+`markerLockMetres` and was never changed to report the stick-up zip distance, so this session's LOCK text is not
+evidence the zip-aim HUD-distance path ran. Do not claim that candidate worked. The diamond and the web-zip circle
+were not fixed.
+
 Everything after `56b1780` is reverted on this branch: the travel latch, the PIECE throttle, and the stick-up zip
-view-distance marker path. Those were speculative. None is a confirmed world position, and this tip does not keep
-them. Runtime code matches cut24 `56b178018f1185de56770bd0d19a8b35af24c20b`. **Do not package a build from any
-commit after that baseline** until a change can be shown not to add load, image, or stream cost against cut24.
+view-distance marker path. Runtime code matches cut24 `56b178018f1185de56770bd0d19a8b35af24c20b`. **Do not package
+any commit after that baseline** until a change can be shown not to add load, image, or stream cost against cut24.
 Sandman (cannot press Y in the air to zip) is not started.
 
 ## hero-0.0.78-cut24 - the game's waypoint stays on the camera that drew it (test cut, not a release)

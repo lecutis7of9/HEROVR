@@ -171,19 +171,8 @@ inline Vec3 trackingOfWorld(const Pose& worldFromTracking, Vec3 world) {
 // the icon at markerLockMetres along the capture ray: from that camera the whole ray is one pixel, and after the
 // head moves an 8 m translation stays within about a degree of a 1173 m objective. Not the game's destination; that
 // position is not a confirmed read.
-// There is no second distance for the web-zip white circle. Session 184004 has reticles 0, so that circle is the
-// game's own UI blob in this same layer, not the mod's aim marker (game_swing::Aim.point is the swing-web hit, and
-// it is not drawn when reticles are off). No existing hook has a confirmed world position for the game's LT+RT zip
-// point (pointLaunch in swing.hpp is the grounded leap window, not that aim). Putting this 1024 m stand-in on a
-// near zip point makes the circle slide. It is not separated here, because the layer does not say which blob it is.
 inline constexpr float markerMetres = 6.f;
 inline constexpr float markerLockMetres = 1024.f;
-// CANDIDATE, not a measured zip distance: while the stick-up zip is on screen, a marker is drawn at the tangent
-// the game gave it, this far in front of the head, instead of markerLockMetres. A near zip point at 1024 m slides.
-inline constexpr float markerViewMetres = hudMetres;
-inline float markerDepth(bool zipOnScreen) {
-    return zipOnScreen ? markerViewMetres : markerLockMetres;
-}
 inline constexpr uint32_t markerPadPixels = 12; // the crop and card grown this much each way, both alike: a marker
                                                 // that moved since the 100 ms grid stays whole (the alpha keys it)
 // A marker piece's centre and size (head tangents) and its padded crop of the layer {u0, v0, u1, v1}.
@@ -298,11 +287,11 @@ inline uint32_t pieceLine(char* out, uint32_t cap, int matched, float turnDeg, u
 class Split {
 public:
     struct Track {
-        Box now{}, ref{}, home{};
+        Box now{}, ref{};
         Quat refHead{};
         int score{};  // marker votes minus HUD votes
         Kind kind{kindHud};
-        bool voted{}, travelled{};
+        bool voted{};
     };
     // A new grid's pieces (`n`, their layer boxes) with the head's room orientation as it was read.
     void update(const Box boxes[], uint32_t n, const Quat& head) {
@@ -330,7 +319,7 @@ public:
             Track t;
             t.now = b;
             if (best < 0) {
-                t.ref = t.home = b;
+                t.ref = b;
                 t.refHead = head;
                 t.kind = prior(b);
                 ++fresh_;
@@ -338,18 +327,13 @@ public:
                 taken[static_cast<uint32_t>(best)] = true;
                 t = last_[static_cast<uint32_t>(best)];
                 t.now = b;
-                // cut24 session 162732: the diamond's box travelled from the left edge to mid-screen, then one
-                // still sample while the capture head turned voted it HUD and the view lock held it there. A piece
-                // that has left its first place is not screen-fixed. Health that only shrinks from one end has not.
-                if (!t.travelled && movedBy(t.home, b) > moveUv)
-                    t.travelled = true;
                 const float moved = movedBy(t.ref, b);
                 const float turned = turnedDegrees(t.refHead, head);
                 int vote = 0;
                 if (moved > moveUv)
                     vote = 1; // it travelled across the screen: with the head or with the world
-                else if (turned > turnDegrees && !t.travelled)
-                    vote = -1; // still at its first place while the head turned: screen-fixed
+                else if (turned > turnDegrees)
+                    vote = -1; // the head turned and it stayed put: screen-fixed
                 if (vote) {
                     t.score = std::clamp(t.score + vote, -maxScore, maxScore);
                     t.ref = b;
@@ -357,7 +341,7 @@ public:
                     t.voted = true;
                     if (t.score >= markerAt)
                         t.kind = kindMarker;
-                    else if (t.score <= hudAt && !t.travelled)
+                    else if (t.score <= hudAt)
                         t.kind = kindHud;
                     vote > 0 ? ++markerVotes_ : ++hudVotes_;
                 }

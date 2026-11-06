@@ -24,9 +24,12 @@
 //    pulled in toward the middle (pull) and the piece grown (grow, at least minCardTan high, at most maxCardTan) so
 //    an edge piece - the bottom-left Y prompt - lands well inside a Quest's view at a readable size; hudDrop lower.
 //  - WORLD MARKER (waypoints, threat and objective icons, a prompt on a thing in the world): the game moves it across
-//    its screen as its view turns or travels. Drawn exactly where the game drew it: its layer place through the head
-//    lens of the frame (headLens) as a direction from the head, markerMetres out, its own size - so it sits on its
-//    target in the game's world and moves with it, never with the room.
+//    its screen as its view turns or travels. cut23 re-read that screen place through the head that is showing the
+//    picture, 6 m out, so a turn of the head after the pixels were drawn dragged the icon across the city and a fall
+//    left a far objective on the roof under the headset. cut24 locks the icon to the camera that produced those
+//    pixels (lockPoint), in that camera's world, and the frame that shows it only projects that world point. The
+//    game's own destination position is not a confirmed read (story077g's POI places are CANDIDATE and off; cut10's
+//    record scan was never matched to the diamond), so the hold is markerLockMetres along the capture ray.
 // Which is which (Split): a piece tracked over the grids (100 ms) keeps a reference place and the head's orientation
 // there. When the head has since turned over turnDegrees, a piece still at its place (within moveUv by its steadiest
 // edge, so a health bar that shrinks from one side stays still) is HUD-voted, one that moved marker-voted; a piece
@@ -41,6 +44,8 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 
 namespace spidy::prompt_split {
 // live.txt prompt_anchor (SpidyPromptAnchor 5647): 0 split (the default since cut23), 1 view (cut21's: every card at
@@ -142,13 +147,32 @@ inline bool hudPlace(const prompt_layer::Region& r, uint32_t w, uint32_t h, floa
     th *= fit;
     return std::isfinite(cx + cy + tw + th) && tw > 0 && th > 0;
 }
-// A head-local point at tangent (tx, ty), `metres` ahead of `head`, in the room.
+// A head-local point at tangent (tx, ty), `metres` ahead of `head` (the -1 axis scaled by `metres`, so the depth
+// along the head's forward is `metres`). HUD pieces still use this on the head that is showing them.
 inline Vec3 headPoint(const Pose& head, float tx, float ty, float metres) {
     return head.position + head.orientation.rotate(Vec3{tx, ty, -1} * metres);
 }
+// The capture camera's ray through a marker's tangent, `metres` deep along that camera's forward, in the same
+// space as `source`. False when the pose or the tangent is not a place. Holding this point, and projecting it
+// later, does not follow a head that has since turned or moved.
+inline bool lockPoint(const Pose& source, float tx, float ty, float metres, Vec3& world) {
+    world = {};
+    if (!(metres > 0) || !std::isfinite(tx + ty + metres) || !finite(source.position))
+        return false;
+    world = headPoint(source, tx, ty, metres);
+    return finite(world);
+}
+// A game-world point as a tracking-space point of the frame whose world-from-tracking pose is `worldFromTracking`.
+inline Vec3 trackingOfWorld(const Pose& worldFromTracking, Vec3 world) {
+    return compose(inverse(worldFromTracking), Pose{world, {}}).position;
+}
 
-// WORLD MARKER placement: its own size, where the game drew it.
-inline constexpr float markerMetres = 6.f;   // out from the head (far enough to sit on a far target comfortably)
+// WORLD MARKER placement. markerMetres is cut23's (a point 6 m out, which a fall puts on a nearby roof). cut24 holds
+// the icon at markerLockMetres along the capture ray: from that camera the whole ray is one pixel, and after the
+// head moves an 8 m translation stays within about a degree of a 1173 m objective. Not the game's destination; that
+// position is not a confirmed read.
+inline constexpr float markerMetres = 6.f;
+inline constexpr float markerLockMetres = 1024.f;
 inline constexpr uint32_t markerPadPixels = 12; // the crop and card grown this much each way, both alike: a marker
                                                 // that moved since the 100 ms grid stays whole (the alpha keys it)
 // A marker piece's centre and size (head tangents) and its padded crop of the layer {u0, v0, u1, v1}.
@@ -210,6 +234,54 @@ inline float movedBy(const Box& a, const Box& b) {
 inline Kind prior(const Box& b) {
     const float cx = b.cx(), cy = b.cy();
     return cx < bandU || cx > 1 - bandU || cy < bandV || cy > 1 - bandV ? kindHud : kindMarker;
+}
+// The command serial stored with the layer pixels, when it is the serial of the frame we still have. Zero, or any
+// other frame (including the one on the headset now), is not that camera: 0 means there is nothing to lock from.
+inline uint64_t matchedCapture(uint64_t pixelSerial, uint64_t storedSerial) {
+    return pixelSerial != 0 && pixelSerial == storedSerial ? storedSerial : 0;
+}
+// One UI-layer piece as the split has it. `how`: 0 dropped (no capture camera), 1 view-locked, 2 world-locked.
+// This is the split's vote, not a read of which blob is the objective diamond.
+struct PieceNote {
+    Kind kind{kindHud};
+    float x0{}, y0{}, x1{}, y1{};
+    uint8_t how{};
+};
+// One bounded line. Stops before `cap`. A trailing "|+" means more pieces did not fit. No world position is written.
+inline uint32_t pieceLine(char* out, uint32_t cap, int matched, float turnDeg, uint64_t serial, const PieceNote* notes,
+                          uint32_t n) {
+    if (!out || cap < 8)
+        return 0;
+    out[0] = 0;
+    const int wrote = std::snprintf(out, cap, "cut24 PIECE match=%d turn=%.1f serial=%llu n=%u", matched ? 1 : 0,
+                                    std::isfinite(turnDeg) ? turnDeg : -1.f,
+                                    static_cast<unsigned long long>(serial), n);
+    if (wrote < 0) {
+        out[0] = 0;
+        return 0;
+    }
+    uint32_t used = static_cast<uint32_t>(wrote) < cap ? static_cast<uint32_t>(wrote) : cap - 1;
+    out[used] = 0;
+    n = notes ? std::min(n, prompt_layer::maxCards) : 0;
+    for (uint32_t i = 0; i < n; ++i) {
+        const char* how = notes[i].how == 2 ? "lock" : notes[i].how == 1 ? "view" : "drop";
+        char bit[72];
+        std::snprintf(bit, sizeof bit, " | %u%s %.2f,%.2f-%.2f,%.2f %s", i,
+                      notes[i].kind == kindMarker ? "M" : "H", notes[i].x0, notes[i].y0, notes[i].x1, notes[i].y1,
+                      how);
+        const uint32_t need = static_cast<uint32_t>(std::strlen(bit));
+        if (used + need + 1 >= cap) {
+            if (used + 4 < cap) {
+                std::memcpy(out + used, " |+", 3);
+                used += 3;
+                out[used] = 0;
+            }
+            break;
+        }
+        std::memcpy(out + used, bit, need + 1);
+        used += need;
+    }
+    return used;
 }
 
 class Split {

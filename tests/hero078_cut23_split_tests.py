@@ -30,18 +30,31 @@ class Cut23(unittest.TestCase):
 
     def test_marker_and_hud_branches(self):
         g = src('src/game_xr.cpp')
-        at = g.index('// cut23: HUD locked to the view (a point of the head\'s frame), markers')
-        body = g[at:at + 3000]
-        # a world marker only when the classifier says so and the head lens is known
-        self.assertIn('splitLensOk && split23.kind(i) == prompt_split::kindMarker;', body)
-        self.assertIn('prompt_split::markerPlace(', body)
-        self.assertIn('metres = prompt_split::markerMetres;', body)
-        # everything else is HUD: view-locked at hudMetres in the head's frame (never left in the room)
+        at = g.index('// cut24: HUD locked to the view (a point of the head\'s frame). A world')
+        body = g[at:at + 4500]
+        # a world marker is the capture camera's world point, projected into this frame
+        self.assertIn('heldMarker23[i].ok &&', body)
+        self.assertIn('split23.kind(i) == prompt_split::kindMarker', body)
+        self.assertIn('prompt_split::trackingOfWorld(saved->worldFromTracking,', body)
+        self.assertIn('prompt_split::markerLockMetres', body)
+        self.assertNotIn('metres = prompt_split::markerMetres;', g)
+        # HUD stays view-locked. A marker with no capture lock is not glued to the head.
         self.assertIn('prompt_split::hudPlace(', body)
         self.assertIn('metres = prompt_split::hudMetres;', body)
         self.assertIn('prompt_split::headPoint(splitHead, cx, cy, metres)', body)
-        self.assertLess(body.index('prompt_split::markerPlace('), body.index('prompt_split::hudPlace('))
-        self.assertIn('HERO VR 0.0.78 cut23 PROMPT SPLIT (CANDIDATE)', g)
+        self.assertIn('continue; // no capture lock: do not glue it to this head', body)
+        self.assertIn('native_gpu::promptLayerSourceSerial()', g)
+        self.assertIn('history.findSerial(srcSerial)', g)
+        self.assertIn('prompt_split::matchedCapture(', g)
+        self.assertNotIn('src = saved', g)
+        self.assertIn('prompt_split::lockPoint(', g)
+        self.assertIn('cut24 PIECE', src('include/spidy/prompt_split.hpp'))
+        self.assertIn('splitPieceLines23 < 80', g)
+        self.assertIn('HERO VR 0.0.78 cut24 WAYPOINT LOCK (CANDIDATE)', g)
+        gpu = src('src/native_eye_gpu.cpp')
+        self.assertIn('SpidyLatchedEyeSerial()', gpu)
+        self.assertIn('mask->sourceSerial', gpu)
+        self.assertIn('if (!mask)', gpu)
 
     def test_migration(self):
         with tempfile.TemporaryDirectory() as d:

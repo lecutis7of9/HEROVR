@@ -2,6 +2,61 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut26 reset - tip matches cut24 `56b1780` (no package)
+
+**Do not package.** Session `game-vr-20261105-191940` was stamped `89bccbf` / HV077-89bccbf (no MIXED INSTALL) and
+was worse than cut24: hitch including 17902 ms; new_scene_fps 6.5 vs 29.4; unique/dropped 771/773 vs 2796/391;
+render_memory 83 vs 49 MB; stream outside 13.5 s / 135 rounds; headset_fps about 67.9 vs 89.8. MODELS were prepared
+6.2 s before the session. The same DEVICE_REMOVED monitor-copy skip note is in the log. PIECE printed 12 lines
+(the throttle). reticles=0. The final WAYPOINT LOCK line still says markers at 1024 m. That line prints
+`markerLockMetres` and was never changed to report the stick-up zip distance, so this session's LOCK text is not
+evidence the zip-aim HUD-distance path ran. Do not claim that candidate worked. The diamond and the web-zip circle
+were not fixed.
+
+Everything after `56b1780` is reverted on this branch: the travel latch, the PIECE throttle, and the stick-up zip
+view-distance marker path. Runtime code matches cut24 `56b178018f1185de56770bd0d19a8b35af24c20b`. **Do not package
+any commit after that baseline** until a change can be shown not to add load, image, or stream cost against cut24.
+Sandman (cannot press Y in the air to zip) is not started.
+
+## hero-0.0.78-cut24 - the game's waypoint stays on the camera that drew it (test cut, not a release)
+
+From the cut23 headset video (the yellow objective diamond, 1237 m then 1173 m): a right head turn dragged it onto the
+brick building, looking up carried it into the clouds, and dropping off a roof left it pointing at the roof.
+- **Cause in this code (not a new HUD guess):** cut23 took the icon's place in the UI layer and aimed it from the head
+  that is showing the picture, 6 m out (`headPoint` + `markerMetres`). The layer's alpha grid is a later read-back of
+  an earlier frame, so that aim follows the head. A point 6 m along the ray also sits on a nearby roof once the hero
+  falls, while the objective is still about a kilometre out. tests/cut24_tests.cpp: yaw, pitch, an 8 m fall, stereo
+  against a 1173 m point, and the health bar staying in the head. That is code evidence. No headset has run this cut.
+- **What is not a confirmed read:** the game's destination position. story077g's POI places are CANDIDATE and off
+  (cut7's GUI2 POI dump was at the origin). cut10's record scan was never matched to the diamond. No new pointer or
+  offset. The icon is the game's own pixels, held `markerLockMetres` (1024 m) along the ray of the eye command latched
+  when that frame's layer was copied (`SpidyLatchedEyeSerial`), then projected with the frame that shows it. 1024 m is
+  a stand-in depth so a kilometre-scale objective does not sit on a roof; it is not the distance drawn on the diamond.
+- **Missing capture camera:** if that serial is 0 or no longer the frame stored for it, the marker holds are dropped
+  and the classifier is not voted from the headset's camera. The displayed frame is not used as a substitute. The
+  diamond is absent for that sample (HUD pieces still draw). The log counts these as source miss.
+- **Classifier (unchanged, still a hole):** an outer-band piece starts as HUD, and a piece that stays on the layer
+  while the tracked head turns is voted HUD. The yellow diamond and a health bar are the same kind of alpha blob.
+  Nothing in the layer's pixels, and no confirmed game field, says which blob is the objective. If the diamond is
+  voted HUD it stays head-locked, which is the video's failure mode. tests/cut24_tests.cpp records that path as a
+  known hole. It does not show which way the video's diamond was voted, and the bearing tests supply their own pose
+  and tangent: they do not prove the latched command is cohtml's camera.
+- **HUD unchanged:** health, ability circles, map and the Y prompt stay view-locked when the classifier calls them
+  HUD. prompt_cards stays off. No new live.txt switch (`prompt_anchor` split remains the default).
+- **Not claimed:** that cohtml projects through the latched head view. cut23 already called that a CANDIDATE. The log
+  line is `cut24 WAYPOINT LOCK (CANDIDATE)`.
+- **What a play log can separate (cut24 PIECE, on change, 80 lines a session, no new game read):** each blob's
+  layer box, the split's vote (H or M), and view / lock / drop, plus whether the pixels' serial still matched a
+  stored eye command and the degrees that command's head has turned from the head showing the picture. It does not
+  name the diamond. A line taken while the diamond is visibly sliding, with that blob's box on it, says which cause
+  it was: `H` and `view` means the split head-locked it; `M` and `lock` with `match=1` means the lock ran and the
+  miss is the camera or the 1024 m depth; `match=0` and `drop` means the capture serial was not stored.
+- **Runtime evidence still required:** that log during the yaw, the look-up and the roof drop, and one pair of layer
+  frames whose diamond pixel agrees with unprojecting through the head lens of the serial on the matching line. The
+  existing CUT10 GUI2 POI lines (disassembly-confirmed layout only; the world-triple scan is not a confirmed offset)
+  from the same session, next to the diamond's on-screen metres, are what would show whether a record's place is the
+  objective. We do not have those. No pointer was added.
+
 ## hero-0.0.78-cut23-split - the game's HUD stays in your view, its world markers stay in its world; lights A/B (test cut, not a release)
 
 From the owner's cut22 video and report ("the HUD should remain stationary in your view", icons "run off the side",

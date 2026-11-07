@@ -1,0 +1,39 @@
+name: Window visibility diagnostic Windows ZIP
+on:
+  push:
+    branches:
+      - diagnostics/window-visibility-2026-11-06
+  workflow_dispatch:
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch dependencies
+        shell: pwsh
+        run: .\tools\bootstrap.ps1 -Observer
+      - name: Compile VR modules and launcher
+        shell: pwsh
+        run: .\tools\build.ps1 -Observer -FromSource
+      - name: Prepare portable diagnostic folder
+        shell: pwsh
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'HEROVR-Window-Diagnostic'
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          robocopy . $dest /E /XD .git third_party .github /XF *.obj *.pdb | Out-Null
+          if ($LASTEXITCODE -gt 7) { throw "Copy failed: $LASTEXITCODE" }
+          if (-not (Test-Path (Join-Path $dest 'build\windows-ninja\spidy_stereo_probe.dll'))) { throw 'Missing compiled stereo probe DLL' }
+          @'
+          HEROVR WINDOW VISIBILITY TEST
+          1. Extract the entire ZIP.
+          2. Launch HEROVR using the usual launcher/script from this folder.
+          3. Before launching, set the environment variable HEROVR_WINDOW_TRACE=1.
+          4. Reproduce distant window flicker and send the debug output.
+          This is an experimental diagnostic build. Keep your regular release.
+          '@ | Set-Content (Join-Path $dest 'WINDOW-TEST-README.txt')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HEROVR-Window-Diagnostic-Windows
+          path: ${{ runner.temp }}/HEROVR-Window-Diagnostic/
+          retention-days: 7

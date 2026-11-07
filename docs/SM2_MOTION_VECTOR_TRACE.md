@@ -20,3 +20,26 @@ The public SM64-SpiderMan2 mod independently reverse-engineered Spider-Man2.exe'
 ## Important limitation
 
 The public mod establishes the existence and location in the rendering *pipeline*, not the exact CBV slot, byte offsets, or HEROVR runtime mismatch. Those require an executable/shader capture. No runtime patch is justified yet.
+
+
+## Exact shader constant layout recovered (2026-11-07)
+
+Source: `ExtCan/SM64-SpiderMan2/src/render/inject_shaders.h`, the independently reversed-engineered `VS_DefaultMaterialGBuffer` camera constants. The game binds a **36 × float4 = 576-byte per-view constant buffer at shader register b0**:
+
+| Float4 rows | Byte offset | Meaning |
+|---|---:|---|
+| V[0..2] | 0x000..0x02f | Camera basis axes |
+| V[3] | 0x030 | Current camera world position (xyz) |
+| V[4..7] | 0x040..0x07f | Current camera-relative view-projection matrix |
+| V[8..11] | 0x080..0x0bf | Previous camera-relative view-projection matrix |
+| V[15] | 0x0f0 | Previous camera world position (xyz) |
+| V[28].w | 0x1cc | Flags (bit 12 = orthographic) |
+| V[33] | 0x210 | Motion-vector scale |
+| V[34] | 0x220 | Inverse render size |
+| V[35] | 0x230 | Projection epsilon / sky depth |
+
+The game's G-buffer writes **motion vectors to SV_Target1**, with depth in SV_Target0 and material data in SV_Target2/3. The independently reversed-engineered shader projects current vertex position through V[4..7], and previous vertex position through V[8..11] after subtracting V[15]. Thus it is not sufficient to compare just view+0x30 and view+0x560 translation.
+
+**Concrete verification**: capture the b0 constant buffer bound to the actual *left and right* G-buffer draws. Compare V[3] and V[15] against the eye camera positions already recorded by `copyJob()`; then compare V[4..7] and V[8..11] against matrices generated from the respective current and previous eye poses/projections. If both eyes share V[8..11] or one has the desktop projection, that is a candidate cause of the swimming. Also check V[33] motion scale and V[34] inverse render size for the 70% scene-size vs full-size TAA output.
+
+**What is still missing**: a verified engine CPU address / DX12 root parameter and descriptor binding that populates this shader b0 for HEROVR's Spider-Man2.exe 2.810.0.0. `b0` is a shader register, not a memory address, and should not be patched by guessing an RVA. The source above gives *byte offsets within the shader constant buffer*, not a hook location.

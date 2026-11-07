@@ -800,39 +800,62 @@ void nearInstance(unsigned eye, uintptr_t instance, const float* m, const float*
     InterlockedIncrement64(&data.sequence);
     ReleaseSRWLockExclusive(&telemetry);
 }
-// Experimental read-only draw-submission counters for the existing 0.0.78 actor hook.
-// These count calls reaching this hook, NOT actual lit windows or completed GPU draws.
-// Opt in with HEROVR_WINDOW_ACTOR_TRACE=1. Output goes to Windows debug output.
+// One-run diagnostic: automatically logs actor-hook submission counters to a local CSV.
+// These are per-context aggregates, NOT proof of which windows were illuminated.
 std::atomic<uint64_t> windowActorCalls[3]{};
 std::atomic<uint64_t> windowActorVisible[3]{};
+SRWLOCK windowActorFileLock = SRWLOCK_INIT;
+void windowActorWrite(unsigned slot, uint64_t calls, uint64_t visible) {
+    char path[MAX_PATH]{};
+    HMODULE self{};
+    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                            GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            reinterpret_cast<LPCSTR>(&windowActorWrite), &self) || !self)
+        return;
+    if (!GetModuleFileNameA(self, path, MAX_PATH))
+        return;
+    char* slash = std::strrchr(path, '\\');
+    if (!slash)
+        return;
+    std::snprintf(slash + 1, MAX_PATH - static_cast<size_t>(slash + 1 - path),
+                  "window-actor-trace-%lu.csv", static_cast<unsigned long>(GetCurrentProcessId()));
+    LARGE_INTEGER now{}, frequency{};
+    QueryPerformanceCounter(&now);
+    QueryPerformanceFrequency(&frequency);
+    const double seconds = frequency.QuadPart > 0
+        ? static_cast<double>(now.QuadPart) / static_cast<double>(frequency.QuadPart) : 0.;
+    char line[200]{};
+    const int n = std::snprintf(line, sizeof(line), "%.6f,%u,%llu,%llu\\r\\n",
+        seconds, slot, static_cast<unsigned long long>(calls),
+        static_cast<unsigned long long>(visible));
+    if (n <= 0 || n >= static_cast<int>(sizeof(line)))
+        return;
+    AcquireSRWLockExclusive(&windowActorFileLock);
+    HANDLE file = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                              nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file != INVALID_HANDLE_VALUE) {
+        if (GetLastError() != ERROR_ALREADY_EXISTS) {
+            constexpr char header[] = "qpc_seconds,slot,submissions,nonzero_visibility\\r\\n";
+            DWORD written{};
+            WriteFile(file, header, sizeof(header) - 1, &written, nullptr);
+        }
+        DWORD written{};
+        WriteFile(file, line, static_cast<DWORD>(n), &written, nullptr);
+        CloseHandle(file);
+    }
+    ReleaseSRWLockExclusive(&windowActorFileLock);
+}
 void windowActorTrace(void* context, uint8_t visibility) {
-    static const bool on = [] {
-        char flag[4]{};
-        return GetEnvironmentVariableA("HEROVR_WINDOW_ACTOR_TRACE", flag, sizeof(flag)) && flag[0] == '1';
-    }();
-    static const bool announced = [] {
-        OutputDebugStringA(on ? "WINDOW ACTOR TRACE: enabled (v078 diagnostic)\n"
-                             : "WINDOW ACTOR TRACE: disabled (set HEROVR_WINDOW_ACTOR_TRACE=1)\n");
-        return true;
-    }();
-    (void)announced;
-    if (!on || !context)
+    if (!context)
         return;
     const auto view = pointer(reinterpret_cast<uintptr_t>(context) + 8);
     const int eye = eyeView(view);
-    // 0 = other/main contexts, 1 = left eye, 2 = right eye.
     const unsigned slot = eye >= 0 && eye < 2 ? static_cast<unsigned>(eye + 1) : 0u;
     const auto calls = windowActorCalls[slot].fetch_add(1, std::memory_order_relaxed) + 1;
     if (visibility)
         windowActorVisible[slot].fetch_add(1, std::memory_order_relaxed);
-    if (calls == 1 || calls % 16384 == 0) {
-        char line[192]{};
-        std::snprintf(line, sizeof(line),
-                      "WINDOW ACTOR TRACE slot=%u submissions=%llu nonzero_visibility=%llu\n",
-                      slot, static_cast<unsigned long long>(calls),
-                      static_cast<unsigned long long>(windowActorVisible[slot].load(std::memory_order_relaxed)));
-        OutputDebugStringA(line);
-    }
+    if (calls == 1 || calls % 16384 == 0)
+        windowActorWrite(slot, calls, windowActorVisible[slot].load(std::memory_order_relaxed));
 }
 void renderActor(void* context, void* actor, uint8_t visibility) {
     windowActorTrace(context, visibility);

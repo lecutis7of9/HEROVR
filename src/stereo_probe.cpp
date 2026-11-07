@@ -3123,6 +3123,82 @@ void* impostorQueries(void* view, void* cull) {
             }
         }
     }
+    // Read-only three-view reach comparison. Group by the observed frameIndex,
+    // not by timestamps: a 100 ms sampling interval cannot prove frame agreement.
+    // Unknown/non-primary views are excluded rather than mislabeled "game".
+    if (result && view) {
+        const uintptr_t at = reinterpret_cast<uintptr_t>(view);
+        const int eye = eyeView(at);
+        const uintptr_t primary = pointer(base + 0xc2ca220);
+        const int slot = eye >= 0 && eye < 2 ? eye + 1 :
+            (primary && (at == primary || pointer(at + 0x1dc8) == primary) ? 0 : -1);
+        if (slot >= 0) {
+            float post{};
+            const bool postValid = read(reinterpret_cast<uintptr_t>(result) + 0x88, &post, 4) &&
+                                   std::isfinite(post) && post > 0.f && post < 5000.f;
+            struct ReachSample { uint64_t frame{}, tick{}; float pre{}, post{}; bool preValid{}, postValid{}; };
+            static ReachSample samples[3]{};
+            static SRWLOCK lock = SRWLOCK_INIT;
+            static uint64_t lastEmittedFrame = ~uint64_t(0);
+            static uint64_t lastOutputTick{};
+            const uint64_t observedFrame = frameIndex;
+            const uint64_t tick = GetTickCount64();
+            AcquireSRWLockExclusive(&lock);
+            samples[slot] = {observedFrame, tick, reach, post, originalReachValid, postValid};
+            const bool complete = samples[0].tick && samples[1].tick && samples[2].tick &&
+                samples[0].frame == samples[1].frame && samples[1].frame == samples[2].frame;
+            if (complete && observedFrame != lastEmittedFrame && tick - lastOutputTick >= 100) {
+                lastEmittedFrame = observedFrame;
+                lastOutputTick = tick;
+                const bool valid = samples[0].postValid && samples[1].postValid && samples[2].postValid;
+                const bool same = valid && std::fabs(samples[0].post - samples[1].post) < .001f &&
+                                  std::fabs(samples[1].post - samples[2].post) < .001f;
+                char path[MAX_PATH]{};
+                HMODULE self{};
+                if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                       GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                       reinterpret_cast<LPCSTR>(&windowActorWrite), &self) && self &&
+                    GetModuleFileNameA(self, path, MAX_PATH)) {
+                    if (char* slash = std::strrchr(path, '\\')) {
+                        std::snprintf(slash + 1, MAX_PATH - static_cast<size_t>(slash + 1 - path),
+                                      "window-reach-triplets-%lu.csv",
+                                      static_cast<unsigned long>(GetCurrentProcessId()));
+                        char line[320]{};
+                        const int n = std::snprintf(line, sizeof(line),
+                            "%llu,%llu,%.7g,%.7g,%.7g,%.7g,%.7g,%.7g,%u,%u,%u,%u\r\n",
+                            static_cast<unsigned long long>(tick),
+                            static_cast<unsigned long long>(observedFrame),
+                            samples[0].pre, samples[0].post,
+                            samples[1].pre, samples[1].post,
+                            samples[2].pre, samples[2].post,
+                            unsigned(samples[0].preValid && samples[0].postValid),
+                            unsigned(samples[1].preValid && samples[1].postValid),
+                            unsigned(samples[2].preValid && samples[2].postValid),
+                            unsigned(same));
+                        if (n > 0 && n < static_cast<int>(sizeof(line))) {
+                            AcquireSRWLockExclusive(&windowActorFileLock);
+                            HANDLE file = CreateFileA(path, FILE_APPEND_DATA,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                                FILE_ATTRIBUTE_NORMAL, nullptr);
+                            if (file != INVALID_HANDLE_VALUE) {
+                                if (GetLastError() != ERROR_ALREADY_EXISTS) {
+                                    constexpr char header[] =
+                                        "tick_ms,observed_frame,game_pre,game_post,left_pre,left_post,right_pre,right_post,game_valid,left_valid,right_valid,post_equal\r\n";
+                                    DWORD written{};
+                                    WriteFile(file, header, sizeof(header) - 1, &written, nullptr);
+                                }
+                                DWORD written{};
+                                WriteFile(file, line, static_cast<DWORD>(n), &written, nullptr);
+                                CloseHandle(file);
+                            }
+                            ReleaseSRWLockExclusive(&windowActorFileLock);
+                        }
+                    }
+                }
+            }
+            ReleaseSRWLockExclusive(&lock);
+        }
+    }
     // Record the actual value AFTER any mod write. The existing window probe
     // samples before this hook's optional impostor-reach modification.
     if (result) {

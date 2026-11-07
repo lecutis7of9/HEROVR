@@ -1804,7 +1804,8 @@ def apply_sm1style(a, live_text):
     if a.vr_aa != 'game':
         a.sm1style = False
         return apply_vr_aa(a, live_settings.vr_supersample(live_text),
-                           live_settings.vr_texture_detail(live_text)[0])
+                           live_settings.vr_texture_detail(live_text)[0],
+                           live_settings.vr_render_upscaled(live_text))
     a.sm1style = live_settings.sm1style_on(live_text)
     percent = SM1STYLE_UPSCALE if live_settings.vr_render_upscaled(live_text) else SM1STYLE_NATIVE
     mip = a.mip_bias if getattr(a, 'game_aa_taa', None) is False else 'game'
@@ -1876,7 +1877,7 @@ def vr_aa_options(a):
 TEXTURE_DETAIL_ANISOTROPY = 16
 
 
-def apply_vr_aa(a, supersample=100, aniso=False):
+def apply_vr_aa(a, supersample=100, aniso=False, render_upscaled=False):
     """0.0.76 SPIDY TAA (live.txt vr_aa = ours, the default, keep or smaa): the eye settings our own anti-aliasing is
     made for, whatever a launcher argument, next-launch.txt or keep-settings asked: render scale and supersample 100,
     eyes at 100% (no upscaling), no anisotropy override (VR TEXTURES gives the game's 16x filtering), the game's
@@ -1889,13 +1890,16 @@ def apply_vr_aa(a, supersample=100, aniso=False):
     anisotropy TEXTURE_DETAIL_ANISOTROPY instead of none, the mip bias as above (no sharpening). Returns the console
     line."""
     smaa = a.vr_aa == 'smaa'
+    # Build 2b opt-in: vr_render = upscaled with vr_aa = ours uses 70% eyes,
+    # bilinear spatial reconstruction and our full-resolution temporal history.
+    eye_percent = 70 if render_upscaled and not smaa and not a.size else 100
     mip = '0.5' if smaa or getattr(a, 'game_aa_taa', None) is False else 'game'
     anisotropy = TEXTURE_DETAIL_ANISOTROPY if aniso else 0
     # 0.0.76 A-depth TRACE D: SpidyXrStart keeps 110 / 125 / 150 with ours only (vr_aa.hpp supersampleKept)
     ss = supersample if supersample in (110, 125, 150) and not a.size and not smaa else 100
     forced = [f'{name} {old} -> {new}' for name, old, new in (
         ('render scale', a.render_scale, 100), ('supersample', a.supersample, ss),
-        ('upscale', a.upscale, 100), ('mip bias', a.mip_bias, mip),
+        ('upscale', a.upscale, eye_percent), ('mip bias', a.mip_bias, mip),
         ('anisotropy', a.anisotropy, anisotropy)) if old != new]
     if a.game_sharpening:
         forced.append('game sharpening -> lowest')
@@ -1904,7 +1908,7 @@ def apply_vr_aa(a, supersample=100, aniso=False):
     if getattr(a, 'no_eye_antialiasing', False):
         forced.append('eye lens jitter -> on')
     a.render_scale = 100 if not a.size else a.render_scale
-    a.supersample, a.upscale, a.mip_bias, a.anisotropy = ss, 100, mip, anisotropy
+    a.supersample, a.upscale, a.mip_bias, a.anisotropy = ss, eye_percent, mip, anisotropy
     a.game_sharpening = a.engine_taa = a.no_eye_antialiasing = False
     kept = ' (kept over: ' + ', '.join(forced) + ')' if forced else ''
     ss_said = (f', eyes supersampled {ss}% (live.txt vr_ss)' if ss != 100 else '')

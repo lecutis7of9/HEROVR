@@ -1921,7 +1921,7 @@ def apply_vr_aa(a, supersample=100, aniso=False, render_upscaled=False):
                 '. vr_aa = ours (or no line) + restart VR for SpidyVR\'s own TAA.')
     return ("VR AA: SPIDY TAA (default" + (', vr_aa = keep: your game AA kept' if a.vr_aa == 'keep' else '') +
             "): SpidyVR's own TAA, one history per eye reprojected with that eye's own pose, Halton jitter per eye, "
-            'colour clipping against ghosts; the game\'s TAA kept off the eyes, eyes at 100%' + ss_said + ', ' +
+            'colour clipping against ghosts; the game\'s TAA kept off the eyes, eyes at ' + str(eye_percent) + '%' + ss_said + ', ' +
             ('the game\'s mip bias' if mip == 'game' else f'mip bias {mip}') + kept +
             '; if it cannot start the eyes get SMAA. live.txt vr_aa = smaa + restart VR for no history at all.')
 

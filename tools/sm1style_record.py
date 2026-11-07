@@ -21,6 +21,9 @@ def sm1style_snapshot(game, address):
     out = dict(version=version, flags=flags, reason=reason, percent=percent, render_width=width,
                render_height=height, sequence=struct.unpack_from('<Q', raw, 192)[0])
     extra = struct.unpack_from('<6Q', raw, 200) if version >= 2 else None
+    # Build 2k: previously reserved trailing Q counts TemporalAa hook calls
+    # that could not be matched to either sm1Jobs pointer.
+    out['unmatched_taa_calls'] = struct.unpack_from('<Q', raw, 248)[0] if version >= 2 else None
     for i, eye in enumerate(('left', 'right')):
         out[eye] = dict(calls=calls[i], ran=ran[i], history=history[i])
         if extra:
@@ -40,6 +43,8 @@ def sm1style_line(record):
     if 'own_history' not in l:
         return line + '.'
     shared = l['shared_history'] + r['shared_history']
+    unmatched = record.get('unmatched_taa_calls')
+    missing = f'; unmatched native TAA hook calls {unmatched}' if unmatched is not None else ''
     return (line + f"; each eye's own history set in {l['own_history']} / {r['own_history']}, shared "
             f"{shared} ({'none: the eyes never read each other' if not shared else 'SHARED: the eyes mix history'}); "
-            f"eye job changed {l['job_changed']} / {r['job_changed']}.")
+            f"eye job changed {l['job_changed']} / {r['job_changed']}{missing}.")

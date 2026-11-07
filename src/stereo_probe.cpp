@@ -2756,7 +2756,12 @@ std::array<float, 2> eyeJitter() {
         return j;
     }
     const bool engine = engineTaaLive.load() && !(eyeTemporal.load() & 1);
-    if (!(eyeTemporal.load() & 1) && !engine)
+    // Build 2d: the 70%-resolution native-eye path needs subpixel sample
+    // diversity for our full-resolution history reconstruction. Previously
+    // eyeTemporal was zero in this mode, so every frame reused the exact
+    // same subpixel coverage and history could not reconstruct thin edges.
+    const bool ownUpscaled = ownTaaRenderPercent.load(std::memory_order_relaxed) < 100;
+    if (!(eyeTemporal.load() & 1) && !engine && !ownUpscaled)
         return {0, 0};
     const auto render = eyeRenderSize();
     const float ratio = static_cast<float>(config.width) / render[0];

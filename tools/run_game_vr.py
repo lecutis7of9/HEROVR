@@ -3622,6 +3622,19 @@ def session(a, startup, session_off=()):
                 for eye in ('left', 'right'):
                     e = record.get(eye) or {}
                     lines.append(eye.upper() + ': ' + json.dumps(e, sort_keys=True))
+                # Stage census: queueing, eye-job AA assignment and matched TAA
+                # calls are different events. Show all three; do not assert
+                # that their totals must be equal.
+                lines.append('TAA STAGE CENSUS: ' + json.dumps({
+                    'queued_left': (record.get('left') or {}).get('queued'),
+                    'queued_right': (record.get('right') or {}).get('queued'),
+                    'aa_writes_left': (record.get('left') or {}).get('aa_writes'),
+                    'aa_writes_right': (record.get('right') or {}).get('aa_writes'),
+                    'matched_calls_left': (record.get('left') or {}).get('calls'),
+                    'matched_calls_right': (record.get('right') or {}).get('calls'),
+                    'unmatched_hook_calls': record.get('unmatched_taa_calls'),
+                    'left_jobs': record.get('left_jobs'),
+                }, sort_keys=True))
                 lines.append('TAA SETTINGS: ' + json.dumps({
                     'percent': record.get('percent'),
                     'render_width': record.get('render_width'),

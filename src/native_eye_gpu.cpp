@@ -1666,36 +1666,8 @@ float4 vs(uint id : SV_VertexID) : SV_POSITION {
     const float2 corner = float2((id << 1) & 2, id & 2);
     return float4(corner * float2(2, -2) + float2(-1, 1), 0, 1);
 }
-// Build 2c: spatial edge reconstruction in source-pixel space. The previous
-// bilinear-only upscale allowed narrow high-contrast geometry to alternate
-// between adjacent source pixels as the camera moved. Smooth *across* an
-// detected edge, not along it, and clamp to the local color envelope.
-float luminance(float3 rgb) { return dot(rgb, float3(0.299, 0.587, 0.114)); }
 float4 ps(float4 position : SV_POSITION) : SV_TARGET {
-    float2 uv = position.xy * frame.xy;
-    uint sourceWidth, sourceHeight;
-    source.GetDimensions(sourceWidth, sourceHeight);
-    float2 texel = 1.0 / float2(sourceWidth, sourceHeight);
-    float4 center = source.SampleLevel(bilinear, uv, 0);
-    float4 north = source.SampleLevel(bilinear, uv - float2(0, texel.y), 0);
-    float4 south = source.SampleLevel(bilinear, uv + float2(0, texel.y), 0);
-    float4 west = source.SampleLevel(bilinear, uv - float2(texel.x, 0), 0);
-    float4 east = source.SampleLevel(bilinear, uv + float2(texel.x, 0), 0);
-    float ln = luminance(north.rgb), ls = luminance(south.rgb);
-    float lw = luminance(west.rgb), le = luminance(east.rgb);
-    float lc = luminance(center.rgb);
-    float contrast = max(max(abs(ln - lc), abs(ls - lc)),
-                         max(abs(lw - lc), abs(le - lc)));
-    // Preserve flat regions and fine low-contrast texture. For a strong edge,
-    // blend the pair straddling its normal, avoiding a four-way blur.
-    float horizontal = abs(lw - le);
-    float vertical = abs(ln - ls);
-    float3 across = horizontal > vertical ? 0.5 * (west.rgb + east.rgb)
-                                           : 0.5 * (north.rgb + south.rgb);
-    float weight = saturate((contrast - 0.045) * 5.0) * 0.30;
-    float3 low = min(center.rgb, min(min(north.rgb, south.rgb), min(west.rgb, east.rgb)));
-    float3 high = max(center.rgb, max(max(north.rgb, south.rgb), max(west.rgb, east.rgb)));
-    return float4(clamp(lerp(center.rgb, across, weight), low, high), center.a);
+    return source.SampleLevel(bilinear, position.xy * frame.xy, 0);
 }
 )";
 const char* fxaaShader = R"(

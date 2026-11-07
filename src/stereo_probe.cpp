@@ -399,7 +399,7 @@ __declspec(dllexport) spidy::sm1style::Data SpidySm1StyleData;
  // Slots: all calls, unmatched, matched L/R, frame advances L/R,
  // repeat frames L/R, AA off L/R, no output L/R, history gate miss L/R,
  // camera cuts L/R. Only diagnostic; no rendering writes.
- alignas(8) __declspec(dllexport) uint64_t SpidyTaaAuditData[16]{};
+ __declspec(align(8)) __declspec(dllexport) uint64_t SpidyTaaAuditData[16]{};
 
 // 0.0.76 JITTER FIX (include/spidy/jitter_log.hpp): each view's lens jitter, its first 200 frames (read-only).
 __declspec(dllexport) spidy::jitter_log::Data SpidyJitterLogData;
@@ -2302,7 +2302,7 @@ void temporalAa(void* a, void* b, void* c, void* d) {
         InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[1]));
         // Build 2k: account for native TAA calls excluded by sm1Jobs pointer matching.
         // This counter is diagnostic only; never change the game's rendering path.
-        ++SpidySm1StyleData.reserved[0];
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidySm1StyleData.reserved[0]));
         originalTemporalAa(a, b, c, d);
         return;
     }
@@ -2334,7 +2334,7 @@ void temporalAa(void* a, void* b, void* c, void* d) {
     const bool ran = aa == 1 && frame && (jitter[0] != 0 || jitter[1] != 0) && output && haveStamp && stamp == frame;
     // Atomic stage/reason counters remain meaningful even if render hooks overlap.
     InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[2 + eye]));
-    static std::atomic<int32_t> lastAuditFrame[2]{{INT32_MIN}, {INT32_MIN}};
+    static std::atomic<int32_t> lastAuditFrame[2]{INT32_MIN, INT32_MIN};
     const int32_t last = lastAuditFrame[eye].exchange(frame, std::memory_order_relaxed);
     if (last == frame)
         InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[6 + eye]));

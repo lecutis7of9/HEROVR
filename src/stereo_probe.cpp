@@ -334,7 +334,8 @@ Vec3 activeHeroPosition{};
 bool activeHeroPlaced{};
 // Frames end with view maintenance (main thread). placedFrame is the frame
 // whose eye poses were placed last; a job copied in a later frame got a late pose.
-uint64_t frameIndex{}, placedFrame{};
+std::atomic<uint64_t> frameIndex{};
+uint64_t placedFrame{};
 // Update 21: the eye camera audit's state (jobLock): the poses given SetPose,
 // and the left eye's rendered position, for the eyes' distance apart.
 native_eyes::EyeAsked eyeAsked[2]{};
@@ -3027,7 +3028,7 @@ void windowProbe(void* view, void* cull, void* result) {
                 const int n = std::snprintf(line, sizeof(line),
                     "%llu,%d,%llu,%.7g,%.7g,%d,%d,%u,%u\r\n",
                     static_cast<unsigned long long>(tick), slot,
-                    static_cast<unsigned long long>(frameIndex), lodScale, lodMultiplier,
+                    static_cast<unsigned long long>(frameIndex.load(std::memory_order_relaxed)), lodScale, lodMultiplier,
                     queryCapacity, queryUsed, unsigned(lodA && lodB), unsigned(poolA && poolB));
                 if (n > 0 && n < static_cast<int>(sizeof(line))) {
                     AcquireSRWLockExclusive(&windowActorFileLock);
@@ -3095,6 +3096,143 @@ void windowProbe(void* view, void* cull, void* result) {
     ReleaseSRWLockExclusive(&windowProbeLock);
 }
 // A view's impostor visibility queries (impostorReach above).
+namespace reach_cycle_diagnostic {
+constexpr unsigned kSlots = 3;
+constexpr unsigned kCapacity = 8;
+constexpr uint64_t kHoldCyclesHeuristic = 3;
+struct Record {
+    uint64_t cycle{};
+    uint64_t tick{};
+    float pre[kSlots]{}, post[kSlots]{};
+    bool preValid[kSlots]{}, postValid[kSlots]{};
+    uint32_t calls[kSlots]{};
+    bool occupied{};
+    uint64_t droppedOldAtRetirement{}, droppedCollisionAtRetirement{};
+};
+static SRWLOCK stateLock = SRWLOCK_INIT;
+static Record records[kCapacity]{};
+static uint64_t newestCycle{};
+static bool seenCycle{};
+static uint64_t droppedOld{}, droppedCollision{};
+
+// All mutations and copies happen under stateLock; file I/O happens afterward.
+// Only records at least kHoldCycles older than the newest observed maintenance
+// cycle are retired. This is a heuristic grace period, NOT a frame-end barrier.
+inline unsigned note(unsigned slot, uint64_t cycle, uint64_t tick,
+                     float pre, bool preOk, float post, bool postOk,
+                     Record (&retired)[kCapacity]) {
+    unsigned count = 0;
+    AcquireSRWLockExclusive(&stateLock);
+    if (!seenCycle || cycle > newestCycle) {
+        newestCycle = cycle;
+        seenCycle = true;
+    }
+    // Accept observations for an exact resident cycle even when out of order.
+    // Never overwrite a different live cycle occupying the same ring slot.
+    Record& r = records[cycle % kCapacity];
+    if (r.occupied && r.cycle == cycle) {
+        r.pre[slot] = pre;
+        r.post[slot] = post;
+        r.preValid[slot] = preOk;
+        r.postValid[slot] = postOk;
+        ++r.calls[slot];
+    } else if (r.occupied) {
+        ++droppedCollision;
+    } else if (newestCycle >= cycle &&
+               newestCycle - cycle >= kHoldCyclesHeuristic) {
+        ++droppedOld;
+    } else {
+        r = Record{};
+        r.occupied = true;
+        r.cycle = cycle;
+        r.tick = tick;
+        r.pre[slot] = pre;
+        r.post[slot] = post;
+        r.preValid[slot] = preOk;
+        r.postValid[slot] = postOk;
+        ++r.calls[slot];
+    }
+
+    // Retire AFTER insertion, not on first three-view completeness.
+    // The grace period is heuristic: it cannot certify render-job completion.
+    for (auto& candidate : records) {
+        if (candidate.occupied && newestCycle >= candidate.cycle &&
+            newestCycle - candidate.cycle >= kHoldCyclesHeuristic) {
+            candidate.droppedOldAtRetirement = droppedOld;
+            candidate.droppedCollisionAtRetirement = droppedCollision;
+            retired[count++] = candidate;
+            candidate = Record{};
+        }
+    }
+    ReleaseSRWLockExclusive(&stateLock);
+    return count;
+}
+
+inline void writeRows(const Record* rows, unsigned count) {
+    if (!count) return;
+    char path[MAX_PATH]{};
+    HMODULE self{};
+    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                            GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            reinterpret_cast<LPCSTR>(&windowActorWrite), &self) ||
+        !self || !GetModuleFileNameA(self, path, MAX_PATH)) return;
+    char* slash = std::strrchr(path, '\\');
+    if (!slash) return;
+    std::snprintf(slash + 1, MAX_PATH - static_cast<size_t>(slash + 1 - path),
+                  "window-reach-by-cycle-v3-%lu.csv",
+                  static_cast<unsigned long>(GetCurrentProcessId()));
+    AcquireSRWLockExclusive(&windowActorFileLock);
+    HANDLE file = CreateFileA(path, FILE_APPEND_DATA,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                              OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file != INVALID_HANDLE_VALUE) {
+        if (GetLastError() != ERROR_ALREADY_EXISTS) {
+            constexpr char header[] =
+                "# maintenance-cycle grouping only; 3-cycle retention is heuristic; "
+                "incomplete masks are provisional; rows may be out of cycle order\r\n"
+                "cycle,tick_ms,view_mask,game_pre,game_post,left_pre,left_post,"
+                "right_pre,right_post,game_pre_valid,left_pre_valid,right_pre_valid,"
+                "game_post_valid,left_post_valid,right_post_valid,post_equal,"
+                "calls_game,calls_left,calls_right,dropped_old,dropped_collision\r\n";
+            DWORD written{};
+            WriteFile(file, header, sizeof(header) - 1, &written, nullptr);
+        }
+        for (unsigned i = 0; i < count; ++i) {
+            const Record& r = rows[i];
+            const unsigned mask = unsigned(r.calls[0] != 0) |
+                                  (unsigned(r.calls[1] != 0) << 1) |
+                                  (unsigned(r.calls[2] != 0) << 2);
+            const bool valid = mask == 7 && r.postValid[0] &&
+                               r.postValid[1] && r.postValid[2];
+            const unsigned equal = !valid ? 2u :
+                ((std::fabs(r.post[0] - r.post[1]) < .001f &&
+                  std::fabs(r.post[1] - r.post[2]) < .001f) ? 1u : 0u);
+            char line[384]{};
+            const int n = std::snprintf(line, sizeof(line),
+                "%llu,%llu,%u,%.7g,%.7g,%.7g,%.7g,%.7g,%.7g,"
+                "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%llu,%llu\r\n",
+                static_cast<unsigned long long>(r.cycle),
+                static_cast<unsigned long long>(r.tick), mask,
+                r.pre[0], r.post[0], r.pre[1], r.post[1],
+                r.pre[2], r.post[2],
+                unsigned(r.preValid[0]), unsigned(r.preValid[1]),
+                unsigned(r.preValid[2]), unsigned(r.postValid[0]),
+                unsigned(r.postValid[1]), unsigned(r.postValid[2]),
+                equal, r.calls[0], r.calls[1], r.calls[2],
+                static_cast<unsigned long long>(r.droppedOldAtRetirement),
+                static_cast<unsigned long long>(r.droppedCollisionAtRetirement));
+            if (n > 0 && n < static_cast<int>(sizeof(line))) {
+                DWORD written{};
+                WriteFile(file, line, static_cast<DWORD>(n), &written, nullptr);
+            }
+        }
+        CloseHandle(file);
+    }
+    ReleaseSRWLockExclusive(&windowActorFileLock);
+}
+} // namespace reach_cycle_diagnostic
+
+
 void* impostorQueries(void* view, void* cull) {
     const auto result = originalImpostorQueries(view, cull);
     windowProbe(view, cull, result);
@@ -3104,6 +3242,8 @@ void* impostorQueries(void* view, void* cull) {
     const bool originalReachValid = result &&
         read(reinterpret_cast<uintptr_t>(result) + 0x88, &reach, sizeof(reach)) &&
         std::isfinite(reach) && reach > 0.f && reach < 5000.f;
+    const float preReach = originalReachValid ? reach : 0.f;
+    const bool preValid = originalReachValid;
     if (result && impostors && enabled && impostorsOn.load(std::memory_order_relaxed) &&
         rested.load(std::memory_order_relaxed) &&
         eyeView(reinterpret_cast<uintptr_t>(view)) >= 0 &&
@@ -3123,9 +3263,7 @@ void* impostorQueries(void* view, void* cull) {
             }
         }
     }
-    // Read-only three-view reach comparison. Group by the observed frameIndex,
-    // not by timestamps: a 100 ms sampling interval cannot prove frame agreement.
-    // Unknown/non-primary views are excluded rather than mislabeled "game".
+    // Read-only per-maintenance-cycle diagnostic; cycle != rendered-frame ID.
     if (result && view) {
         const uintptr_t at = reinterpret_cast<uintptr_t>(view);
         const int eye = eyeView(at);
@@ -3134,71 +3272,18 @@ void* impostorQueries(void* view, void* cull) {
             (primary && (at == primary || pointer(at + 0x1dc8) == primary) ? 0 : -1);
         if (slot >= 0) {
             float post{};
-            const bool postValid = read(reinterpret_cast<uintptr_t>(result) + 0x88, &post, 4) &&
-                                   std::isfinite(post) && post > 0.f && post < 5000.f;
-            struct ReachSample { uint64_t frame{}, tick{}; float pre{}, post{}; bool preValid{}, postValid{}; };
-            static ReachSample samples[3]{};
-            static SRWLOCK lock = SRWLOCK_INIT;
-            static uint64_t lastEmittedFrame = ~uint64_t(0);
-            static uint64_t lastOutputTick{};
-            const uint64_t observedFrame = frameIndex;
-            const uint64_t tick = GetTickCount64();
-            AcquireSRWLockExclusive(&lock);
-            samples[slot] = {observedFrame, tick, reach, post, originalReachValid, postValid};
-            const bool complete = samples[0].tick && samples[1].tick && samples[2].tick &&
-                samples[0].frame == samples[1].frame && samples[1].frame == samples[2].frame;
-            if (complete && observedFrame != lastEmittedFrame && tick - lastOutputTick >= 100) {
-                lastEmittedFrame = observedFrame;
-                lastOutputTick = tick;
-                const bool valid = samples[0].postValid && samples[1].postValid && samples[2].postValid;
-                const bool same = valid && std::fabs(samples[0].post - samples[1].post) < .001f &&
-                                  std::fabs(samples[1].post - samples[2].post) < .001f;
-                char path[MAX_PATH]{};
-                HMODULE self{};
-                if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                                       GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                                       reinterpret_cast<LPCSTR>(&windowActorWrite), &self) && self &&
-                    GetModuleFileNameA(self, path, MAX_PATH)) {
-                    if (char* slash = std::strrchr(path, '\\')) {
-                        std::snprintf(slash + 1, MAX_PATH - static_cast<size_t>(slash + 1 - path),
-                                      "window-reach-triplets-%lu.csv",
-                                      static_cast<unsigned long>(GetCurrentProcessId()));
-                        char line[320]{};
-                        const int n = std::snprintf(line, sizeof(line),
-                            "%llu,%llu,%.7g,%.7g,%.7g,%.7g,%.7g,%.7g,%u,%u,%u,%u\r\n",
-                            static_cast<unsigned long long>(tick),
-                            static_cast<unsigned long long>(observedFrame),
-                            samples[0].pre, samples[0].post,
-                            samples[1].pre, samples[1].post,
-                            samples[2].pre, samples[2].post,
-                            unsigned(samples[0].preValid && samples[0].postValid),
-                            unsigned(samples[1].preValid && samples[1].postValid),
-                            unsigned(samples[2].preValid && samples[2].postValid),
-                            unsigned(same));
-                        if (n > 0 && n < static_cast<int>(sizeof(line))) {
-                            AcquireSRWLockExclusive(&windowActorFileLock);
-                            HANDLE file = CreateFileA(path, FILE_APPEND_DATA,
-                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
-                                FILE_ATTRIBUTE_NORMAL, nullptr);
-                            if (file != INVALID_HANDLE_VALUE) {
-                                if (GetLastError() != ERROR_ALREADY_EXISTS) {
-                                    constexpr char header[] =
-                                        "tick_ms,observed_frame,game_pre,game_post,left_pre,left_post,right_pre,right_post,game_valid,left_valid,right_valid,post_equal\r\n";
-                                    DWORD written{};
-                                    WriteFile(file, header, sizeof(header) - 1, &written, nullptr);
-                                }
-                                DWORD written{};
-                                WriteFile(file, line, static_cast<DWORD>(n), &written, nullptr);
-                                CloseHandle(file);
-                            }
-                            ReleaseSRWLockExclusive(&windowActorFileLock);
-                        }
-                    }
-                }
-            }
-            ReleaseSRWLockExclusive(&lock);
+            const bool postValid =
+                read(reinterpret_cast<uintptr_t>(result) + 0x88, &post, sizeof(post)) &&
+                std::isfinite(post) && post > 0.f && post < 5000.f;
+            reach_cycle_diagnostic::Record retired[reach_cycle_diagnostic::kCapacity]{};
+            const unsigned count = reach_cycle_diagnostic::note(
+                static_cast<unsigned>(slot),
+                frameIndex.load(std::memory_order_relaxed), GetTickCount64(),
+                preReach, preValid, post, postValid, retired);
+            reach_cycle_diagnostic::writeRows(retired, count);
         }
     }
+
     // Record the actual value AFTER any mod write. The existing window probe
     // samples before this hook's optional impostor-reach modification.
     if (result) {
@@ -3222,7 +3307,7 @@ void* impostorQueries(void* view, void* cull) {
                                   "window-impostor-after-%lu.csv", static_cast<unsigned long>(GetCurrentProcessId()));
                     char line[160]{};
                     const int n = std::snprintf(line, sizeof(line), "%llu,%u,%.7g,%.7g,%u\r\n",
-                        static_cast<unsigned long long>(now), slot, originalReachValid ? reach : 0.f, actual, unsigned(valid));
+                        static_cast<unsigned long long>(now), slot, preReach, actual, unsigned(valid));
                     if (n > 0 && n < static_cast<int>(sizeof(line))) {
                         AcquireSRWLockExclusive(&windowActorFileLock);
                         HANDLE file = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,

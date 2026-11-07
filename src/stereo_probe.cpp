@@ -1689,14 +1689,15 @@ void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t heigh
     // 0.0.74 test 10 SM1STYLE (SpidyVR src/stereo_probe.cpp:917-932): eyes made smaller than their image keep the
     // size they were made at (the game's TAA resolves it to sizes[2..3]); a later re-size must not ask for more than
     // the buffers have.
-    // Build 2e: keep the scene dimensions consistent with the actual 70%
-    // buffers. Previously the own-upscale path reduced sizes[2..7], but
-    // left sizes[0..1] at the original full eye resolution unless SM1STYLE
-    // was also enabled. That describes two different scene dimensions to
-    // the engine for the same native-eye buffer set.
-    const uint32_t ownPercent = ownTaaRenderPercent.load(std::memory_order_relaxed);
-    const uint32_t made = sm1Percent.load(std::memory_order_relaxed);
-    if (ownPercent < 100 || (made && made < 100)) {
+    // Build 2h: these two paths have different output contracts.
+    // Own-upscale: the game produces a small eye image, and our GPU stage
+    // enlarges it after capture; all native dimensions remain small.
+    // SM1STYLE: the game must retain a full-size TAA output target while
+    // rendering the scene at 70%. Do not shrink sizes[0..1] here: the native
+    // TemporalAa shader reads its input size separately from its target size.
+    // Collapsing the two sizes defeats native temporal reconstruction and
+    // can leave its history and resolved target with incompatible dimensions.
+    if (ownTaaRenderPercent.load(std::memory_order_relaxed) < 100) {
         const auto render = eyeRenderSize();
         sizes[0] = render[0];
         sizes[1] = render[1];

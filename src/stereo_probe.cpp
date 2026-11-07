@@ -2790,7 +2790,10 @@ std::array<float, 2> eyeJitter() {
                 engineTaaGameMax[i].store(g, std::memory_order_relaxed);
         }
     }
-    j = spidy::sm1style::eyeJitterFor(eyeJitterOff.load(std::memory_order_relaxed) != 0, j);
+    // In 70% temporal reconstruction the sampling step is required, even
+    // when an older live.txt left vr_jitter=off from the isolation tests.
+    // Full-resolution rendering still honors that setting unchanged.
+    j = spidy::sm1style::eyeJitterFor(!ownUpscaled && eyeJitterOff.load(std::memory_order_relaxed) != 0, j);
     eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
     eyeJitterSent[1].store(j[1], std::memory_order_relaxed);
     return j;

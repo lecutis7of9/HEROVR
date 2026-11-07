@@ -50,3 +50,27 @@ def sm1style_line(record):
     return (line + f"; each eye's own history set in {l['own_history']} / {r['own_history']}, shared "
             f"{shared} ({'none: the eyes never read each other' if not shared else 'SHARED: the eyes mix history'}); "
             f"eye job changed {l['job_changed']} / {r['job_changed']}{missing}.")
+
+
+# Build 2k: separate 16-QWORD atomic native-TAA audit (does not change
+# SpidySm1StyleData's 256-byte ABI).
+TAA_AUDIT_EXPORT = 'SpidyTaaAuditData'
+TAA_AUDIT_FIELDS = (
+    'all_hook_calls', 'unmatched_calls',
+    'matched_left', 'matched_right',
+    'frame_changes_left', 'frame_changes_right',
+    'same_frame_left', 'same_frame_right',
+    'aa_off_left', 'aa_off_right',
+    'no_output_left', 'no_output_right',
+    'history_gate_miss_left', 'history_gate_miss_right',
+    'camera_cut_left', 'camera_cut_right',
+)
+
+
+def taa_audit_snapshot(game, address):
+    if not address:
+        return None
+    raw = game.read(address, 128)
+    if len(raw) != 128:
+        return None
+    return dict(zip(TAA_AUDIT_FIELDS, struct.unpack('<16Q', raw)))

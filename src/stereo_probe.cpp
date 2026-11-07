@@ -395,6 +395,12 @@ std::atomic<uintptr_t> sm1Jobs[2]{};
 } // namespace
 extern "C" {
 __declspec(dllexport) spidy::sm1style::Data SpidySm1StyleData;
+ // Build 2k consolidated, independent TAA census. 16 aligned QWORDs.
+ // Slots: all calls, unmatched, matched L/R, frame advances L/R,
+ // repeat frames L/R, AA off L/R, no output L/R, history gate miss L/R,
+ // camera cuts L/R. Only diagnostic; no rendering writes.
+ alignas(8) __declspec(dllexport) uint64_t SpidyTaaAuditData[16]{};
+
 // 0.0.76 JITTER FIX (include/spidy/jitter_log.hpp): each view's lens jitter, its first 200 frames (read-only).
 __declspec(dllexport) spidy::jitter_log::Data SpidyJitterLogData;
 }
@@ -2291,7 +2297,9 @@ void temporalAa(void* a, void* b, void* c, void* d) {
     for (int i = 0; job && i < 2; ++i)
         if (sm1Jobs[i].load(std::memory_order_relaxed) == job)
             eye = i;
+    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[0]));
     if (eye < 0) {
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[1]));
         // Build 2k: account for native TAA calls excluded by sm1Jobs pointer matching.
         // This counter is diagnostic only; never change the game's rendering path.
         ++SpidySm1StyleData.reserved[0];
@@ -2324,21 +2332,37 @@ void temporalAa(void* a, void* b, void* c, void* d) {
     const uintptr_t slot = haveIndex ? pointer(job + mt::jobSlots + 8 * index) : 0;
     const bool haveStamp = slot && read(slot, &stamp, 4);
     const bool ran = aa == 1 && frame && (jitter[0] != 0 || jitter[1] != 0) && output && haveStamp && stamp == frame;
+    // Atomic stage/reason counters remain meaningful even if render hooks overlap.
+    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[2 + eye]));
+    static std::atomic<int32_t> lastAuditFrame[2]{{INT32_MIN}, {INT32_MIN}};
+    const int32_t last = lastAuditFrame[eye].exchange(frame, std::memory_order_relaxed);
+    if (last == frame)
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[6 + eye]));
+    else
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[4 + eye]));
+    if (aa != 1)
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[8 + eye]));
+    if (!output)
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[10 + eye]));
+    if (ran && !(haveOther && other == frame - 1 && previous))
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[12 + eye]));
+    if (cut)
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[14 + eye]));
     auto& dd = SpidySm1StyleData;
-    ++dd.calls[eye];
+    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&dd.calls[eye]));
     if (ran)
-        ++dd.ran[eye];
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&dd.ran[eye]));
     if (ran && haveOther && other == frame - 1 && previous)
-        ++dd.history[eye];
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&dd.history[eye]));
     if (ran) {
         if (mt::ownHistory(eyeSet, previous, mainSet, otherSet))
-            ++dd.ownHistory[eye];
+            InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&dd.ownHistory[eye]));
         else
-            ++dd.sharedHistory[eye];
+            InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&dd.sharedHistory[eye]));
     }
     static uintptr_t lastJob[2]{};
     if (lastJob[eye] && lastJob[eye] != job)
-        ++dd.jobChanged[eye];
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&dd.jobChanged[eye]));
     lastJob[eye] = job;
     dd.frame[eye] = frame;
     dd.stamp[eye] = stamp;

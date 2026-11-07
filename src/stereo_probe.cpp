@@ -2292,6 +2292,9 @@ void temporalAa(void* a, void* b, void* c, void* d) {
         if (sm1Jobs[i].load(std::memory_order_relaxed) == job)
             eye = i;
     if (eye < 0) {
+        // Build 2k: account for native TAA calls excluded by sm1Jobs pointer matching.
+        // This counter is diagnostic only; never change the game's rendering path.
+        ++SpidySm1StyleData.reserved[0];
         originalTemporalAa(a, b, c, d);
         return;
     }

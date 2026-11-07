@@ -5131,8 +5131,16 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTemporal(void* packed) {
     const bool own70 = percent == 70 && !nativeTemporal &&
                        spidy::native_gpu::vrAa() == spidy::vr_aa::ours;
     ownTaaRenderPercent = own70 ? 70u : 100u;
-    if (own70)
+    if (own70) {
+        // The experimental path reads a smaller eye image and enlarges it
+        // after capture in our GPU stage.
         spidy::native_gpu::setEyeOutput(config.width, config.height);
+    } else if (nativeTemporal) {
+        // Native TemporalAa resolves the small scene *inside the game* to
+        // the full-size eye target. Never ask our GPU stage to enlarge it
+        // again; also clear a stale own-upscale output override.
+        spidy::native_gpu::setEyeOutput(0, 0);
+    }
     // SM2 port: SM2VR 0.0.27's export (DLL +b040) keeps the size and always
     // stores 0 here: no jittered lens, no eye temporal AA, no extra reflection
     // targets (SM2VR 0.0.3/0.0.5). Update 34: bit 0x10 (-EngineTaa) is kept: the

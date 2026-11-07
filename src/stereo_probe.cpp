@@ -3098,7 +3098,12 @@ void windowProbe(void* view, void* cull, void* result) {
 void* impostorQueries(void* view, void* cull) {
     const auto result = originalImpostorQueries(view, cull);
     windowProbe(view, cull, result);
+    // Capture the original reach before any override. This value is diagnostic
+    // only and must not influence the engine's impostor selection.
     float reach{};
+    const bool originalReachValid = result &&
+        read(reinterpret_cast<uintptr_t>(result) + 0x88, &reach, sizeof(reach)) &&
+        std::isfinite(reach) && reach > 0.f && reach < 5000.f;
     if (result && impostors && enabled && impostorsOn.load(std::memory_order_relaxed) &&
         rested.load(std::memory_order_relaxed) &&
         eyeView(reinterpret_cast<uintptr_t>(view)) >= 0 &&
@@ -3141,7 +3146,7 @@ void* impostorQueries(void* view, void* cull) {
                                   "window-impostor-after-%lu.csv", static_cast<unsigned long>(GetCurrentProcessId()));
                     char line[160]{};
                     const int n = std::snprintf(line, sizeof(line), "%llu,%u,%.7g,%.7g,%u\r\n",
-                        static_cast<unsigned long long>(now), slot, reach, actual, unsigned(valid));
+                        static_cast<unsigned long long>(now), slot, originalReachValid ? reach : 0.f, actual, unsigned(valid));
                     if (n > 0 && n < static_cast<int>(sizeof(line))) {
                         AcquireSRWLockExclusive(&windowActorFileLock);
                         HANDLE file = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,

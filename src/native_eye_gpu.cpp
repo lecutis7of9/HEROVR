@@ -1666,6 +1666,9 @@ float4 vs(uint id : SV_VertexID) : SV_POSITION {
     const float2 corner = float2((id << 1) & 2, id & 2);
     return float4(corner * float2(2, -2) + float2(-1, 1), 0, 1);
 }
+// Build 2d: spatial reconstruction supplies a stable full-resolution input
+// to the temporal pass. Do not pre-blend changing edge neighborhoods here;
+// temporal accumulation handles subpixel samples over successive frames.
 float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     return source.SampleLevel(bilinear, position.xy * frame.xy, 0);
 }
@@ -5086,9 +5089,10 @@ void stagePair(EyePairState::Stamp stamp) {
                            D3D12_RESOURCE_STATE_COPY_SOURCE);
     const bool smaaUploading = useSmaa && drawSmaa(slot->list.Get(), index);
     // The history after AA: it blends what the headset is shown.
-    // Build 2b isolation test: preserve 70% eye rendering and spatial upscale,
-    // but skip temporal accumulation while upscaling to diagnose stationary waviness.
-    if (!up && historyNow() && prepareHistory()) {
+    // Build 2d: accumulate the newly jittered 70% eye samples at headset
+    // resolution. The previous isolation test skipped this pass for all
+    // upscaled eyes, leaving thin geometry with no temporal reconstruction.
+    if (historyNow() && prepareHistory()) {
         drawHistory(slot->list.Get(), index, stamp.serial);
     } else {
         history.valid = false;

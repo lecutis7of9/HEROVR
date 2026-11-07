@@ -19,6 +19,7 @@
 #include "spidy/native_body.hpp"
 #include "spidy/native_eye_frame.hpp"
 #include "spidy/native_eye_gpu.hpp"
+#include "spidy/vr_aa.hpp"
 #include "spidy/native_hud.hpp"
 #include "spidy/perf077.hpp"
 #include "spidy/native_view.hpp"

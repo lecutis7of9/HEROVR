@@ -3118,6 +3118,50 @@ void* impostorQueries(void* view, void* cull) {
             }
         }
     }
+    // Record the actual value AFTER any mod write. The existing window probe
+    // samples before this hook's optional impostor-reach modification.
+    if (result) {
+        const int eye = eyeView(reinterpret_cast<uintptr_t>(view));
+        const unsigned slot = eye >= 0 && eye < 2 ? unsigned(eye + 1) : 0u;
+        static std::atomic<uint64_t> last[3]{};
+        const uint64_t now = GetTickCount64();
+        uint64_t previous = last[slot].load(std::memory_order_relaxed);
+        if (now - previous >= 100 && last[slot].compare_exchange_strong(previous, now)) {
+            float actual{};
+            const bool valid = read(reinterpret_cast<uintptr_t>(result) + 0x88, &actual, sizeof(actual)) &&
+                               std::isfinite(actual) && actual > 0 && actual < 5000;
+            char path[MAX_PATH]{};
+            HMODULE self{};
+            if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                   GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                   reinterpret_cast<LPCSTR>(&windowActorWrite), &self) && self &&
+                GetModuleFileNameA(self, path, MAX_PATH)) {
+                if (char* slash = std::strrchr(path, '\\')) {
+                    std::snprintf(slash + 1, MAX_PATH - static_cast<size_t>(slash + 1 - path),
+                                  "window-impostor-after-%lu.csv", static_cast<unsigned long>(GetCurrentProcessId()));
+                    char line[160]{};
+                    const int n = std::snprintf(line, sizeof(line), "%llu,%u,%.7g,%.7g,%u\r\n",
+                        static_cast<unsigned long long>(now), slot, reach, actual, unsigned(valid));
+                    if (n > 0 && n < static_cast<int>(sizeof(line))) {
+                        AcquireSRWLockExclusive(&windowActorFileLock);
+                        HANDLE file = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                  nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+                        if (file != INVALID_HANDLE_VALUE) {
+                            if (GetLastError() != ERROR_ALREADY_EXISTS) {
+                                constexpr char header[] = "tick_ms,view,prewrite_reach,postwrite_reach,valid\r\n";
+                                DWORD written{};
+                                WriteFile(file, header, sizeof(header) - 1, &written, nullptr);
+                            }
+                            DWORD written{};
+                            WriteFile(file, line, static_cast<DWORD>(n), &written, nullptr);
+                            CloseHandle(file);
+                        }
+                        ReleaseSRWLockExclusive(&windowActorFileLock);
+                    }
+                }
+            }
+        }
+    }
     return result;
 }
 void restGameView(uintptr_t primary, bool rest) {

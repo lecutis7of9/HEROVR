@@ -3632,7 +3632,7 @@ def session(a, startup, session_off=()):
                 lines.append('FRAME RATES: ' + json.dumps(result.get('frame_rates'), default=str))
                 lines.append('POSE CHECK: ' + json.dumps(result.get('pose_check'), default=str))
                 lines.append('JITTER CHECK: ' + json.dumps(result.get('jitter_log'), default=str))
-                diag.write_text('\\n'.join(lines) + '\\n', encoding='utf-8')
+                diag.write_text('\n'.join(lines) + '\n', encoding='utf-8')
                 print('GHOSTING DIAGNOSTIC SAVED: ' + str(diag.resolve()), flush=True)
             except (OSError, TypeError, ValueError) as error:
                 print('Ghosting diagnostic text could not be saved: ' + str(error), flush=True)

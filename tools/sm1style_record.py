@@ -17,15 +17,17 @@ def sm1style_snapshot(game, address):
     if magic != 0x53314d53 or size != 256 or version not in (1, 2):
         return None
     reason, percent, width, height = struct.unpack_from('<4I', raw, 16)
-    calls, ran, history = (struct.unpack_from('<2Q', raw, 32 + 16 * i) for i in range(3))
+    calls, ran, history, aa_writes, queued = (struct.unpack_from('<2Q', raw, 32 + 16 * i) for i in range(5))
     out = dict(version=version, flags=flags, reason=reason, percent=percent, render_width=width,
-               render_height=height, sequence=struct.unpack_from('<Q', raw, 192)[0])
+               render_height=height, sequence=struct.unpack_from('<Q', raw, 192)[0],
+               left_jobs=struct.unpack_from('<Q', raw, 184)[0])
     extra = struct.unpack_from('<6Q', raw, 200) if version >= 2 else None
     # Build 2k: previously reserved trailing Q counts TemporalAa hook calls
     # that could not be matched to either sm1Jobs pointer.
     out['unmatched_taa_calls'] = struct.unpack_from('<Q', raw, 248)[0] if version >= 2 else None
     for i, eye in enumerate(('left', 'right')):
-        out[eye] = dict(calls=calls[i], ran=ran[i], history=history[i])
+        out[eye] = dict(calls=calls[i], ran=ran[i], history=history[i],
+                        aa_writes=aa_writes[i], queued=queued[i])
         if extra:
             out[eye].update(own_history=extra[i], shared_history=extra[2 + i], job_changed=extra[4 + i])
     return out

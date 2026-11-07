@@ -2935,6 +2935,54 @@ void windowProbe(void* view, void* cull, void* result) {
     InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&data.calls[slot]));
     if (result)
         InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&data.results[slot]));
+    // Read-only per-view LOD and light-query pool telemetry, sampled at most 10 Hz.
+    // These fields are established elsewhere in this mod; they are not individual
+    // window/texture identifiers and cannot prove a specific light's visibility.
+    static std::atomic<uint64_t> lastTick[3]{};
+    const uint64_t tick = GetTickCount64();
+    uint64_t prior = lastTick[slot].load(std::memory_order_relaxed);
+    if (tick - prior >= 100 && lastTick[slot].compare_exchange_strong(prior, tick)) {
+        float lodScale{}, lodMultiplier{};
+        int32_t queryCapacity{}, queryUsed{};
+        const bool lodA = read(at + 0x1b24, &lodScale, sizeof(lodScale));
+        const bool lodB = read(at + 0x1b28, &lodMultiplier, sizeof(lodMultiplier));
+        const bool poolA = read(at + 0x1c78 + 0x88, &queryCapacity, sizeof(queryCapacity));
+        const bool poolB = read(at + 0x1c78 + 0x8c, &queryUsed, sizeof(queryUsed));
+        char path[MAX_PATH]{};
+        HMODULE self{};
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               reinterpret_cast<LPCSTR>(&windowActorWrite), &self) && self &&
+            GetModuleFileNameA(self, path, MAX_PATH)) {
+            if (char* slash = std::strrchr(path, '\\')) {
+                std::snprintf(slash + 1, MAX_PATH - static_cast<size_t>(slash + 1 - path),
+                              "window-lod-light-%lu.csv", static_cast<unsigned long>(GetCurrentProcessId()));
+                char line[256]{};
+                const int n = std::snprintf(line, sizeof(line),
+                    "%llu,%d,%llu,%.7g,%.7g,%d,%d,%u,%u\r\n",
+                    static_cast<unsigned long long>(tick), slot,
+                    static_cast<unsigned long long>(frameIndex), lodScale, lodMultiplier,
+                    queryCapacity, queryUsed, unsigned(lodA && lodB), unsigned(poolA && poolB));
+                if (n > 0 && n < static_cast<int>(sizeof(line))) {
+                    AcquireSRWLockExclusive(&windowActorFileLock);
+                    HANDLE file = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                              nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+                    if (file != INVALID_HANDLE_VALUE) {
+                        if (GetLastError() != ERROR_ALREADY_EXISTS) {
+                            constexpr char header[] =
+                                "tick_ms,view,frame,lod_scale,lod_multiplier,query_capacity,query_used,lod_valid,pool_valid\r\n";
+                            DWORD written{};
+                            WriteFile(file, header, sizeof(header) - 1, &written, nullptr);
+                        }
+                        DWORD written{};
+                        WriteFile(file, line, static_cast<DWORD>(n), &written, nullptr);
+                        CloseHandle(file);
+                    }
+                    ReleaseSRWLockExclusive(&windowActorFileLock);
+                }
+            }
+        }
+    }
     const double now = windowProbeSeconds();
     // Cheap check first; the lock is taken only when a sample may be due.
     if (!wp::due(windowProbeLast[slot].load(std::memory_order_relaxed), now) || !TryAcquireSRWLockExclusive(&windowProbeLock))

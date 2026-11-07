@@ -150,7 +150,8 @@ UINT width{}, height{};
 // are supersampled and the staged images are filtered down to it (drawAa).
 std::atomic<uint32_t> wantedOutWidth{}, wantedOutHeight{};
 UINT outWidth{}, outHeight{};
-bool downsampling() { return outWidth != width || outHeight != height; }
+bool downsampling() { return outWidth < width || outHeight < height; }
+bool upscaling() { return outWidth > width || outHeight > height; }
 // The size of the images read back (captureImage) and published (Data).
 UINT imageWidth() { return staged ? outWidth : width; }
 UINT imageHeight() { return staged ? outHeight : height; }
@@ -1641,7 +1642,7 @@ bool vrAaLocked() {
 }
 struct AaPipeline {
     ComPtr<ID3D12RootSignature> root;
-    ComPtr<ID3D12PipelineState> state, down; // FXAA; the downsample filter
+    ComPtr<ID3D12PipelineState> state, down, up; // FXAA; downsample; bilinear upscale
     ComPtr<ID3D12DescriptorHeap> views, targets;
     ComPtr<ID3D12QueryHeap> queries;
     ComPtr<ID3D12Resource> stamps; // readback, mapped while the bridge lives
@@ -1654,6 +1655,21 @@ TimingMetric aaGpu; // copyTimingLock
 std::atomic<uint64_t> aaPairs{};
 // FXAA 3.11 quality (Timothy Lottes, NVIDIA), PC path, preset 29 steps, luma
 // computed from RGB. The eyes hold display-encoded values, as FXAA expects.
+// Build 2b: spatial reconstruction of the smaller scene into the full-size
+// staged image. SPIDY TAA then accumulates full-resolution history; the game's
+// TemporalAa is not used. Never use the downsample filter to enlarge an eye.
+const char* upscaleShader = R"(
+Texture2D source : register(t0);
+SamplerState bilinear : register(s0);
+cbuffer Frame : register(b0) { float4 frame; };
+float4 vs(uint id : SV_VertexID) : SV_POSITION {
+    const float2 corner = float2((id << 1) & 2, id & 2);
+    return float4(corner * float2(2, -2) + float2(-1, 1), 0, 1);
+}
+float4 ps(float4 position : SV_POSITION) : SV_TARGET {
+    return source.SampleLevel(bilinear, position.xy * frame.xy, 0);
+}
+)";
 const char* fxaaShader = R"(
 Texture2D source : register(t0);
 SamplerState bilinear : register(s0);
@@ -1879,9 +1895,9 @@ bool prepareAa() {
                                            IID_PPV_ARGS(&aa.root))))
         return failAa(1);
     // FXAA or, for supersampled eyes, the downsample filter: the same root.
-    const bool down = downsampling();
-    const char* shader = down ? downsampleShader : fxaaShader;
-    const char* name = down ? "spidy_eye_downsample" : "spidy_eye_fxaa";
+    const bool down = downsampling(), up = upscaling();
+    const char* shader = down ? downsampleShader : up ? upscaleShader : fxaaShader;
+    const char* name = down ? "spidy_eye_downsample" : up ? "spidy_eye_upscale" : "spidy_eye_fxaa";
     ComPtr<ID3DBlob> vs, ps;
     if (FAILED(D3DCompile(shader, std::strlen(shader), name, nullptr, nullptr, "vs", "vs_5_0",
                           D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &vs, &error)) ||
@@ -1905,7 +1921,7 @@ bool prepareAa() {
     blend.DestBlend = blend.DestBlendAlpha = D3D12_BLEND_ZERO;
     blend.BlendOp = blend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
     blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-    if (FAILED(device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(down ? &aa.down : &aa.state))))
+    if (FAILED(device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(down ? &aa.down : up ? &aa.up : &aa.state))))
         return failAa(3);
     D3D12_DESCRIPTOR_HEAP_DESC views{};
     views.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -2001,14 +2017,14 @@ void drawAa(ID3D12GraphicsCommandList* list, size_t slot) {
     originalBarrier(list, count, b);
     // FXAA: one over the eye's size, and its settings. The downsample: the
     // eye's pixels per headset pixel across and down, and the filter's reach.
-    const bool down = downsampling();
+    const bool down = downsampling(), up = upscaling();
     const float frame[4] = {down ? static_cast<float>(width) / static_cast<float>(outWidth)
-                                 : 1.f / static_cast<float>(width),
+                                 : 1.f / static_cast<float>(up ? outWidth : width),
                             down ? static_cast<float>(height) / static_cast<float>(outHeight)
-                                 : 1.f / static_cast<float>(height),
+                                 : 1.f / static_cast<float>(up ? outHeight : height),
                             down ? downsampleRadius : aaQuality.load() ? aaStrongSubpix : aaSubpix,
                             down ? 0.f : aaQuality.load() ? aaStrongEdgeThreshold : aaEdgeThreshold};
-    list->SetPipelineState(down ? aa.down.Get() : aa.state.Get());
+    list->SetPipelineState(down ? aa.down.Get() : up ? aa.up.Get() : aa.state.Get());
     list->SetGraphicsRootSignature(aa.root.Get());
     ID3D12DescriptorHeap* heaps[] = {aa.views.Get()};
     list->SetDescriptorHeaps(1, heaps);
@@ -5047,18 +5063,18 @@ void stagePair(EyePairState::Stamp stamp) {
     noteDepthCheck(index);
     // Supersampled eyes cannot be copied: they are always filtered down,
     // without FXAA (the extra samples already smooth the edges).
-    const bool down = downsampling();
+    const bool down = downsampling(), up = upscaling();
     // 0.0.76 SPIDY TAA (vr_aa.hpp): SMAA when asked, or when SPIDY TAA's own pass cannot run (it failed to build,
     // or EYE AA's lens step is off); FXAA if SMAA cannot be built either; a plain copy past that. Never nothing.
     const uint32_t vrMode = vrAaMode.load(std::memory_order_relaxed);
     const bool sm1 = sm1Lock.load();
     const bool taaFailed = vrMode == vr_aa::ours && historyFault.load() != 0;
-    const bool wantSmaa = !down && !sm1 &&
+    const bool wantSmaa = !down && !up && !sm1 &&
                           (vrMode == vr_aa::smaa || (vrMode == vr_aa::ours && (taaFailed || !temporalOn.load())));
     const bool useSmaa = wantSmaa && prepareSmaa();
-    const bool smooth = (down || (aaMode.load() == 1 && !sm1 && !vrAaLocked()) || (wantSmaa && !useSmaa)) &&
+    const bool smooth = (down || up || (aaMode.load() == 1 && !sm1 && !vrAaLocked()) || (wantSmaa && !useSmaa)) &&
                         prepareAa(); // SM1STYLE, SPIDY TAA, SMAA: no FXAA (but SMAA's own fallback)
-    if (down && !smooth) {
+    if ((down || up) && !smooth) {
         fault = 3806; // the headset would get nothing: say why (aaFault)
         return;
     }

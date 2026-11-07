@@ -800,7 +800,36 @@ void nearInstance(unsigned eye, uintptr_t instance, const float* m, const float*
     InterlockedIncrement64(&data.sequence);
     ReleaseSRWLockExclusive(&telemetry);
 }
+// Experimental read-only draw-submission counters for the existing 0.0.78 actor hook.
+// These count calls reaching this hook, NOT actual lit windows or completed GPU draws.
+// Opt in with HEROVR_WINDOW_ACTOR_TRACE=1. Output goes to Windows debug output.
+std::atomic<uint64_t> windowActorCalls[3]{};
+std::atomic<uint64_t> windowActorVisible[3]{};
+void windowActorTrace(void* context, uint8_t visibility) {
+    static const bool on = [] {
+        char flag[4]{};
+        return GetEnvironmentVariableA("HEROVR_WINDOW_ACTOR_TRACE", flag, sizeof(flag)) && flag[0] == '1';
+    }();
+    if (!on || !context)
+        return;
+    const auto view = pointer(reinterpret_cast<uintptr_t>(context) + 8);
+    const int eye = eyeView(view);
+    // 0 = other/main contexts, 1 = left eye, 2 = right eye.
+    const unsigned slot = eye >= 0 && eye < 2 ? static_cast<unsigned>(eye + 1) : 0u;
+    const auto calls = windowActorCalls[slot].fetch_add(1, std::memory_order_relaxed) + 1;
+    if (visibility)
+        windowActorVisible[slot].fetch_add(1, std::memory_order_relaxed);
+    if (calls % 16384 == 0) {
+        char line[192]{};
+        std::snprintf(line, sizeof(line),
+                      "WINDOW ACTOR TRACE slot=%u submissions=%llu nonzero_visibility=%llu\\n",
+                      slot, static_cast<unsigned long long>(calls),
+                      static_cast<unsigned long long>(windowActorVisible[slot].load(std::memory_order_relaxed)));
+        OutputDebugStringA(line);
+    }
+}
 void renderActor(void* context, void* actor, uint8_t visibility) {
+    windowActorTrace(context, visibility);
     // The HUD off: its panel stays out of the eyes (the game's own view, which
     // the game screen shows, keeps it).
     if (const auto hud = hiddenHud.load(std::memory_order_relaxed);

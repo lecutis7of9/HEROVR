@@ -2950,7 +2950,7 @@ float3 clipHistory(int2 p, int2 last, float2 old, float2 size, float3 middle, ou
     float3 lo = middle, hi = middle, m1 = 0, m2 = 0;
     [unroll] for (int y = -1; y <= 1; ++y)
         [unroll] for (int x = -1; x <= 1; ++x) {
-            const float3 n = toYCoCg(current.Load(int3(clamp(p + int2(x, y), int2(0, 0), last), 0)).rgb);
+            const float3 n = toYCoCg(current.SampleLevel(bilinear, (float2(clamp(int2(floor(float2(p) * float2(w, h) * extra.yz)) + int2(x, y), int2(0, 0), last)) + 0.5) / float2(w, h), 0).rgb);
             lo = min(lo, n);
             hi = max(hi, n);
             m1 += n;
@@ -3113,9 +3113,11 @@ void noteSeam(int2 p, int2 last, int2 dp, int2 depthLast, uint pitch, uint bin, 
 float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     uint w, h;
     current.GetDimensions(w, h);
+    // Build 2b: output raster coordinates and scene input dimensions can differ.
     const int2 p = int2(position.xy);
     const int2 last = int2(w, h) - 1;
-    const float4 here = current.Load(int3(p, 0));
+    const float2 sceneUv = position.xy * extra.yz;
+    const float4 here = current.SampleLevel(bilinear, sceneUv, 0);
     const float3 uv = float3(position.xy * extra.yz, 1);
     float3 q = float3(dot(row0.xyz, uv), dot(row1.xyz, uv), dot(row2.xyz, uv));
 #ifdef TAA_COUNT

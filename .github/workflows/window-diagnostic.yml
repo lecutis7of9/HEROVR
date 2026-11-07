@@ -22,7 +22,9 @@ jobs:
           $dest = Join-Path $env:RUNNER_TEMP 'HEROVR-Window-Diagnostic'
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           robocopy . $dest /E /XD .git third_party .github /XF *.obj *.pdb | Out-Null
-          if ($LASTEXITCODE -gt 7) { throw "Copy failed: $LASTEXITCODE" }
+          $copyExit = $LASTEXITCODE
+          if ($copyExit -gt 7) { throw "Copy failed: $copyExit" }
+          $global:LASTEXITCODE = 0
           if (-not (Test-Path (Join-Path $dest 'build\windows-ninja\spidy_stereo_probe.dll'))) { throw 'Missing compiled stereo probe DLL' }
           @'
           HEROVR WINDOW VISIBILITY TEST

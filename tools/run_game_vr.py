@@ -1711,7 +1711,7 @@ SM1STYLE_OPTION = 0x1000000
 # off the LEGACY bit (the 0.0.72 picture); ours / keep send neither: SpidyVR's own per-eye TAA, the default.
 VR_AA_SMAA_OPTION = 0x2000000
 VR_AA_LEGACY_OPTION = 0x4000000
-SM1STYLE_UPSCALE = 67   # SpidyVR's DEFAULT_UPSCALE (its tools/run_game_vr.py:52, eye_resolution.hpp:25)
+SM1STYLE_UPSCALE = 70   # Build 2g: native per-eye TemporalAa reconstruction at the same 70% as the experimental own path
 # 0.0.76 VISUAL (live.txt vr_render = native, the default; upscaled = SpidyVR's 67%): the eyes at their full size,
 # the game's TAA resolving them without upscaling (the owner: "turn off upscaling in VR and run native 100%").
 SM1STYLE_NATIVE = 100
@@ -1795,7 +1795,7 @@ def apply_sm1style(a, live_text):
     """0.0.74 test 10 SM1STYLE, the default (live.txt `sm1style = off` turns it off for the next start): SpidyVR's
     eye settings for this start, whatever a launcher argument, next-launch.txt or keep-settings asked: render scale
     and supersample 100, eyes at 100% (0.0.76 VISUAL, live.txt vr_render = native, the default; upscaled: SpidyVR's
-    67%), the game's own mip bias and filtering (SpidyVR changes neither), the game's sharpening at its lowest, no
+    70%), the game's own mip bias and filtering (SpidyVR changes neither), the game's sharpening at its lowest, no
     ENGINE TAA. 0.0.76 VISUAL: where the game's AA will not be TAA with no upscaler (a.game_aa_taa False, set by
     vr_picture_plan; SM1STYLE then falls back to the 0.0.72 picture) the launcher's mip bias is kept: the game's own
     is DLSS's -2.0, which crawls on brick at full-size eyes with no TAA. Sets a.sm1style; returns the console line.
@@ -1824,7 +1824,7 @@ def apply_sm1style(a, live_text):
     a.supersample, a.upscale, a.mip_bias, a.anisotropy = 100, percent, mip, 0
     a.game_sharpening = a.engine_taa = False
     return ("SM1STYLE ON (default): SpidyVR's eye anti-aliasing - the game's TAA in each eye, eyes at "
-            + ('67% (vr_render = upscaled)' if percent != SM1STYLE_NATIVE else '100% (native, no upscaling)') +
+            + ('70% (vr_render = upscaled; native game TAA reconstruction)' if percent != SM1STYLE_NATIVE else '100% (native, no upscaling)') +
             ', Halton(2,3) jitter, render scale 100%, supersample 100%, ' +
             ('the game\'s mip bias' if mip == 'game' else f'mip bias {mip} (the game\'s AA is not TAA)') +
             ', the game\'s sharpening at its lowest; our FXAA, EYE AA history '

@@ -70,8 +70,6 @@ def inspect(items, tolerance):
         inv_size = row(v, 34)
         if inv_size[0] <= 0 or inv_size[1] <= 0:
             issues.append(f"frame {frame} {eye}: invalid inverse render size {inv_size[:2]}")
-        if frame in previous.get(eye, {}):
-            pass
         old = previous.get(eye)
         if old and old["frame"] == frame - 1:
             drift = distance(prev_cam, old["cam"])
@@ -91,10 +89,17 @@ def inspect(items, tolerance):
         baseline = distance(a["cam"], b["cam"])
         if baseline < 0.01:
             issues.append(f"frame {frame}: eyes have near-identical current camera positions ({baseline:.6f}m)")
+        prev_baseline = distance(a["prev_cam"], b["prev_cam"])
+        if baseline >= 0.01 and prev_baseline < 0.01:
+            issues.append(f"frame {frame}: previous camera positions collapsed to {prev_baseline:.6f}m while current eye separation is {baseline:.6f}m")
         if a["before"] == b["before"]:
             issues.append(f"frame {frame}: both eyes share identical previous view-projection matrices")
         if a["now"] == b["now"]:
             issues.append(f"frame {frame}: both eyes share identical current view-projection matrices")
+        if a["before"] == a["now"] and distance(a["prev_cam"], a["cam"]) > tolerance:
+            issues.append(f"frame {frame}: left previous matrix equals current despite camera motion")
+        if b["before"] == b["now"] and distance(b["prev_cam"], b["cam"]) > tolerance:
+            issues.append(f"frame {frame}: right previous matrix equals current despite camera motion")
         if a["inv_size"] != b["inv_size"]:
             issues.append(f"frame {frame}: eyes use different inverse render sizes")
         print(f"frame {frame}: eye separation {baseline:.5f}m; previous camera separation "

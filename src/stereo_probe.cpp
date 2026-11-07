@@ -2346,6 +2346,39 @@ void temporalAa(void* a, void* b, void* c, void* d) {
     dd.aa[eye] = aa;
     dd.inputWidth[eye] = input;
     dd.outputWidth[eye] = output;
+    // Build 2i: diagnose persistent city ghosting without modifying the
+    // camera, jitter, history pointers or motion vectors. Report each eye's
+    // actual TAA history ownership and frame gate at most once per 2 seconds.
+    // The existing ownHistory/sharedHistory counters alone do not reveal
+    // whether a shared set is the desktop set, the opposite eye, or whether
+    // the F-1 history stamp was rejected.
+    if (sm1Steps()) {
+        static uint64_t lastHistoryLog[2]{};
+        const uint64_t now = GetTickCount64();
+        if (now - lastHistoryLog[eye] >= 2000) {
+            lastHistoryLog[eye] = now;
+            const char* owner = !eyeSet ? "missing" :
+                eyeSet == mainSet ? "desktop" :
+                otherSet && eyeSet == otherSet ? "other-eye" : "own";
+            const char* previousOwner = !previous ? "missing" :
+                previous == mainSet ? "desktop" :
+                otherSet && previous == otherSet ? "other-eye" :
+                previous == eyeSet ? "own" : "different";
+            const bool historyReady = ran && haveOther && other == frame - 1 && previous;
+            char line[512];
+            std::snprintf(line, sizeof line,
+                "BUILD 2i TAA eye=%d frame=%d stamp=%d prevStamp=%d slot=%u "
+                "ran=%d historyReady=%d cut=%u set=%s prevSet=%s "
+                "input=%u output=%u ownRuns=%llu sharedRuns=%llu jobChanges=%llu\\n",
+                eye, frame, stamp, other, index, ran ? 1 : 0,
+                historyReady ? 1 : 0, static_cast<unsigned>(cut), owner,
+                previousOwner, input, output,
+                static_cast<unsigned long long>(dd.ownHistory[eye]),
+                static_cast<unsigned long long>(dd.sharedHistory[eye]),
+                static_cast<unsigned long long>(dd.jobChanged[eye]));
+            OutputDebugStringA(line);
+        }
+    }
     // The upscale (CANDIDATE): TemporalAa must read the smaller scene and write the eye's size. 30 runs that do not
     // and the console says so (the eyes stay as made: restart with SM1STYLE OFF for the full size).
     if (ran) {

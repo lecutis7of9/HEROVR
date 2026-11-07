@@ -1646,8 +1646,35 @@ std::array<uint32_t, 2> eyeRenderSize() {
     const uint32_t made = sm1Percent.load(std::memory_order_relaxed);
     return spidy::eyeRenderSize(config.width, config.height, made ? made : 100);
 }
+// BUILD 2a EXPERIMENT: isolated primary-view render-size reduction.
+// OFF by default. This is a launch-time experiment: enable before the game's
+// primary buffers are allocated; switching after allocation is not supported.
+// The output/AA dimensions remain engine-owned. No eye buffers are touched.
+// 180 is rounded UP to the engine's 8-pixel alignment (184).
+std::atomic<bool> flatViewSmall2a{false};
+extern "C" __declspec(dllexport) void SpidyFlatViewSmall2aSet(uint32_t enabledForNextAllocation) {
+    flatViewSmall2a.store(enabledForNextAllocation != 0, std::memory_order_relaxed);
+}
 void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t height, uint32_t kind, uint8_t align) {
-    originalSizeBuffers(buffers, name, width, height, kind, align);
+    // Primary view +1e38 owns its buffer set in SM2, as the eyes do.
+    // Only substitute the *render allocation* arguments, not the game's
+    // display/output dimensions. A mismatched size must not claim equality.
+    const uintptr_t primary = pointer(base + 0xc2ca220);
+    const bool primaryBuffers = primary && buffers &&
+        pointer(primary + 0x1e38) == reinterpret_cast<uintptr_t>(buffers);
+    const bool isEyeBuffer = creatingEye ||
+        (eyes[0].load() && pointer(reinterpret_cast<uintptr_t>(eyes[0].load()) + 0x1e38) == reinterpret_cast<uintptr_t>(buffers)) ||
+        (eyes[1].load() && pointer(reinterpret_cast<uintptr_t>(eyes[1].load()) + 0x1e38) == reinterpret_cast<uintptr_t>(buffers));
+    const bool shrink = enabled && flatViewSmall2a.load(std::memory_order_relaxed) &&
+        primaryBuffers && !isEyeBuffer && width >= 320 && height >= 184;
+    originalSizeBuffers(buffers, name, shrink ? 320u : width, shrink ? 184u : height, kind, align);
+    if (shrink) {
+        // The render and resolved output dimensions are different. The engine
+        // must not treat the reduced scene as an unscaled final image.
+        auto* sizes = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(buffers) + 0x1b978);
+        if (sizes[0] != sizes[2] || sizes[1] != sizes[3])
+            sizes[15] &= ~2u;
+    }
     // As SM2VR 0.0.27's detour (94c0): the eye's size while its buffers are
     // made (initBuffers), and whenever the game sizes an eye's buffers again
     // later (eye +1e38 is its buffer set), e.g. on entering the world. The port

@@ -825,7 +825,7 @@ void windowActorWrite(unsigned slot, uint64_t calls, uint64_t visible) {
     const double seconds = frequency.QuadPart > 0
         ? static_cast<double>(now.QuadPart) / static_cast<double>(frequency.QuadPart) : 0.;
     char line[200]{};
-    const int n = std::snprintf(line, sizeof(line), "%.6f,%u,%llu,%llu\\r\\n",
+    const int n = std::snprintf(line, sizeof(line), "%.6f,%u,%llu,%llu\r\n",
         seconds, slot, static_cast<unsigned long long>(calls),
         static_cast<unsigned long long>(visible));
     if (n <= 0 || n >= static_cast<int>(sizeof(line)))
@@ -835,7 +835,7 @@ void windowActorWrite(unsigned slot, uint64_t calls, uint64_t visible) {
                               nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file != INVALID_HANDLE_VALUE) {
         if (GetLastError() != ERROR_ALREADY_EXISTS) {
-            constexpr char header[] = "qpc_seconds,slot,submissions,nonzero_visibility\\r\\n";
+            constexpr char header[] = "qpc_seconds,slot,submissions,nonzero_visibility\r\n";
             DWORD written{};
             WriteFile(file, header, sizeof(header) - 1, &written, nullptr);
         }

@@ -5114,10 +5114,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTemporal(void* packed) {
     // Build 2b: explicitly requested 70% with own TAA, never SM1STYLE.
     // The native GPU stage enlarges to the original headset resolution before
     // our per-eye TAA; the game does not attempt to resolve these buffers.
-    const bool own70 = percent == 70 && native_gpu::vrAa() == spidy::vr_aa::ours;
+    const bool own70 = percent == 70 && spidy::native_gpu::vrAa() == spidy::vr_aa::ours;
     ownTaaRenderPercent = own70 ? 70u : 100u;
     if (own70)
-        native_gpu::setEyeOutput(config.width, config.height);
+        spidy::native_gpu::setEyeOutput(config.width, config.height);
     // SM2 port: SM2VR 0.0.27's export (DLL +b040) keeps the size and always
     // stores 0 here: no jittered lens, no eye temporal AA, no extra reflection
     // targets (SM2VR 0.0.3/0.0.5). Update 34: bit 0x10 (-EngineTaa) is kept: the

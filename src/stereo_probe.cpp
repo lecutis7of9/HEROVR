@@ -857,8 +857,74 @@ void windowActorTrace(void* context, uint8_t visibility) {
     if (calls == 1 || calls % 16384 == 0)
         windowActorWrite(slot, calls, windowActorVisible[slot].load(std::memory_order_relaxed));
 }
+// Bounded read-only actor identity sampler. An actor is not necessarily a window:
+// pointer identity and visibility are observations, not material/texture identities.
+// Fixed storage, at most 4096 rows, one write per 100ms; no engine memory dereference.
+struct WindowActorIdentity {
+    std::atomic<uintptr_t> actor{0};
+    std::atomic<uint32_t> mask{0};
+};
+WindowActorIdentity windowActorIdentity[8192]{};
+std::atomic<uint32_t> windowActorIdentityRows{0};
+std::atomic<uint64_t> windowActorIdentityLastMs{0};
+void windowActorIdentityTrace(void* context, void* actor, uint8_t visibility) {
+    if (!context || !actor || windowActorIdentityRows.load(std::memory_order_relaxed) >= 4096)
+        return;
+    const auto view = pointer(reinterpret_cast<uintptr_t>(context) + 8);
+    const int eye = eyeView(view);
+    const unsigned slot = eye >= 0 && eye < 2 ? unsigned(eye + 1) : 0u;
+    const uintptr_t id = reinterpret_cast<uintptr_t>(actor);
+    auto& entry = windowActorIdentity[(id >> 4 ^ id >> 19) & 8191u];
+    uintptr_t expected = 0;
+    if (entry.actor.load(std::memory_order_relaxed) != id &&
+        !entry.actor.compare_exchange_strong(expected, id, std::memory_order_relaxed))
+        return; // collision: skip instead of replacing an unrelated actor
+    const uint32_t bit = 1u << (slot * 2 + (visibility != 0));
+    const uint32_t previous = entry.mask.fetch_or(bit, std::memory_order_relaxed);
+    if (previous & bit)
+        return; // only first observed state per actor/view
+    const uint64_t now = GetTickCount64();
+    uint64_t last = windowActorIdentityLastMs.load(std::memory_order_relaxed);
+    if (now - last < 100 || !windowActorIdentityLastMs.compare_exchange_strong(last, now))
+        return;
+    if (windowActorIdentityRows.fetch_add(1, std::memory_order_relaxed) >= 4096)
+        return;
+    char path[MAX_PATH]{};
+    HMODULE self{};
+    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                            GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            reinterpret_cast<LPCSTR>(&windowActorWrite), &self) || !self ||
+        !GetModuleFileNameA(self, path, MAX_PATH))
+        return;
+    char* slash = std::strrchr(path, '\\');
+    if (!slash)
+        return;
+    std::snprintf(slash + 1, MAX_PATH - static_cast<size_t>(slash + 1 - path),
+                  "window-actor-identities-%lu.csv", static_cast<unsigned long>(GetCurrentProcessId()));
+    char line[160]{};
+    const int n = std::snprintf(line, sizeof(line), "%llu,%u,%llx,%u,%u\r\n",
+        static_cast<unsigned long long>(now), slot, static_cast<unsigned long long>(id),
+        unsigned(visibility), unsigned(previous));
+    if (n <= 0 || n >= static_cast<int>(sizeof(line)))
+        return;
+    AcquireSRWLockExclusive(&windowActorFileLock);
+    HANDLE file = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                              nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file != INVALID_HANDLE_VALUE) {
+        if (GetLastError() != ERROR_ALREADY_EXISTS) {
+            constexpr char header[] = "tick_ms,view,actor_pointer,visibility,previous_seen_mask\r\n";
+            DWORD written{};
+            WriteFile(file, header, sizeof(header) - 1, &written, nullptr);
+        }
+        DWORD written{};
+        WriteFile(file, line, static_cast<DWORD>(n), &written, nullptr);
+        CloseHandle(file);
+    }
+    ReleaseSRWLockExclusive(&windowActorFileLock);
+}
 void renderActor(void* context, void* actor, uint8_t visibility) {
     windowActorTrace(context, visibility);
+    windowActorIdentityTrace(context, actor, visibility);
     // The HUD off: its panel stays out of the eyes (the game's own view, which
     // the game screen shows, keeps it).
     if (const auto hud = hiddenHud.load(std::memory_order_relaxed);

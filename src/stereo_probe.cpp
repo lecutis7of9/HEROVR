@@ -5119,10 +5119,17 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTemporal(void* packed) {
         return 4101;
     if (percent)
         eyeRenderPercent = percent;
-    // Build 2b: explicitly requested 70% with own TAA, never SM1STYLE.
-    // The native GPU stage enlarges to the original headset resolution before
-    // our per-eye TAA; the game does not attempt to resolve these buffers.
-    const bool own70 = percent == 70 && spidy::native_gpu::vrAa() == spidy::vr_aa::ours;
+    // Native TemporalAa and the experimental own-upscale path are mutually
+    // exclusive: both otherwise claim the same 70%-size eye scene. When the
+    // launcher explicitly requests SM1STYLE (bit 0x20), leave the scene and
+    // output-size bookkeeping to the game's own TemporalAa. In particular,
+    // do not activate the separate bilinear GPU upscale just because vr_aa
+    // was previously set to ours. SM1STYLE's existing safety checks decide
+    // whether native per-eye TAA can actually start.
+    const uint32_t requestedTemporal = static_cast<uint32_t>(value >> 8);
+    const bool nativeTemporal = (requestedTemporal & spidy::sm1style::eyeTemporalBit) != 0;
+    const bool own70 = percent == 70 && !nativeTemporal &&
+                       spidy::native_gpu::vrAa() == spidy::vr_aa::ours;
     ownTaaRenderPercent = own70 ? 70u : 100u;
     if (own70)
         spidy::native_gpu::setEyeOutput(config.width, config.height);

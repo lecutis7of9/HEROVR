@@ -810,7 +810,7 @@ void windowActorTrace(void* context, uint8_t visibility) {
         char flag[4]{};
         return GetEnvironmentVariableA("HEROVR_WINDOW_ACTOR_TRACE", flag, sizeof(flag)) && flag[0] == '1';
     }();
-    static const bool announced = [on] {
+    static const bool announced = [] {
         OutputDebugStringA(on ? "WINDOW ACTOR TRACE: enabled (v078 diagnostic)\n"
                              : "WINDOW ACTOR TRACE: disabled (set HEROVR_WINDOW_ACTOR_TRACE=1)\n");
         return true;

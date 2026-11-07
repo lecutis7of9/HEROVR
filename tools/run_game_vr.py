@@ -39,7 +39,7 @@ import start_errors
 from session_comfort import comfort_advice, game_settings, play_rate
 from observe_game import call_remote, call_with_payload, modules
 from probe_stereo_gpu import MAX_EYE_SIZE, discover_queue, snapshot as gpu_snapshot, save_eye_images
-from sm1style_record import sm1style_snapshot, sm1style_line  # 0.0.76 EYE HISTORY CHECK
+from sm1style_record import sm1style_snapshot, sm1style_line, taa_audit_snapshot, TAA_AUDIT_EXPORT  # 0.0.76 EYE HISTORY CHECK
 import pose_check_record  # 0.0.76 POSE CHECK
 import jitter_log_record  # 0.0.76 JITTER FIX
 import vr_aa_record  # 0.0.76 SPIDY TAA
@@ -3076,7 +3076,7 @@ def session(a, startup, session_off=()):
                                            'SpidyEyeLodData', 'SpidyShadowCamera',
                                            'SpidyShadowCameraData', 'SpidyShadowDistanceData',
                                            'SpidyEyeTrail', 'SpidyEngineTaaJitter', 'SpidyEngineTaaJitterScale',
-                                           'SpidyEngineTaaData', 'SpidyFarShadowsData', 'SpidySm1StyleData',
+                                           'SpidyEngineTaaData', 'SpidyFarShadowsData', 'SpidySm1StyleData', TAA_AUDIT_EXPORT,
                                            # Update 37: every live.txt export (so none can be missing
                                            # at the first edit) and the new telemetry.
                                            *sorted({e for _, e, _ in live_settings.SETTINGS.values() if e}),
@@ -3188,6 +3188,7 @@ def session(a, startup, session_off=()):
         live_changes = []
         history_last = None  # Update 21: history_snapshot, kept from the samples
         sm1style_last = None  # 0.0.76 EYE HISTORY CHECK: sm1style_snapshot, kept from the samples
+        taa_audit_last = None  # Build 2k: independent atomic census
         pose_check_last = None  # 0.0.76 POSE CHECK: pose_check_snapshot, kept from the samples
         # 0.0.76 SPIDY TAA TUNE: the vr_aa and jitter records kept from the samples too (the 11:26 report, written
         # after the game was closed, had neither: they were only read at a normal stop).
@@ -3511,7 +3512,7 @@ def session(a, startup, session_off=()):
                         haptics=haptics_last, wrist_hud=wrist_hud_last, prompts=prompt_section(list(samples)),
                         ray_samples=list(ray_samples), appearance=appearance, eye_jobs=eye_jobs,
                         render_memory=render_memory, timing=timing, network=links, eye_history=history_last,
-                        sm1style_eyes=sm1style_last,
+                        sm1style_eyes=sm1style_last, taa_audit=taa_audit_last,
                         pose_check=pose_check_last,
                         vr_aa=vr_aa_last, jitter_log=jitter_log_last,
                         taa_watch=taa_watch_record.taa_watch_report(taa_watch_last),
@@ -3635,6 +3636,20 @@ def session(a, startup, session_off=()):
                     'unmatched_hook_calls': record.get('unmatched_taa_calls'),
                     'left_jobs': record.get('left_jobs'),
                 }, sort_keys=True))
+                audit = result.get('taa_audit') or {}
+                lines.append('TAA FRAME AND REJECTION AUDIT: ' + json.dumps(audit, sort_keys=True))
+                # This verdict evaluates accounting only; it does not infer a
+                # visual rendering defect from unequal counts.
+                if audit:
+                    total = audit.get('all_hook_calls', 0)
+                    matched = audit.get('matched_left', 0) + audit.get('matched_right', 0)
+                    unmatched = audit.get('unmatched_calls', 0)
+                    verdict = ('ACCOUNTED' if total == matched + unmatched
+                               else 'COUNTER MISMATCH - investigate concurrent snapshots')
+                    lines.append('TAA ACCOUNTING VERDICT: ' + verdict +
+                                 f' (total={total}, matched={matched}, unmatched={unmatched})')
+                else:
+                    lines.append('TAA ACCOUNTING VERDICT: unavailable (audit export missing)')
                 lines.append('TAA SETTINGS: ' + json.dumps({
                     'percent': record.get('percent'),
                     'render_width': record.get('render_width'),
@@ -3872,6 +3887,7 @@ def session(a, startup, session_off=()):
                     history_last = history_snapshot(game, xr['SpidyEyeHistoryData']) or history_last
                     # 0.0.76 EYE HISTORY CHECK: each eye's TAA history its own (probe_stereo.sm1style_snapshot).
                     sm1style_last = sm1style_snapshot(game, xr['SpidySm1StyleData']) or sm1style_last
+                    taa_audit_last = taa_audit_snapshot(game, xr.get(TAA_AUDIT_EXPORT)) or taa_audit_last
                     if sm1style_last:
                         sample['sm1style_eyes'] = {e: sm1style_last[e] for e in ('left', 'right')}
                     # 0.0.76 POSE CHECK: each eye's rendered camera against its submitted pose.

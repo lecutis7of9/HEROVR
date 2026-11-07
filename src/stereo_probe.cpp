@@ -810,6 +810,12 @@ void windowActorTrace(void* context, uint8_t visibility) {
         char flag[4]{};
         return GetEnvironmentVariableA("HEROVR_WINDOW_ACTOR_TRACE", flag, sizeof(flag)) && flag[0] == '1';
     }();
+    static const bool announced = [on] {
+        OutputDebugStringA(on ? "WINDOW ACTOR TRACE: enabled (v078 diagnostic)\n"
+                             : "WINDOW ACTOR TRACE: disabled (set HEROVR_WINDOW_ACTOR_TRACE=1)\n");
+        return true;
+    }();
+    (void)announced;
     if (!on || !context)
         return;
     const auto view = pointer(reinterpret_cast<uintptr_t>(context) + 8);
@@ -819,7 +825,7 @@ void windowActorTrace(void* context, uint8_t visibility) {
     const auto calls = windowActorCalls[slot].fetch_add(1, std::memory_order_relaxed) + 1;
     if (visibility)
         windowActorVisible[slot].fetch_add(1, std::memory_order_relaxed);
-    if (calls % 16384 == 0) {
+    if (calls == 1 || calls % 16384 == 0) {
         char line[192]{};
         std::snprintf(line, sizeof(line),
                       "WINDOW ACTOR TRACE slot=%u submissions=%llu nonzero_visibility=%llu\n",

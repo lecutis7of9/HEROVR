@@ -822,7 +822,7 @@ void windowActorTrace(void* context, uint8_t visibility) {
     if (calls % 16384 == 0) {
         char line[192]{};
         std::snprintf(line, sizeof(line),
-                      "WINDOW ACTOR TRACE slot=%u submissions=%llu nonzero_visibility=%llu\\n",
+                      "WINDOW ACTOR TRACE slot=%u submissions=%llu nonzero_visibility=%llu\n",
                       slot, static_cast<unsigned long long>(calls),
                       static_cast<unsigned long long>(windowActorVisible[slot].load(std::memory_order_relaxed)));
         OutputDebugStringA(line);

@@ -5089,10 +5089,9 @@ void stagePair(EyePairState::Stamp stamp) {
                            D3D12_RESOURCE_STATE_COPY_SOURCE);
     const bool smaaUploading = useSmaa && drawSmaa(slot->list.Get(), index);
     // The history after AA: it blends what the headset is shown.
-    // Build 2d: accumulate the newly jittered 70% eye samples at headset
-    // resolution. The previous isolation test skipped this pass for all
-    // upscaled eyes, leaving thin geometry with no temporal reconstruction.
-    if (historyNow() && prepareHistory()) {
+    // Build 2b isolation test: preserve 70% eye rendering and spatial upscale,
+    // but skip temporal accumulation while upscaling to diagnose stationary waviness.
+    if (!up && historyNow() && prepareHistory()) {
         drawHistory(slot->list.Get(), index, stamp.serial);
     } else {
         history.valid = false;

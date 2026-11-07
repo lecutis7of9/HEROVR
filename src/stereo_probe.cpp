@@ -2378,8 +2378,43 @@ void eyeLod(void* eye, const Descriptor& lens, const Descriptor& game, unsigned 
     ReleaseSRWLockExclusive(&telemetry);
 }
 // A view's impostor visibility queries (impostorReach above).
+// Opt-in diagnostic only: set HEROVR_WINDOW_TRACE=1 before starting the launcher.
+// Samples the eye impostor-query distance and its changes. This does NOT identify
+// individual lit windows or prove whether a building was rendered as an impostor.
+void windowQueryTrace(void* view, void* result) {
+    static const bool trace = [] {
+        char value[4]{};
+        return GetEnvironmentVariableA("HEROVR_WINDOW_TRACE", value, sizeof(value)) &&
+               value[0] == '1';
+    }();
+    if (!trace || !result)
+        return;
+    const int eye = eyeView(reinterpret_cast<uintptr_t>(view));
+    if (eye < 0 || eye > 1)
+        return;
+    float distance{};
+    if (!read(reinterpret_cast<uintptr_t>(result) + 0x88, &distance, sizeof(distance)) ||
+        !std::isfinite(distance) || distance <= 0 || distance > 5000)
+        return;
+    static std::atomic<uint32_t> samples[2]{};
+    static std::atomic<uint32_t> changes[2]{};
+    static std::atomic<float> previous[2]{};
+    const float last = previous[eye].exchange(distance, std::memory_order_relaxed);
+    if (last > 0 && std::fabs(last - distance) > 0.25f)
+        changes[eye].fetch_add(1, std::memory_order_relaxed);
+    const auto count = samples[eye].fetch_add(1, std::memory_order_relaxed) + 1;
+    if (count % 256 == 0) {
+        char line[240]{};
+        std::snprintf(line, sizeof(line),
+                      "WINDOW TRACE eye=%d queries=%u distance=%.2fm previous=%.2fm changes=%u impostors=%u far_candidate=%u\\n",
+                      eye, count, distance, last, changes[eye].load(std::memory_order_relaxed),
+                      impostors ? 1u : 0u, farWindowsCandidateWrite ? 1u : 0u);
+        OutputDebugStringA(line);
+    }
+}
 void* impostorQueries(void* view, void* cull) {
     const auto result = originalImpostorQueries(view, cull);
+    windowQueryTrace(view, result);
     float reach{};
     if (result && impostors && enabled && impostorsOn.load(std::memory_order_relaxed) &&
         rested.load(std::memory_order_relaxed) &&

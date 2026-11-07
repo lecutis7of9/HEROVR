@@ -1896,7 +1896,7 @@ def apply_vr_aa(a, supersample=100, aniso=False, render_upscaled=False):
     mip = '0.5' if smaa or getattr(a, 'game_aa_taa', None) is False else 'game'
     anisotropy = TEXTURE_DETAIL_ANISOTROPY if aniso else 0
     # 0.0.76 A-depth TRACE D: SpidyXrStart keeps 110 / 125 / 150 with ours only (vr_aa.hpp supersampleKept)
-    ss = supersample if supersample in (110, 125, 150) and not a.size and not smaa else 100
+    ss = supersample if supersample in (110, 125, 150) and not a.size and not smaa and eye_percent == 100 else 100
     forced = [f'{name} {old} -> {new}' for name, old, new in (
         ('render scale', a.render_scale, 100), ('supersample', a.supersample, ss),
         ('upscale', a.upscale, eye_percent), ('mip bias', a.mip_bias, mip),

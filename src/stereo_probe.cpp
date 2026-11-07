@@ -388,6 +388,8 @@ std::atomic<bool> sm1ExeKnown{};
 // them TemporalAa has nowhere to write.
 std::atomic<bool> sm1TargetsOk{}, sm1Targets{};
 std::atomic<uint32_t> sm1Reason{}, sm1Percent{}, sm1UpscaleBad{};
+// Build 2b: own-TAA scene size, separate from SM1STYLE/game TAA.
+std::atomic<uint32_t> ownTaaRenderPercent{100};
 std::atomic<uintptr_t> sm1Jobs[2]{};
 } // namespace
 extern "C" {
@@ -1644,7 +1646,8 @@ std::array<uint32_t, 2> eyeRenderSize() {
     // followed a live switch would change under buffers already made).
     // 0.0.74 test 10 SM1STYLE: the percent the eyes were made at (set once, when the first eye's buffers are made).
     const uint32_t made = sm1Percent.load(std::memory_order_relaxed);
-    return spidy::eyeRenderSize(config.width, config.height, made ? made : 100);
+    const uint32_t own = ownTaaRenderPercent.load(std::memory_order_relaxed);
+    return spidy::eyeRenderSize(config.width, config.height, own < 100 ? own : made ? made : 100);
 }
 void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t height, uint32_t kind, uint8_t align) {
     originalSizeBuffers(buffers, name, width, height, kind, align);
@@ -1663,6 +1666,14 @@ void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t heigh
             }
     if (!eyeWidth)
         return;
+    // Own TAA resolves in the native GPU stage, not in the game's buffers.
+    // The eye's scene and its internal output are both 70%; the headset
+    // output is separately kept full-size by native_gpu::setEyeOutput.
+    if (ownTaaRenderPercent.load(std::memory_order_relaxed) < 100) {
+        const auto render = eyeRenderSize();
+        eyeWidth = render[0];
+        eyeHeight = render[1];
+    }
     // SM2 +1b978: render width, height; the anti-aliased image's width,
     // height; those in multiples of 8; the output's width, height (multiples
     // of 8 when aligned, SM2VR +1b990/+1b994); ... flags at +1b9b4, 2 among
@@ -1812,8 +1823,8 @@ bool initBuffers(void* buffers, const void* description, const char* name) {
             std::memcpy(local + 0x18, &noParent, 8);
             // As SM2VR does: the eye's sizes (sizeBuffers). Update 34: with -EngineTaa,
             // the TAA target kind as well (engineTaaBuffers).
-            sizingEye[0] = config.width;
-            sizingEye[1] = config.height;
+            sizingEye[0] = ownTaaRenderPercent.load(std::memory_order_relaxed) < 100 ? render[0] : config.width;
+            sizingEye[1] = ownTaaRenderPercent.load(std::memory_order_relaxed) < 100 ? render[1] : config.height;
             // 0.0.74 test 10 SM1STYLE step 2 (SpidyVR src/stereo_probe.cpp:961-990): the TAA targets for the eyes.
             const bool taaTargets = (eyeTemporal.load() & 0x10) ||
                                     (sm1 && sm1ExeKnown.load() && sm1Reason.load() == mt::none);
@@ -5100,6 +5111,13 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTemporal(void* packed) {
         return 4101;
     if (percent)
         eyeRenderPercent = percent;
+    // Build 2b: explicitly requested 70% with own TAA, never SM1STYLE.
+    // The native GPU stage enlarges to the original headset resolution before
+    // our per-eye TAA; the game does not attempt to resolve these buffers.
+    const bool own70 = percent == 70 && native_gpu::vrAa() == spidy::vr_aa::ours;
+    ownTaaRenderPercent = own70 ? 70u : 100u;
+    if (own70)
+        native_gpu::setEyeOutput(config.width, config.height);
     // SM2 port: SM2VR 0.0.27's export (DLL +b040) keeps the size and always
     // stores 0 here: no jittered lens, no eye temporal AA, no extra reflection
     // targets (SM2VR 0.0.3/0.0.5). Update 34: bit 0x10 (-EngineTaa) is kept: the

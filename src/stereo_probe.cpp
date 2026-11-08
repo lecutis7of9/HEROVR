@@ -37,6 +37,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <initializer_list>
 #include <intrin.h>
 #include <windows.h>

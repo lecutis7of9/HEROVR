@@ -3955,6 +3955,18 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
             break;
         }
         config = incoming;
+        // Explicit opt-in for the experimental shared-cascade test.
+        // Set SPIDY_SHADOW_REUSE=1 in the game's inherited environment before launch.
+        // Every fresh SpidyStart resets to safe independent shadows otherwise.
+        char shadowReuseSetting[4]{};
+        const DWORD shadowReuseLength = GetEnvironmentVariableA(
+            "SPIDY_SHADOW_REUSE", shadowReuseSetting, sizeof(shadowReuseSetting));
+        const bool shadowReuseRequested = shadowReuseLength == 1 && shadowReuseSetting[0] == '1';
+        eyeShadows.store(shadowReuseRequested ? 1u : 0u, std::memory_order_relaxed);
+        SpidyShadowData.mode = shadowReuseRequested ? 1u : 0u;
+        OutputDebugStringA(shadowReuseRequested
+                               ? "SHADOW REUSE EXPERIMENT: cascade sharing requested\\n"
+                               : "SHADOW REUSE EXPERIMENT: independent shadows\\n");
         // createViews bits: 1 eye views, 2 native readback, 4 display/VR path,
         // 8 (VR path only) move the engine's active view to the head while immersive,
         // 16 (VR path only) occlusion culling for each eye (giveOcclusion),

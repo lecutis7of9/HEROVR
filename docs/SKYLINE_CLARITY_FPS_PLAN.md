@@ -56,3 +56,19 @@ Source review and branch isolation only. No Windows binaries compiled or headset
 ### Immediate test-design correction
 
 Use **the exact public default `vr_aa = ours`** as the protected baseline. Do not substitute SM1STYLE. The first comparison should isolate actual eye resolution and LOD/mip decisions while holding AA fixed. Any scene-buffer resizing requires a restart. Keep the old experimental camera-history changes out of this branch.
+
+## FPS is a co-equal priority, not a later optional step
+
+The user's observed ~40 FPS is about 25 ms per delivered frame. This alone does not distinguish application render throughput from VR runtime pacing, asynchronous reprojection, GPU saturation or CPU bottlenecks. The existing `perf077::Frames` samples VR-loop intervals, **not** a GPU timestamp or a definitive application frame time; do not label it GPU timing.
+
+### FPS diagnostic requirements for the same comparison session
+
+1. Record actual headset refresh rate, Virtual Desktop streaming refresh rate and whether the runtime reports reprojection / synthetic frames. A stable fraction of headset refresh can indicate pacing, but is not proof without compositor data.
+2. Capture application CPU frame time, GPU frame time and compositor frame timing using available reliable APIs or an external overlay. Mark a metric **unavailable** rather than estimating it from VR-loop timing.
+3. Record real eye buffer width/height and render width/height alongside current `vr_aa`, supersampling, texture quality and LOD mode. Avoid comparisons where more than one variable changes.
+4. Compare a fixed rooftop skyline and the same swinging path; record median and high-percentile frame time, plus clarity/shimmer observations. FPS alone conceals frame-time spikes.
+5. Classify the bottleneck before making performance changes: GPU-bound => examine resolution and expensive rendering passes; CPU-bound => profile hooks, game thread and draw submission; compositor/pacing-bound => diagnose runtime refresh and reprojection. These are decision paths, **not confirmed diagnoses**.
+
+### Acceptance criteria
+
+A proposed change must improve distant clarity or measured frame time relative to the exact same 0.0.78 settings without returning shimmer or breaking other scenes. A clarity improvement that substantially worsens FPS is not a final fix. No target FPS is asserted without first measuring headset refresh and available performance headroom.

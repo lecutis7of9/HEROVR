@@ -413,11 +413,12 @@ bool sm1Live() {
     return sm1AtStart() && sm1ExeKnown.load(std::memory_order_relaxed) && sm1Targets.load(std::memory_order_relaxed) &&
            (why == mt::none || why == mt::upscaleWrong || why == mt::hookFailed);
 }
-// Eyes made smaller than their image need the game's TAA every frame (its jitter and the job's AA) whatever the
-// safety says: without it TemporalAa leaves (0x2c2dccb, 0x2c2dd09) and nothing resolves them to the eye's size.
+// Only SM1STYLE's smaller scene needs the game's TAA to reconstruct it to a full-size eye image.
+// OWN AA's 70% path makes a smaller final eye color target instead; its own AA handles the image.
+// Do not activate SM1STYLE's game TAA and lens jitter just because that target is below 100%.
 bool sm1Upscaled() {
     const uint32_t made = sm1Percent.load(std::memory_order_relaxed);
-    return made && made < 100;
+    return sm1AtStart() && made && made < 100;
 }
 bool sm1Steps() { return sm1Live() || sm1Upscaled(); }
 // The first reason only (one console line: game_xr reads it).

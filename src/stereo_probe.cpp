@@ -3488,8 +3488,10 @@ uint8_t renderOffscreen() {
         spidy::perf077::Scope timed(spidy::perf077::nativeFrame);
         native_body::renderFrame();
     }
-    if (!lateEyes && (enabled || live.load() || hiddenHero.load()))
+    if (!lateEyes && (enabled || live.load() || hiddenHero.load())) {
+        spidy::perf077::Scope timed(spidy::perf077::eyePlacement);
         placeEyes();
+    }
     // This is CPU elapsed time only; a GPU submission may return before GPU work completes.
     spidy::perf077::Scope timed(spidy::perf077::offscreenOriginal);
     return originalRenderOffscreen();

@@ -6,9 +6,9 @@
 #include <windows.h>
 
 namespace spidy::perf077 {
-enum Path : unsigned { cards = 0, cameraSample = 1, poiDrain = 2, nativeFrame = 3, offscreenOriginal = 4, pathCount = 5 };
+enum Path : unsigned { cards = 0, cameraSample = 1, poiDrain = 2, nativeFrame = 3, offscreenOriginal = 4, eyePlacement = 5, pathCount = 6 };
 inline const char* pathName(unsigned p) {
-    static const char* names[pathCount] = {"cards+waypoint", "camera sample", "poi dump", "native renderFrame CPU", "offscreen original CPU"};
+    static const char* names[pathCount] = {"cards+waypoint", "camera sample", "poi dump", "native renderFrame CPU", "offscreen original CPU", "eye placement CPU"};
     return p < pathCount ? names[p] : "?";
 }
 inline std::atomic<uint64_t> pathUs[pathCount]{};

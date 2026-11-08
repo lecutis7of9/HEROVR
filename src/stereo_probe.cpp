@@ -2417,6 +2417,70 @@ void temporalAa(void* a, void* b, void* c, void* d) {
     }
     ++dd.sequence;
 }
+// Build 1: bounded, read-only camera-history capture. No GPU hooks or rendering writes.
+// Captures the exact per-eye view descriptor that the game copies into its job.
+// File is placed beside the injected DLL, so no headset or external debugger is
+// needed to retrieve it. The first 240 paired samples are enough to spot a
+// repeated/stale previous camera, a shared stereo history, or a timing mismatch.
+// These descriptor offsets are already audited by copyJob; this is NOT the
+// shader b0 constant buffer and cannot establish its contents.
+SRWLOCK cameraCaptureLock = SRWLOCK_INIT;
+uint32_t cameraCaptureSamples[2]{};
+void captureCameraJob(unsigned eye, uintptr_t view, uintptr_t job, uint64_t frame) {
+    if (eye > 1 || cameraCaptureSamples[eye] >= 240)
+        return;
+    float current[3]{}, previous[3]{}, lens[4]{}, jitter[2]{};
+    const bool positions = read(view + 0x30, current, sizeof current) &&
+                           read(view + 0x560, previous, sizeof previous);
+    const bool projection = read(view + 0x400, lens, sizeof lens) &&
+                            read(view + 0x428, jitter, sizeof jitter);
+    if (!positions || !projection)
+        return;
+    AcquireSRWLockExclusive(&cameraCaptureLock);
+    if (cameraCaptureSamples[eye] >= 240) {
+        ReleaseSRWLockExclusive(&cameraCaptureLock);
+        return;
+    }
+    char path[MAX_PATH]{};
+    HMODULE self{};
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                           GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCSTR>(&captureCameraJob), &self) && self &&
+        GetModuleFileNameA(self, path, MAX_PATH)) {
+        if (char* slash = std::strrchr(path, '\\')) {
+            std::snprintf(slash + 1, MAX_PATH - static_cast<size_t>(slash + 1 - path),
+                          "herovr-camera-history-%lu.csv",
+                          static_cast<unsigned long>(GetCurrentProcessId()));
+            HANDLE file = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ,
+                                      nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (file != INVALID_HANDLE_VALUE) {
+                if (GetLastError() != ERROR_ALREADY_EXISTS) {
+                    constexpr char header[] =
+                        "frame,eye,job,current_x,current_y,current_z,previous_x,previous_y,previous_z,"
+                        "lens_left,lens_right,lens_top,lens_bottom,jitter_x,jitter_y\\r\\n";
+                    DWORD written{};
+                    WriteFile(file, header, sizeof(header) - 1, &written, nullptr);
+                }
+                char line[400]{};
+                const int n = std::snprintf(line, sizeof line,
+                    "%llu,%u,%llx,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,"
+                    "%.9g,%.9g,%.9g,%.9g,%.9g,%.9g\\r\\n",
+                    static_cast<unsigned long long>(frame), eye,
+                    static_cast<unsigned long long>(job),
+                    current[0], current[1], current[2],
+                    previous[0], previous[1], previous[2],
+                    lens[0], lens[1], lens[2], lens[3], jitter[0], jitter[1]);
+                if (n > 0 && n < static_cast<int>(sizeof line)) {
+                    DWORD written{};
+                    if (WriteFile(file, line, static_cast<DWORD>(n), &written, nullptr))
+                        ++cameraCaptureSamples[eye];
+                }
+                CloseHandle(file);
+            }
+        }
+    }
+    ReleaseSRWLockExclusive(&cameraCaptureLock);
+}
 void copyJob(void* view, void* settings, void* a, void* b, bool c) {
     // Update 36: EYE BLOOM, before the job copies the view settings (a, its r8).
     if (enabled) {
@@ -2458,6 +2522,8 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
             const auto job = reinterpret_cast<void*>(pointer(reinterpret_cast<uintptr_t>(settings) + 0x650));
             if (!job)
                 return;
+            captureCameraJob(i, reinterpret_cast<uintptr_t>(view),
+                             reinterpret_cast<uintptr_t>(job), frameIndex.load(std::memory_order_relaxed));
             // The job's render context (0x7a0 bytes, copied to 7a2e200 while its
             // commands run): +40c is its anti-aliasing, 1 the engine's temporal
             // one, the only value at which TemporalAa (1842e10) runs. With an

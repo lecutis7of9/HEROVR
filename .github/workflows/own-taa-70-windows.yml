@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - experiment/078-own-taa-70
+      - experiment/078-own-taa-70-color-fix
 
 jobs:
   build-windows:

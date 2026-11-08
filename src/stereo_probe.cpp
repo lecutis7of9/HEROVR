@@ -2244,10 +2244,15 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
             if (view == eyes[i].load())
                 tracedJobs[i + 1] = job;
     }
-    for (unsigned i = 0; i < 2; ++i)
-        if (view == eyes[i].load()) {
-            // Measure the HEROVR per-eye post-copy bookkeeping, not the original game copy.
-            spidy::perf077::Scope timed(spidy::perf077::eyeCopyJob);
+    // FPS: resolve the eye once instead of scanning both atomics in the hot copy hook.
+    // Non-eye jobs return immediately after the game's original copy.
+    const void* leftEye = eyes[0].load(std::memory_order_relaxed);
+    const void* rightEye = eyes[1].load(std::memory_order_relaxed);
+    const unsigned selectedEye = view == leftEye ? 0u : view == rightEye ? 1u : 2u;
+    if (selectedEye < 2) {
+        const unsigned i = selectedEye;
+        // Keep the profiling scope on the eye-specific work only.
+        spidy::perf077::Scope timed(spidy::perf077::eyeCopyJob);
             // The job is settings +0x650 in SM2 (SM2VR 0.0.27 copyJob detour,
             // 0x2d66/0x2dfe: [rdx+0x650]). Remastered's +0x4b0 read 0 here, so
             // no eye job was ever recorded, begun, ended or marked

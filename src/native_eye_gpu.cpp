@@ -2952,7 +2952,16 @@ float4 sampleCurrent(float2 uv) {
     sum += current.SampleLevel(bilinear, float2(t3.x, t12.y), 0).rgb * (w3.x * w12.y);
     sum += current.SampleLevel(bilinear, float2(t12.x, t3.y), 0).rgb * (w12.x * w3.y);
     const float weight = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
-    return float4(saturate(sum / max(weight, 1e-4)), current.SampleLevel(bilinear, uv, 0).a);
+    const float3 reconstructed = saturate(sum / max(weight, 1e-4));
+    // Temporal-detail experiment: thin bright windows can ring as the negative
+    // Catmull-Rom lobes cross their edges. Fall partway back to bilinear ONLY
+    // where the two reconstructions strongly disagree. Preserve fine detail
+    // elsewhere and leave the existing full-resolution AA path untouched.
+    const float4 base = current.SampleLevel(bilinear, uv, 0);
+    const float3 difference = abs(reconstructed - base.rgb);
+    const float disagreement = max(difference.r, max(difference.g, difference.b));
+    const float antiRing = 0.45 * saturate((disagreement - 0.025) * 6.0);
+    return float4(lerp(reconstructed, base.rgb, antiRing), base.a);
 }
 #endif
 )"
@@ -2990,8 +2999,20 @@ float3 clipHistory(int2 p, int2 last, float2 old, float2 size, float3 middle, ou
         }
     const float3 mean = m1 / 9.0;
     const float3 sigma = sqrt(max(m2 / 9.0 - mean * mean, 0));
+#ifdef TAA_UPSCALE
+    // The 70% image contains fewer samples than the full-size accumulated
+    // history. During nearly still views, ease the variance clipping toward
+    // the native 3x3 min/max (never beyond it) so thin windows can settle.
+    // Under motion extra.x approaches 0.6 and the original tight clipping
+    // returns, limiting trails on nearby moving objects.
+    const float stillness = saturate((extra.x - 0.60) / 0.33);
+    const float relax = 0.40 * stillness;
+    const float3 boxLo = lerp(max(lo, mean - extra.w * sigma), lo, relax);
+    const float3 boxHi = lerp(min(hi, mean + extra.w * sigma), hi, relax);
+#else
     const float3 boxLo = max(lo, mean - extra.w * sigma);
     const float3 boxHi = min(hi, mean + extra.w * sigma);
+#endif
     float3 before = toYCoCg(catmullRom(old, size));
     // Clip toward the box's centre (not a per-channel clamp): keeps the history's hue, no colour shift.
     const float3 centre = 0.5 * (boxHi + boxLo);
@@ -4303,7 +4324,13 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
             keep = vr_aa::keep(both, turn, travel);
         if (ours) // 0.0.76 TAA STILL (live.txt vr_taa_still): the still share only, unset the build's own
             keep = taa_still::withStill(keep, stillMilli);
-        for (int r = 0; r < 3; ++r)
+        // In the native 70% temporal-upscale experiment, preserve a little
+        // more full-size per-eye history only when the view is nearly still.
+        // The extra history vanishes continuously as head motion/travel rises;
+        // camera cuts and missing reprojection still force keep = 0.
+        if (ours && history.upscale && both && keep > 0.f)
+            keep = std::min(0.99f, keep + 0.035f * (1.f - vr_aa::motion(turn, travel)));
+        for (int r = 0; r < 3; ++r>
             for (int c = 0; c < 3; ++c)
                 frame[i][r * 4 + c] = h[r * 3 + c];
         frame[i][12] = keep;

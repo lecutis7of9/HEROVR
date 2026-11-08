@@ -3484,9 +3484,14 @@ uint8_t renderOffscreen() {
     } catch (...) {
     }
     ++SpidyShadowData.passes;
-    native_body::renderFrame();
+    {
+        spidy::perf077::Scope timed(spidy::perf077::nativeFrame);
+        native_body::renderFrame();
+    }
     if (!lateEyes && (enabled || live.load() || hiddenHero.load()))
         placeEyes();
+    // This is CPU elapsed time only; a GPU submission may return before GPU work completes.
+    spidy::perf077::Scope timed(spidy::perf077::offscreenOriginal);
     return originalRenderOffscreen();
 }
 // Update 34: ENGINE TAA goes off on its own when VR ends or an eye loses its targets

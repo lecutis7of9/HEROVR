@@ -1698,8 +1698,6 @@ bool initBuffers(void* buffers, const void* description, const char* name) {
                 else if (sm1 && sm1ExeKnown.load() && !aaOk)
                     sm1FallBack(mt::gameAa);
                 sm1TargetsOk = maskStock && aaOk;
-                ownReducedEyes = !sm1 && !(eyeTemporal.load() & 0x10) &&
-                                 spidy::native_gpu::vrAa() == spidy::vr_aa::ours && requestOwnReducedEyes();
                 const uint32_t percent = ownReducedEyes ? 70u :
                     mt::madePercent(sm1, sm1ExeKnown.load(), maskStock, aaOk,
                                                                 eyeRenderPercent.load());  // 0.0.76 VISUAL
@@ -3765,6 +3763,14 @@ void maintain(void* manager) {
         (!attempted || retired[0] || retired[1]) && valid && GetTickCount64() < deadline &&
         (config.durationMs || GetTickCount64() < commandDeadline)) {
         attempted = true;
+        if (!sm1Percent.load()) {
+            ownReducedEyes = !sm1AtStart() && !(eyeTemporal.load() & 0x10) &&
+                             spidy::native_gpu::vrAa() == spidy::vr_aa::ours && requestOwnReducedEyes();
+        }
+        // The native view creates its final color target from these dimensions
+        // before initBuffers sizes the scene. Keep the XR output config intact.
+        const auto eyeTarget = ownReducedEyes ? spidy::eyeRenderSize(config.width, config.height, 70)
+                                              : std::array<uint32_t, 2>{config.width, config.height};
         static const char* names[] = {"Spidy left eye test", "Spidy right eye test"};
         for (unsigned i = 0; i < 2; ++i) {
             if (!eyes[i]) {
@@ -3780,7 +3786,7 @@ void maintain(void* manager) {
                 else if (!(widened = lightChecksByte(stockByte, eq::roomByte(room))))
                     lightChecksState = 3;
                 creatingEye = true;
-                const CreateArgs args{names[i], main.nearZ(), main.farZ(), 90.f, config.width, config.height,
+                const CreateArgs args{names[i], main.nearZ(), main.farZ(), 90.f, eyeTarget[0], eyeTarget[1],
                                       28, nullptr, 0x100, 2, widened ? room : 0xffffffffu, 0};
                 eyes[i] = reinterpret_cast<Create>(base + 0x2c9c590)(manager, &args);
                 creatingEye = false;

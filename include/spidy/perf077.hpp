@@ -8,10 +8,11 @@
 namespace spidy::perf077 {
 enum Path : unsigned { cards = 0, cameraSample = 1, poiDrain = 2, nativeFrame = 3, offscreenOriginal = 4, eyePlacement = 5, eyeCopyJob = 6, pathCount = 7 };
 inline const char* pathName(unsigned p) {
-    static const char* names[pathCount] = {"cards+waypoint", "camera sample", "poi dump", "native renderFrame CPU", "offscreen original CPU", "eye placement CPU", "eye copyJob CPU"};
+    static const char* names[pathCount] = {"cards", "camera", "poi", "nativeFrame", "offscreen", "placeEyes", "eyeCopy"};
     return p < pathCount ? names[p] : "?";
 }
 inline std::atomic<uint64_t> pathUs[pathCount]{};
+inline std::atomic<uint64_t> pathCalls[pathCount]{};
 inline std::atomic<uint64_t> pathPeakUs[pathCount]{};
 inline int64_t qpcNow() {
     LARGE_INTEGER t;
@@ -30,6 +31,7 @@ inline void add(unsigned p, uint64_t us) {
     if (p >= pathCount)
         return;
     pathUs[p].fetch_add(us, std::memory_order_relaxed);
+    pathCalls[p].fetch_add(1, std::memory_order_relaxed);
     uint64_t peak = pathPeakUs[p].load(std::memory_order_relaxed);
     while (us > peak && !pathPeakUs[p].compare_exchange_weak(peak, us, std::memory_order_relaxed)) {
     }
@@ -62,8 +64,11 @@ struct Frames {
         int n = sprintf_s(line, size, "HERO VR 0.0.77 FRAME (VR loop): %u frames, avg %.1f ms, worst %.1f ms;", count,
                           count ? sumMs / count : 0.0, worstMs);
         for (unsigned p = 0; p < pathCount && n > 0 && static_cast<size_t>(n) < size; ++p) {
-            const int m = sprintf_s(line + n, size - n, " %s %.2f ms/s peak %.2f ms", pathName(p),
-                                    pathUs[p].exchange(0) / 1000.0, pathPeakUs[p].exchange(0) / 1000.0);
+            const auto calls = pathCalls[p].exchange(0);
+            const auto us = pathUs[p].exchange(0);
+            const int m = sprintf_s(line + n, size - n, " %s %llu calls avg %.3f ms peak %.2f ms", pathName(p),
+                                    static_cast<unsigned long long>(calls), calls ? us / (1000.0 * calls) : 0.0,
+                                    pathPeakUs[p].exchange(0) / 1000.0);
             if (m <= 0)
                 break;
             n += m;

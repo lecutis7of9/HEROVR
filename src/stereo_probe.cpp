@@ -36,6 +36,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <initializer_list>
 #include <intrin.h>
 #include <windows.h>
@@ -3961,7 +3962,30 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
         char shadowReuseSetting[4]{};
         const DWORD shadowReuseLength = GetEnvironmentVariableA(
             "SPIDY_SHADOW_REUSE", shadowReuseSetting, sizeof(shadowReuseSetting));
-        const bool shadowReuseRequested = shadowReuseLength == 1 && shadowReuseSetting[0] == '1';
+        // The desktop launcher may not pass its environment to the game process.
+        // An opt-in marker beside this DLL makes the test independent of launcher inheritance.
+        bool shadowReuseMarker = false;
+        HMODULE ownModule = nullptr;
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                   GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               reinterpret_cast<LPCSTR>(&SpidyStart), &ownModule)) {
+            char modulePath[MAX_PATH]{};
+            if (GetModuleFileNameA(ownModule, modulePath, MAX_PATH)) {
+                char* slash = std::strrchr(modulePath, '\\');
+                if (slash) {
+                    *(slash + 1) = '\0';
+                    char markerPath[MAX_PATH + 64]{};
+                    if (std::snprintf(markerPath, sizeof(markerPath),
+                                      "%sspidy-shadow-reuse.enable", modulePath) > 0) {
+                        const DWORD attrs = GetFileAttributesA(markerPath);
+                        shadowReuseMarker = attrs != INVALID_FILE_ATTRIBUTES &&
+                                            !(attrs & FILE_ATTRIBUTE_DIRECTORY);
+                    }
+                }
+            }
+        }
+        const bool shadowReuseRequested =
+            (shadowReuseLength == 1 && shadowReuseSetting[0] == '1') || shadowReuseMarker;
         eyeShadows.store(shadowReuseRequested ? 1u : 0u, std::memory_order_relaxed);
         SpidyShadowData.mode = shadowReuseRequested ? 1u : 0u;
         OutputDebugStringA(shadowReuseRequested

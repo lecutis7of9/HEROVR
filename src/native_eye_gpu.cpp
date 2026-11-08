@@ -2671,6 +2671,11 @@ uint32_t historyNow() {
 bool spidyTaaNow() {
     return vrAaMode.load(std::memory_order_relaxed) == vr_aa::ours && !sm1Lock.load(std::memory_order_relaxed);
 }
+// The reduced-resolution OWN-AA path reconstructs into full-size eye history.
+bool temporalUpscale() {
+    return width && height && outWidth > width && outHeight > height && spidyTaaNow() &&
+           temporalOn.load(std::memory_order_relaxed) && !taaDepthActive();
+}
 std::mutex viewLock;
 struct NotedViews {
     uint64_t serial{};
@@ -2725,7 +2730,7 @@ struct HistoryPipeline {
     // Per eye, the picture so far and the one being drawn (parity is read).
     std::array<std::array<ComPtr<ID3D12Resource>, 2>, 2> pictures;
     unsigned parity{};
-    bool ready{}, valid{}; // valid: pictures[*][parity] hold `shown`
+    bool ready{}, valid{}, upscale{}; // upscale: history consumes native 70% eyes; valid: pictures[*][parity] hold `shown`
     std::array<eye_history::EyeView, 2> shown{};
     std::array<float, 2> shownJitter{}; // 0.0.76 JITTER CHECK: eye 0's step in `shown`
 } history;
@@ -2923,6 +2928,33 @@ float3 toYCoCg(float3 c) {
 float3 fromYCoCg(float3 c) {
     return float3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z);
 }
+#ifdef TAA_UPSCALE
+// Reconstruct the lower-resolution current eye directly at the full output
+// size with a five-tap Catmull-Rom filter. Previous history is full-size.
+float4 sampleCurrent(float2 uv) {
+    uint sw, sh;
+    current.GetDimensions(sw, sh);
+    const float2 size = float2(sw, sh);
+    const float2 at = uv * size;
+    const float2 c1 = floor(at - 0.5) + 0.5;
+    const float2 f = at - c1;
+    const float2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+    const float2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+    const float2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+    const float2 w3 = f * f * (-0.5 + 0.5 * f);
+    const float2 w12 = w1 + w2;
+    const float2 t12 = (c1 + w2 / w12) / size;
+    const float2 t0 = (c1 - 1.0) / size;
+    const float2 t3 = (c1 + 2.0) / size;
+    float3 sum = current.SampleLevel(bilinear, float2(t12.x, t0.y), 0).rgb * (w12.x * w0.y);
+    sum += current.SampleLevel(bilinear, float2(t0.x, t12.y), 0).rgb * (w0.x * w12.y);
+    sum += current.SampleLevel(bilinear, t12, 0).rgb * (w12.x * w12.y);
+    sum += current.SampleLevel(bilinear, float2(t3.x, t12.y), 0).rgb * (w3.x * w12.y);
+    sum += current.SampleLevel(bilinear, float2(t12.x, t3.y), 0).rgb * (w12.x * w3.y);
+    const float weight = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
+    return float4(saturate(sum / max(weight, 1e-4)), current.SampleLevel(bilinear, uv, 0).a);
+}
+#endif
 )"
 R"(float3 catmullRom(float2 uv, float2 size) {
     const float2 at = uv * size;
@@ -3112,10 +3144,23 @@ void noteSeam(int2 p, int2 last, int2 dp, int2 depthLast, uint pitch, uint bin, 
 #endif
 float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     uint w, h;
+#ifdef TAA_UPSCALE
+    previous.GetDimensions(w, h);
+#else
     current.GetDimensions(w, h);
+#endif
     const int2 p = int2(position.xy);
     const int2 last = int2(w, h) - 1;
+#ifdef TAA_UPSCALE
+    uint sw, sh;
+    current.GetDimensions(sw, sh);
+    const float2 currentUv = position.xy / float2(w, h);
+    const int2 sourceLast = int2(sw, sh) - 1;
+    const int2 sourcePixel = clamp(int2(currentUv * float2(sw, sh)), int2(0, 0), sourceLast);
+    const float4 here = sampleCurrent(currentUv);
+#else
     const float4 here = current.Load(int3(p, 0));
+#endif
     const float3 uv = float3(position.xy * extra.yz, 1);
     float3 q = float3(dot(row0.xyz, uv), dot(row1.xyz, uv), dot(row2.xyz, uv));
 #ifdef TAA_COUNT
@@ -3249,7 +3294,11 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     }
 #endif
     float most;
+#ifdef TAA_UPSCALE
+    const float3 before = clipHistory(sourcePixel, sourceLast, old, float2(w, h), middle, most);
+#else
     const float3 before = clipHistory(p, last, old, float2(w, h), middle, most);
+#endif
 #ifdef TAA_AGE
     {
         const uint had = agePrevious(old, w, h);
@@ -3345,7 +3394,9 @@ bool prepareHistory() {
     // never fails for it.
     if (spidyTaaNow()) {
         ComPtr<ID3DBlob> taaPs;
-        if (FAILED(D3DCompile(taaShader, std::strlen(taaShader), "spidy_taa", nullptr, nullptr, "ps", "ps_5_0",
+        const D3D_SHADER_MACRO upscaleDefines[] = {{"TAA_UPSCALE", "1"}, {nullptr, nullptr}};
+        if (FAILED(D3DCompile(taaShader, std::strlen(taaShader), "spidy_taa",
+                              temporalUpscale() ? upscaleDefines : nullptr, nullptr, "ps", "ps_5_0",
                               D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &taaPs, &error)))
             return failHistory(2);
         d.PS = {taaPs->GetBufferPointer(), taaPs->GetBufferSize()};
@@ -3390,7 +3441,7 @@ bool prepareHistory() {
         for (unsigned k = 0; k < 2; ++k) {
             auto view = history.views->GetCPUDescriptorHandleForHeapStart();
             view.ptr += static_cast<SIZE_T>(viewStep) * ((2 * i + k) * 2);
-            device->CreateShaderResourceView(stagedEyes[i].Get(), &sv, view);
+            device->CreateShaderResourceView((temporalUpscale() ? resources[i] : stagedEyes[i]).Get(), &sv, view);
             view.ptr += viewStep;
             device->CreateShaderResourceView(history.pictures[i][k].Get(), &sv, view);
             auto target = history.targets->GetCPUDescriptorHandleForHeapStart();
@@ -3424,6 +3475,7 @@ bool prepareHistory() {
         history.queries.Reset();
         history.stamps.Reset();
     }
+    history.upscale = temporalUpscale();
     history.ready = true;
     history.valid = false;
     return true;
@@ -4149,7 +4201,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     const bool depthWanted = ours && taaDepthActive();
     // 0.0.76 SEAM TRACE: with vr_taa_depth off, vr_taa_seam reads the same depth (the same gates and check) for the
     // trace alone; seamUsed never moves the history.
-    const bool seamWanted = ours && !depthWanted && taaSeamOn.load(std::memory_order_relaxed);
+    const bool seamWanted = ours && !history.upscale && !depthWanted && taaSeamOn.load(std::memory_order_relaxed);
     bool depthUsed = false;
     bool depthFound[2]{};
     uint32_t depthGate = 0; // 0 used, 1 an eye's depth missing, 2 check not passed yet, 3 check failed
@@ -4332,6 +4384,21 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
                    D3D12_RESOURCE_STATE_RENDER_TARGET);
     }
     originalBarrier(list, 4, b);
+    // Direct temporal upscale reads the game's original smaller eye texture.
+    // Restore the state that the game supplied once the GPU history draw ends.
+    D3D12_RESOURCE_BARRIER nativeBarriers[2]{};
+    UINT nativeBarrierCount = 0;
+    if (history.upscale) {
+        for (unsigned i = 0; i < 2; ++i)
+            if (!(states[i] & D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)) {
+                auto& transition = nativeBarriers[nativeBarrierCount++];
+                transition.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                transition.Transition = {resources[i].Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, states[i],
+                                         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE};
+            }
+        if (nativeBarrierCount)
+            originalBarrier(list, nativeBarrierCount, nativeBarriers);
+    }
     // 0.0.76 TAA JITTER: the same TAA with the rejection counts when its variant is built (else as before).
     // A-depth: its own counted variant (TAA_DEPTH + TAA_COUNT), or no counts that pair.
     // 0.0.76 SEAM TRACE: the depth read above was for the trace only (vr_taa_depth off): the history is turned by
@@ -4339,7 +4406,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     const bool seamReady = seamWanted && depthUsed && history.taaSeam;
     if (!depthWanted)
         depthUsed = false;
-    const bool counting = ours && slot < history.counted.size() && prepareTaaCount() &&
+    const bool counting = ours && !history.upscale && slot < history.counted.size() && prepareTaaCount() &&
                           (!depthUsed || history.taaDepthCount);
     // 0.0.76 A-depth TRACE (read-only): the counted depth pass with the ages and graze bins when they are there.
     // SEAM TRACE: or the counted head-motion pass, its depth read for the bins alone (seamTraced).
@@ -4434,6 +4501,10 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         list->OMSetRenderTargets(1, &target, FALSE, nullptr);
         list->DrawInstanced(3, 1, 0, 0);
     }
+    for (UINT i = 0; i < nativeBarrierCount; ++i)
+        std::swap(nativeBarriers[i].Transition.StateBefore, nativeBarriers[i].Transition.StateAfter);
+    if (nativeBarrierCount)
+        originalBarrier(list, nativeBarrierCount, nativeBarriers);
     for (unsigned i = 0; i < 2; ++i) {
         transition(2 * i, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
                    D3D12_RESOURCE_STATE_COPY_DEST);
@@ -5054,21 +5125,25 @@ void stagePair(EyePairState::Stamp stamp) {
     const bool wantSmaa = !down && !sm1 &&
                           (vrMode == vr_aa::smaa || (vrMode == vr_aa::ours && (taaFailed || !temporalOn.load())));
     const bool useSmaa = wantSmaa && prepareSmaa();
-    const bool smooth = (down || (aaMode.load() == 1 && !sm1 && !vrAaLocked()) || (wantSmaa && !useSmaa)) &&
+    // Native 70% -> full-size headset history in one pass. Keep the old
+    // spatial resize as a fail-safe if the new reconstruction cannot start.
+    const bool directTemporal = temporalUpscale() && prepareHistory() && history.upscale && history.taa;
+    const bool smooth = !directTemporal &&
+                        (down || (aaMode.load() == 1 && !sm1 && !vrAaLocked()) || (wantSmaa && !useSmaa)) &&
                         prepareAa(); // SM1STYLE, SPIDY TAA, SMAA: no FXAA (but SMAA's own fallback)
-    if (down && !smooth) {
+    if (down && !smooth && !directTemporal) {
         fault = 3806; // the headset would get nothing: say why (aaFault)
         return;
     }
     if (smooth)
         drawAa(slot->list.Get(), index);
-    else
+    else if (!directTemporal)
         for (unsigned i = 0; i < 2; ++i)
             copyEyeTexture(slot->list.Get(), resources[i].Get(), states[i], stagedEyes[i].Get(), originalBarrier,
                            D3D12_RESOURCE_STATE_COPY_SOURCE);
     const bool smaaUploading = useSmaa && drawSmaa(slot->list.Get(), index);
-    // The history after AA: it blends what the headset is shown.
-    if (historyNow() && prepareHistory()) {
+    // Under directTemporal, this pass IS the full-resolution upscaler.
+    if (directTemporal || (historyNow() && prepareHistory())) {
         drawHistory(slot->list.Get(), index, stamp.serial);
     } else {
         history.valid = false;

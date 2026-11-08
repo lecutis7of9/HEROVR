@@ -3390,7 +3390,13 @@ void* submitScene(void* view, void* parent, uint32_t flags, uint64_t last, uint6
                         shadowLensPass == offscreenPass;
     const bool cover = shares;
     uintptr_t given[11]{};
-    const bool take = (mode & 7) && (flags & 2) && second && shadowDonor.part[5] && shadowDonor.covers &&
+    // Experimental shadow reuse: validate the donor before handing its cascade records to the engine.
+    // Default remains off; SpidyEyeShadows(1) must be explicitly requested.
+    uint8_t donorCounts[2]{};
+    const bool donorValid = second && shadowDonor.part[5] && shadowDonor.covers &&
+                            cascades(shadowDonor.part[5], donorCounts) != 0;
+    const bool take = (mode & 1) && (flags & 2) && donorValid &&
+                      shadowLensPass == offscreenPass && !shadowLensSame &&
                       (!parent || read(reinterpret_cast<uintptr_t>(parent), given, sizeof(given)));
     if (take) {
         if (mode & 1)
@@ -4465,10 +4471,12 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeShadows(void* mode) {
     const auto value = reinterpret_cast<uintptr_t>(mode);
     if (value > 7)
         return 4301;
-    // SM2 port: SM2VR 0.0.27's export (DLL +b020) checks the value the same
-    // way, records it, and always stores 0 here: each eye makes its own shadows
-    // (sharing them crashed the render thread; SM2VR 0.0.4).
-    eyeShadows = 0;
+    // Experimental: allow only key-light cascade sharing (bit 1).
+    // Sharing the light set or +30 part is not enabled: the older SM2VR attempt crashed.
+    // This mode is OFF by default and never enabled automatically.
+    if (value != 0 && value != 1)
+        return 4302;
+    eyeShadows = static_cast<uint32_t>(value);
     SpidyShadowData.mode = static_cast<uint32_t>(value);
     return 0;
 }

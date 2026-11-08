@@ -23,3 +23,11 @@
 - Branch created and CPU timing scopes committed.
 - No verified FPS improvement yet.
 - No Windows build, GPU timing capture, or distributable optimized ZIP yet.
+
+## Additional source inspection and instrumentation
+
+`src/stereo_probe.cpp::copyJob` does more than forward the native engine call. For matched eye views it tracks native render jobs, updates stereo frame records, reads eye camera data and uses synchronization. A new `eye copyJob CPU` scope measures only HEROVR's post-copy eye bookkeeping; it deliberately excludes the engine's original copy. It is not proof that this path is slow.
+
+`placeEyes` calls `restGameView` and several native eye operations. The existing eye-placement scope covers the entire function; the offscreen-original scope covers the game's original offscreen renderer. Their relative costs will help distinguish mod CPU work from engine submission overhead. **Neither scope is GPU execution time.**
+
+All instrumentation is initially active in the branch, so it also introduces small measurement overhead. Any eventual optimized release should remove or gate these scopes after profiling. Do not claim an FPS gain based on added instrumentation.

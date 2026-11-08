@@ -200,6 +200,10 @@ SETTINGS = {
                          "once a frame from your head's view and shared by both eyes, instead of the left eye "
                          "making them again, to stop them flickering; only changes anything with far_shadows at "
                          "eyes+cache, the default; 0 off, the default) - live, no restart needed"),
+    # FRAME OVERLAP test: the VR thread records the next overlay while the GPU finishes the last.
+    'frame_overlap': ((0, 1), 'SpidyFrameOverlap', "FRAME OVERLAP {} (1 on: record the next headset frame while the "
+                      "graphics card finishes the last one; the picture is unchanged; 0 off, the default) - live, "
+                      "no restart needed"),
     # 0.0.76 FAR SHAKE (include/spidy/sm1style.hpp eyeJitterFor, gameViewJitter): live, never persisted.
     'vr_jitter': ((0, 1), 'SpidyVrJitter', "VR JITTER {} (0 on: the eyes' TAA sample walk, sharpest bricks; 1 off: "
                  "one fixed offset instead, a test for the far shake, a little softer) - live, no restart needed"),
@@ -902,6 +906,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'vr_taa_depth': ('off', 'on', 'auto'),  # 0.0.76 A-depth (off, 0, the default)
                 'vr_taa_seam': ('off', 'on'),  # 0.0.76 SEAM TRACE (off, 0, the default)
                 'vr_shadow_stable': ('off', 'on'),  # 0.0.76 SHADOW STABLE (off, 0, the default)
+                'frame_overlap': ('off', 'on'),  # FRAME OVERLAP test (off, 0, the default)
                 'vr_ao': ('off', 'on'),  # 0.0.76 AO (off, 0, the default since the 0.0.76 HARLEYS fix)
                 'vr_texture_detail': ('off', 'on', 'aniso', 'quality'),  # 0.0.76 TEXTURE DETAIL (off, 0, the default)
                 'vr_taa_jitter': ('on', 'off', 'fixed', 'half'),  # 0.0.76 TAA JITTER (0 on, the default)
@@ -1006,6 +1011,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'vr_taa_depth': {'off': 0, 'on': 1, 'auto': 2, '0': 0, '1': 1, '2': 2},  # 0.0.76 A-depth: 0 off default
            'vr_taa_seam': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.76 SEAM TRACE: 0 off default
            'vr_shadow_stable': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.76 SHADOW STABLE: 0 off default
+           'frame_overlap': {'off': 0, 'on': 1, '0': 0, '1': 1},  # FRAME OVERLAP test: 0 off default
            'vr_ao': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.76 AO
            'vr_texture_detail': {'off': 0, 'on': 1, 'aniso': 2, 'quality': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 TEXTURE DETAIL
            'punch_hits': {'game_instant': 0, 'game_move': 1, 'instant_only': 2, 'instant': 2, '0': 0, '1': 1, '2': 2},
@@ -1458,7 +1464,7 @@ START_ONLY = START_ONLY + ('fly_hold', 'fly_steer', 'fly_flips', 'fly_look_up') 
 START_ONLY = START_ONLY + ('fly_classic',)  # HERO VR 0.0.76 FLIGHT: an ON kept between sessions
 START_ONLY = START_ONLY + ('vr_texture_detail', 'vr_ao')  # 0.0.76 TEXTURE DETAIL: kept between sessions (RESTART)
 # 0.0.76 SHADOW STABLE: live, and a line the launcher wrote before the start applies at the start too
-START_ONLY = START_ONLY + ('vr_shadow_stable',)
+START_ONLY = START_ONLY + ('vr_shadow_stable', 'frame_overlap')
 START_ONLY = START_ONLY + ('hitch_hold',)  # 0.0.76 HITCH HOLD: an OFF kept between sessions
 START_ONLY = START_ONLY + ('story_swap', 'story_throw')  # HERO VR 0.0.77 STORY INPUTS: kept between sessions
 START_ONLY = START_ONLY + ('story_abilities', 'story_throw_aim', 'story_dodge', 'head_dodge', 'story_sprint')  # 0.0.77 STORY MOVES

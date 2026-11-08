@@ -19,7 +19,7 @@ jobs:
       - name: Build full VR mod and run project tests
         shell: pwsh
         run: |
-          & .\tools\build.ps1 -FromSource -Configuration Release
+          & .\tools\build.ps1 -FromSource -Observer -Configuration Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path 'build\windows-ninja\spidy_stereo_probe.dll')) {
             throw 'Required VR module was not produced'

@@ -3,6 +3,7 @@
 #include "spidy/eye_job_table.hpp"
 #include "spidy/eye_resolution.hpp"
 #include "spidy/engine_taa.hpp"
+#include "spidy/engine_upscale70.hpp" // isolated native 70% TAA experiment
 #include "spidy/eye_bloom.hpp"
 #include "spidy/sm1style.hpp" // 0.0.74 test 10 SM1STYLE
 #include "spidy/jitter_log.hpp" // 0.0.76 JITTER FIX
@@ -4716,8 +4717,17 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTemporal(void* packed) {
     const uint32_t percent = value & 0xff;
     if (percent && (percent < 25 || percent > 100))
         return 4101;
-    if (percent)
-        eyeRenderPercent = percent;
+    if (percent) {
+        // This branch only: the launcher's explicit SpidyVR-style 67% mode
+        // becomes an engine-TAA 70% test. Native 100%, classic and our own TAA
+        // do not change; the existing engine-target guards still apply.
+        const bool engineEye = (static_cast<uint32_t>(value >> 8) &
+                                spidy::sm1style::eyeTemporalBit) != 0;
+        const uint32_t chosen = spidy::engine_upscale70::percent(percent, engineEye);
+        eyeRenderPercent = chosen;
+        if (chosen != percent)
+            OutputDebugStringA("ENGINE UPSCALE 70: opted in; SM1STYLE eye scene set to 70% per side\n");
+    }
     // SM2 port: SM2VR 0.0.27's export (DLL +b040) keeps the size and always
     // stores 0 here: no jittered lens, no eye temporal AA, no extra reflection
     // targets (SM2VR 0.0.3/0.0.5). Update 34: bit 0x10 (-EngineTaa) is kept: the

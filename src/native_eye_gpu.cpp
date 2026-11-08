@@ -4330,7 +4330,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         // camera cuts and missing reprojection still force keep = 0.
         if (ours && history.upscale && both && keep > 0.f)
             keep = std::min(0.99f, keep + 0.035f * (1.f - vr_aa::motion(turn, travel)));
-        for (int r = 0; r < 3; ++r>
+        for (int r = 0; r < 3; ++r)
             for (int c = 0; c < 3; ++c)
                 frame[i][r * 4 + c] = h[r * 3 + c];
         frame[i][12] = keep;

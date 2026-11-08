@@ -2458,14 +2458,14 @@ void captureCameraJob(unsigned eye, uintptr_t view, uintptr_t job, uint64_t fram
                 if (GetLastError() != ERROR_ALREADY_EXISTS) {
                     constexpr char header[] =
                         "frame,eye,job,current_x,current_y,current_z,previous_x,previous_y,previous_z,"
-                        "lens_left,lens_right,lens_top,lens_bottom,jitter_x,jitter_y\\r\\n";
+                        "lens_left,lens_right,lens_top,lens_bottom,jitter_x,jitter_y\r\n";
                     DWORD written{};
                     WriteFile(file, header, sizeof(header) - 1, &written, nullptr);
                 }
                 char line[400]{};
                 const int n = std::snprintf(line, sizeof line,
                     "%llu,%u,%llx,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,"
-                    "%.9g,%.9g,%.9g,%.9g,%.9g,%.9g\\r\\n",
+                    "%.9g,%.9g,%.9g,%.9g,%.9g,%.9g\r\n",
                     static_cast<unsigned long long>(frame), eye,
                     static_cast<unsigned long long>(job),
                     current[0], current[1], current[2],

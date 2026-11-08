@@ -162,6 +162,8 @@ struct CopyCommands {
 std::array<CopyCommands, 3> captureCommands, presentCommands, screenCommands, mirrorCommands, shownCommands;
 std::array<ComPtr<ID3D12Resource>, 2> stagedEyes;
 EyePairState::Stamp capturedStamp;
+// Published with capturedStamp under the submission and recording locks.
+bool capturedFromHistory{};
 uint64_t capturedPairs{}, reusedPairs{}, capturedMs{};
 // copyTiming (submission lock): headset copies not yet seen finished, with
 // when they and their pair were submitted (QueryPerformanceCounter).
@@ -4121,7 +4123,7 @@ bool findViews(uint64_t serial, std::array<eye_history::EyeView, 2>& out, NotedV
 // The staged pair (in COPY_SOURCE) blended with the history, turned to its
 // view: drawn into the other picture, which is copied back into the staged
 // image and kept for the next pair.
-void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) {
+bool drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial, bool allowDirect) {
     pairTrace = {};
     pairTrace.drawn = true;
     std::array<eye_history::EyeView, 2> now{};
@@ -4434,11 +4436,12 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         list->OMSetRenderTargets(1, &target, FALSE, nullptr);
         list->DrawInstanced(3, 1, 0, 0);
     }
+    const bool direct = allowDirect && ours;
     for (unsigned i = 0; i < 2; ++i) {
         transition(2 * i, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-                   D3D12_RESOURCE_STATE_COPY_DEST);
+                   direct ? D3D12_RESOURCE_STATE_COPY_SOURCE : D3D12_RESOURCE_STATE_COPY_DEST);
         transition(2 * i + 1, history.pictures[i][write].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
-                   D3D12_RESOURCE_STATE_COPY_SOURCE);
+                   direct ? D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE : D3D12_RESOURCE_STATE_COPY_SOURCE);
     }
     originalBarrier(list, 4, b);
     if (counting) { // 0.0.76 TAA JITTER: this slot's counts to its readback, back to COMMON
@@ -4481,14 +4484,16 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         history.traced[slot] = true;
     }
     history.aged = {tracing, tracing}; // the next pair's ageIn: these, or none
-    for (unsigned i = 0; i < 2; ++i)
-        list->CopyResource(stagedEyes[i].Get(), history.pictures[i][write].Get());
-    for (unsigned i = 0; i < 2; ++i) {
-        transition(2 * i, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE);
-        transition(2 * i + 1, history.pictures[i][write].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE,
-                   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    if (!direct) {
+        for (unsigned i = 0; i < 2; ++i)
+            list->CopyResource(stagedEyes[i].Get(), history.pictures[i][write].Get());
+        for (unsigned i = 0; i < 2; ++i) {
+            transition(2 * i, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE);
+            transition(2 * i + 1, history.pictures[i][write].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE,
+                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        }
+        originalBarrier(list, 4, b);
     }
-    originalBarrier(list, 4, b);
     if (history.queries) {
         originalEndQuery(list, history.queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, first + 1);
         list->ResolveQueryData(history.queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, first, 2, history.stamps.Get(),
@@ -4570,6 +4575,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
             taa_frame_log::note(SpidyTaaFrameLogData, frameEntry);
         }
     }
+    return direct;
 }
 // 0.0.76 SPIDY TAA (vr_aa.hpp): SMAA 1x per eye (spidy/smaa: Jimenez et al.'s SMAA.hlsl, preset HIGH, luma edges),
 // live.txt vr_aa = smaa, and SPIDY TAA's own fallback when its pass cannot be built. No history: nothing temporal
@@ -5068,8 +5074,30 @@ void stagePair(EyePairState::Stamp stamp) {
                            D3D12_RESOURCE_STATE_COPY_SOURCE);
     const bool smaaUploading = useSmaa && drawSmaa(slot->list.Get(), index);
     // The history after AA: it blends what the headset is shown.
+    static const bool directHistory = [] {
+        // Check the loaded module's directory because the launcher can stage the DLL.
+        HMODULE module{};
+        wchar_t path[MAX_PATH]{};
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               reinterpret_cast<LPCWSTR>(&stagePair), &module))
+            return false;
+        const auto length = GetModuleFileNameW(module, path, MAX_PATH);
+        if (!length || length >= MAX_PATH)
+            return false;
+        auto* name = path + length;
+        while (name != path && name[-1] != L'\\')
+            --name;
+        constexpr wchar_t marker[] = L"herovr-direct-taa-copy.enable";
+        if (name == path || MAX_PATH - (name - path) < sizeof(marker) / sizeof(marker[0]))
+            return false;
+        std::memcpy(name, marker, sizeof(marker));
+        const DWORD attributes = GetFileAttributesW(path);
+        return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+    }();
+    bool direct = false;
     if (historyNow() && prepareHistory()) {
-        drawHistory(slot->list.Get(), index, stamp.serial);
+        direct = drawHistory(slot->list.Get(), index, stamp.serial, directHistory && !mvResource);
     } else {
         history.valid = false;
         history.aged = {}; // 0.0.76 A-depth TRACE: no ages for the next pass to read
@@ -5098,6 +5126,7 @@ void stagePair(EyePairState::Stamp stamp) {
         SpidyVrAaData.smaaPairs += useSmaa;
         SpidyVrAaData.fxaaPairs += smooth && !down && wantSmaa;
     }
+    capturedFromHistory = direct;
     capturedStamp = stamp;
     capturedMs = GetTickCount64();
     capturedQpc = qpcNow();
@@ -5770,6 +5799,10 @@ void mirrorEye(IDXGISwapChain* swapchain) {
     auto* slot = readyCommands(mirrorCommands);
     if (!slot)
         return; // earlier draws still in flight: this present keeps what the buffer holds
+    if (!shown && capturedFromHistory)
+        copyEyeTexture(slot->list.Get(), history.pictures[0][history.parity].Get(),
+                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, stagedEyes[0].Get(), originalBarrier,
+                       D3D12_RESOURCE_STATE_COPY_SOURCE);
     auto* eye = shown ? shownEye.Get() : stagedEyes[0].Get();
     D3D12_SHADER_RESOURCE_VIEW_DESC sv{};
     sv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -7374,12 +7407,22 @@ bool copyLatest(ID3D12Resource* left, ID3D12Resource* right, uint64_t& serial, u
     // HERO VR 0.0.78 PUNISHER ARSENAL: the pass also runs for a scope or red dot in view.
     const bool graded = staged && (colorOn.load() || // not in the screen-copy mode (as sharpening)
                                    (foveaDebug.load() && foveaLevel.load() != foveation::off) || opticsLive());
-    const bool sharpened = (percent || graded) && prepareSharpen() &&
-                           drawSharpen(slot->list.Get(), slotIndex, incoming, percent, debug);
+    const bool wantsEffect = (percent || graded) && prepareSharpen();
+    if (capturedFromHistory && wantsEffect)
+        for (unsigned i = 0; i < 2; ++i)
+            copyEyeTexture(slot->list.Get(), history.pictures[i][history.parity].Get(),
+                           D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, stagedEyes[i].Get(), originalBarrier,
+                           D3D12_RESOURCE_STATE_COPY_SOURCE);
+    const bool sharpened = wantsEffect && drawSharpen(slot->list.Get(), slotIndex, incoming, percent, debug);
     for (unsigned i = 0; i < 2; ++i) {
-        if (!sharpened)
-            copyEyeTexture(slot->list.Get(), stagedEyes[eye_debug::eyeDebugSource(debug, i)].Get(),
-                           D3D12_RESOURCE_STATE_COPY_SOURCE, incoming[i], originalBarrier);
+        if (!sharpened) {
+            const unsigned source = eye_debug::eyeDebugSource(debug, i);
+            auto* picture = capturedFromHistory ? history.pictures[source][history.parity].Get()
+                                                : stagedEyes[source].Get();
+            const auto state = capturedFromHistory ? D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+                                                   : D3D12_RESOURCE_STATE_COPY_SOURCE;
+            copyEyeTexture(slot->list.Get(), picture, state, incoming[i], originalBarrier);
+        }
         if (captureImages)
             captureImage(slot->list.Get(), incoming[i], i);
     }

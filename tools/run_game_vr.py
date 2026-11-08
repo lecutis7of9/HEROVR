@@ -39,7 +39,7 @@ import start_errors
 from session_comfort import comfort_advice, game_settings, play_rate
 from observe_game import call_remote, call_with_payload, modules
 from probe_stereo_gpu import MAX_EYE_SIZE, discover_queue, snapshot as gpu_snapshot, save_eye_images
-from sm1style_record import sm1style_snapshot, sm1style_line  # 0.0.76 EYE HISTORY CHECK
+from sm1style_record import sm1style_snapshot, sm1style_line, taa_audit_snapshot, TAA_AUDIT_EXPORT  # 0.0.76 EYE HISTORY CHECK
 import pose_check_record  # 0.0.76 POSE CHECK
 import jitter_log_record  # 0.0.76 JITTER FIX
 import vr_aa_record  # 0.0.76 SPIDY TAA
@@ -1711,7 +1711,7 @@ SM1STYLE_OPTION = 0x1000000
 # off the LEGACY bit (the 0.0.72 picture); ours / keep send neither: SpidyVR's own per-eye TAA, the default.
 VR_AA_SMAA_OPTION = 0x2000000
 VR_AA_LEGACY_OPTION = 0x4000000
-SM1STYLE_UPSCALE = 67   # SpidyVR's DEFAULT_UPSCALE (its tools/run_game_vr.py:52, eye_resolution.hpp:25)
+SM1STYLE_UPSCALE = 70   # Build 2g: native per-eye TemporalAa reconstruction at the same 70% as the experimental own path
 # 0.0.76 VISUAL (live.txt vr_render = native, the default; upscaled = SpidyVR's 67%): the eyes at their full size,
 # the game's TAA resolving them without upscaling (the owner: "turn off upscaling in VR and run native 100%").
 SM1STYLE_NATIVE = 100
@@ -1795,7 +1795,7 @@ def apply_sm1style(a, live_text):
     """0.0.74 test 10 SM1STYLE, the default (live.txt `sm1style = off` turns it off for the next start): SpidyVR's
     eye settings for this start, whatever a launcher argument, next-launch.txt or keep-settings asked: render scale
     and supersample 100, eyes at 100% (0.0.76 VISUAL, live.txt vr_render = native, the default; upscaled: SpidyVR's
-    67%), the game's own mip bias and filtering (SpidyVR changes neither), the game's sharpening at its lowest, no
+    70%), the game's own mip bias and filtering (SpidyVR changes neither), the game's sharpening at its lowest, no
     ENGINE TAA. 0.0.76 VISUAL: where the game's AA will not be TAA with no upscaler (a.game_aa_taa False, set by
     vr_picture_plan; SM1STYLE then falls back to the 0.0.72 picture) the launcher's mip bias is kept: the game's own
     is DLSS's -2.0, which crawls on brick at full-size eyes with no TAA. Sets a.sm1style; returns the console line.
@@ -1804,7 +1804,8 @@ def apply_sm1style(a, live_text):
     if a.vr_aa != 'game':
         a.sm1style = False
         return apply_vr_aa(a, live_settings.vr_supersample(live_text),
-                           live_settings.vr_texture_detail(live_text)[0])
+                           live_settings.vr_texture_detail(live_text)[0],
+                           live_settings.vr_render_upscaled(live_text))
     a.sm1style = live_settings.sm1style_on(live_text)
     percent = SM1STYLE_UPSCALE if live_settings.vr_render_upscaled(live_text) else SM1STYLE_NATIVE
     mip = a.mip_bias if getattr(a, 'game_aa_taa', None) is False else 'game'
@@ -1823,7 +1824,7 @@ def apply_sm1style(a, live_text):
     a.supersample, a.upscale, a.mip_bias, a.anisotropy = 100, percent, mip, 0
     a.game_sharpening = a.engine_taa = False
     return ("SM1STYLE ON (default): SpidyVR's eye anti-aliasing - the game's TAA in each eye, eyes at "
-            + ('67% (vr_render = upscaled)' if percent != SM1STYLE_NATIVE else '100% (native, no upscaling)') +
+            + ('70% (vr_render = upscaled; native game TAA reconstruction)' if percent != SM1STYLE_NATIVE else '100% (native, no upscaling)') +
             ', Halton(2,3) jitter, render scale 100%, supersample 100%, ' +
             ('the game\'s mip bias' if mip == 'game' else f'mip bias {mip} (the game\'s AA is not TAA)') +
             ', the game\'s sharpening at its lowest; our FXAA, EYE AA history '
@@ -1876,7 +1877,7 @@ def vr_aa_options(a):
 TEXTURE_DETAIL_ANISOTROPY = 16
 
 
-def apply_vr_aa(a, supersample=100, aniso=False):
+def apply_vr_aa(a, supersample=100, aniso=False, render_upscaled=False):
     """0.0.76 SPIDY TAA (live.txt vr_aa = ours, the default, keep or smaa): the eye settings our own anti-aliasing is
     made for, whatever a launcher argument, next-launch.txt or keep-settings asked: render scale and supersample 100,
     eyes at 100% (no upscaling), no anisotropy override (VR TEXTURES gives the game's 16x filtering), the game's
@@ -1889,13 +1890,16 @@ def apply_vr_aa(a, supersample=100, aniso=False):
     anisotropy TEXTURE_DETAIL_ANISOTROPY instead of none, the mip bias as above (no sharpening). Returns the console
     line."""
     smaa = a.vr_aa == 'smaa'
+    # Build 2b opt-in: vr_render = upscaled with vr_aa = ours uses 70% eyes,
+    # bilinear spatial reconstruction and our full-resolution temporal history.
+    eye_percent = 70 if render_upscaled and not smaa and not a.size else 100
     mip = '0.5' if smaa or getattr(a, 'game_aa_taa', None) is False else 'game'
     anisotropy = TEXTURE_DETAIL_ANISOTROPY if aniso else 0
     # 0.0.76 A-depth TRACE D: SpidyXrStart keeps 110 / 125 / 150 with ours only (vr_aa.hpp supersampleKept)
-    ss = supersample if supersample in (110, 125, 150) and not a.size and not smaa else 100
+    ss = supersample if supersample in (110, 125, 150) and not a.size and not smaa and eye_percent == 100 else 100
     forced = [f'{name} {old} -> {new}' for name, old, new in (
         ('render scale', a.render_scale, 100), ('supersample', a.supersample, ss),
-        ('upscale', a.upscale, 100), ('mip bias', a.mip_bias, mip),
+        ('upscale', a.upscale, eye_percent), ('mip bias', a.mip_bias, mip),
         ('anisotropy', a.anisotropy, anisotropy)) if old != new]
     if a.game_sharpening:
         forced.append('game sharpening -> lowest')
@@ -1904,7 +1908,7 @@ def apply_vr_aa(a, supersample=100, aniso=False):
     if getattr(a, 'no_eye_antialiasing', False):
         forced.append('eye lens jitter -> on')
     a.render_scale = 100 if not a.size else a.render_scale
-    a.supersample, a.upscale, a.mip_bias, a.anisotropy = ss, 100, mip, anisotropy
+    a.supersample, a.upscale, a.mip_bias, a.anisotropy = ss, eye_percent, mip, anisotropy
     a.game_sharpening = a.engine_taa = a.no_eye_antialiasing = False
     kept = ' (kept over: ' + ', '.join(forced) + ')' if forced else ''
     ss_said = (f', eyes supersampled {ss}% (live.txt vr_ss)' if ss != 100 else '')
@@ -1917,7 +1921,7 @@ def apply_vr_aa(a, supersample=100, aniso=False):
                 '. vr_aa = ours (or no line) + restart VR for SpidyVR\'s own TAA.')
     return ("VR AA: SPIDY TAA (default" + (', vr_aa = keep: your game AA kept' if a.vr_aa == 'keep' else '') +
             "): SpidyVR's own TAA, one history per eye reprojected with that eye's own pose, Halton jitter per eye, "
-            'colour clipping against ghosts; the game\'s TAA kept off the eyes, eyes at 100%' + ss_said + ', ' +
+            'colour clipping against ghosts; the game\'s TAA kept off the eyes, eyes at ' + str(eye_percent) + '%' + ss_said + ', ' +
             ('the game\'s mip bias' if mip == 'game' else f'mip bias {mip}') + kept +
             '; if it cannot start the eyes get SMAA. live.txt vr_aa = smaa + restart VR for no history at all.')
 
@@ -3072,7 +3076,7 @@ def session(a, startup, session_off=()):
                                            'SpidyEyeLodData', 'SpidyShadowCamera',
                                            'SpidyShadowCameraData', 'SpidyShadowDistanceData',
                                            'SpidyEyeTrail', 'SpidyEngineTaaJitter', 'SpidyEngineTaaJitterScale',
-                                           'SpidyEngineTaaData', 'SpidyFarShadowsData', 'SpidySm1StyleData',
+                                           'SpidyEngineTaaData', 'SpidyFarShadowsData', 'SpidySm1StyleData', TAA_AUDIT_EXPORT,
                                            # Update 37: every live.txt export (so none can be missing
                                            # at the first edit) and the new telemetry.
                                            *sorted({e for _, e, _ in live_settings.SETTINGS.values() if e}),
@@ -3184,6 +3188,7 @@ def session(a, startup, session_off=()):
         live_changes = []
         history_last = None  # Update 21: history_snapshot, kept from the samples
         sm1style_last = None  # 0.0.76 EYE HISTORY CHECK: sm1style_snapshot, kept from the samples
+        taa_audit_last = None  # Build 2k: independent atomic census
         pose_check_last = None  # 0.0.76 POSE CHECK: pose_check_snapshot, kept from the samples
         # 0.0.76 SPIDY TAA TUNE: the vr_aa and jitter records kept from the samples too (the 11:26 report, written
         # after the game was closed, had neither: they were only read at a normal stop).
@@ -3507,7 +3512,7 @@ def session(a, startup, session_off=()):
                         haptics=haptics_last, wrist_hud=wrist_hud_last, prompts=prompt_section(list(samples)),
                         ray_samples=list(ray_samples), appearance=appearance, eye_jobs=eye_jobs,
                         render_memory=render_memory, timing=timing, network=links, eye_history=history_last,
-                        sm1style_eyes=sm1style_last,
+                        sm1style_eyes=sm1style_last, taa_audit=taa_audit_last,
                         pose_check=pose_check_last,
                         vr_aa=vr_aa_last, jitter_log=jitter_log_last,
                         taa_watch=taa_watch_record.taa_watch_report(taa_watch_last),
@@ -3600,6 +3605,65 @@ def session(a, startup, session_off=()):
                                        game_exited=result.get('game_exited'), error=str(result.get('error'))),
                                   indent=2)+'\n'
             a.output.write_text(text)
+            # Build 2j: a small, upload-ready diagnostic alongside the full JSON.
+            # Read the game's exported per-eye counters directly: OutputDebugString
+            # is not automatically visible to this launcher or captured here.
+            try:
+                diag = a.output.parent / 'HEROVR_GHOSTING_DIAGNOSTIC.txt'
+                record = result.get('sm1style_eyes') or {}
+                lines = [
+                    'HEROVR BUILD 2j - NATIVE TAA / BUILDING GHOSTING',
+                    'Generated by the launcher when the VR session report is saved.',
+                    'Upload this text file to the ChatGPT conversation.',
+                    '',
+                    'FULL REPORT: ' + str(a.output.resolve()),
+                    'PER-EYE TAA: ' + (sm1style_line(record) or 'No native TAA eye runs recorded.'),
+                    'NOTE: Detailed BUILD 2i OutputDebugString lines are not captured by this file.',
+                ]
+                for eye in ('left', 'right'):
+                    e = record.get(eye) or {}
+                    lines.append(eye.upper() + ': ' + json.dumps(e, sort_keys=True))
+                # Stage census: queueing, eye-job AA assignment and matched TAA
+                # calls are different events. Show all three; do not assert
+                # that their totals must be equal.
+                lines.append('TAA STAGE CENSUS: ' + json.dumps({
+                    'queued_left': (record.get('left') or {}).get('queued'),
+                    'queued_right': (record.get('right') or {}).get('queued'),
+                    'aa_writes_left': (record.get('left') or {}).get('aa_writes'),
+                    'aa_writes_right': (record.get('right') or {}).get('aa_writes'),
+                    'matched_calls_left': (record.get('left') or {}).get('calls'),
+                    'matched_calls_right': (record.get('right') or {}).get('calls'),
+                    'unmatched_hook_calls': record.get('unmatched_taa_calls'),
+                    'left_jobs': record.get('left_jobs'),
+                }, sort_keys=True))
+                audit = result.get('taa_audit') or {}
+                lines.append('TAA FRAME AND REJECTION AUDIT: ' + json.dumps(audit, sort_keys=True))
+                # This verdict evaluates accounting only; it does not infer a
+                # visual rendering defect from unequal counts.
+                if audit:
+                    total = audit.get('all_hook_calls', 0)
+                    matched = audit.get('matched_left', 0) + audit.get('matched_right', 0)
+                    unmatched = audit.get('unmatched_calls', 0)
+                    verdict = ('ACCOUNTED' if total == matched + unmatched
+                               else 'COUNTER MISMATCH - investigate concurrent snapshots')
+                    lines.append('TAA ACCOUNTING VERDICT: ' + verdict +
+                                 f' (total={total}, matched={matched}, unmatched={unmatched})')
+                else:
+                    lines.append('TAA ACCOUNTING VERDICT: unavailable (audit export missing)')
+                lines.append('TAA SETTINGS: ' + json.dumps({
+                    'percent': record.get('percent'),
+                    'render_width': record.get('render_width'),
+                    'render_height': record.get('render_height'),
+                    'flags': record.get('flags'),
+                    'reason': record.get('reason'),
+                }, sort_keys=True))
+                lines.append('FRAME RATES: ' + json.dumps(result.get('frame_rates'), default=str))
+                lines.append('POSE CHECK: ' + json.dumps(result.get('pose_check'), default=str))
+                lines.append('JITTER CHECK: ' + json.dumps(result.get('jitter_log'), default=str))
+                diag.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+                print('GHOSTING DIAGNOSTIC SAVED: ' + str(diag.resolve()), flush=True)
+            except (OSError, TypeError, ValueError) as error:
+                print('Ghosting diagnostic text could not be saved: ' + str(error), flush=True)
             report_written = startup.reported = True
 
         def safe_report(**extra):
@@ -3823,6 +3887,7 @@ def session(a, startup, session_off=()):
                     history_last = history_snapshot(game, xr['SpidyEyeHistoryData']) or history_last
                     # 0.0.76 EYE HISTORY CHECK: each eye's TAA history its own (probe_stereo.sm1style_snapshot).
                     sm1style_last = sm1style_snapshot(game, xr['SpidySm1StyleData']) or sm1style_last
+                    taa_audit_last = taa_audit_snapshot(game, xr.get(TAA_AUDIT_EXPORT)) or taa_audit_last
                     if sm1style_last:
                         sample['sm1style_eyes'] = {e: sm1style_last[e] for e in ('left', 'right')}
                     # 0.0.76 POSE CHECK: each eye's rendered camera against its submitted pose.

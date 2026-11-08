@@ -19,6 +19,7 @@
 #include "spidy/native_body.hpp"
 #include "spidy/native_eye_frame.hpp"
 #include "spidy/native_eye_gpu.hpp"
+#include "spidy/vr_aa.hpp"
 #include "spidy/native_hud.hpp"
 #include "spidy/perf077.hpp"
 #include "spidy/native_view.hpp"
@@ -36,6 +37,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <initializer_list>
 #include <intrin.h>
 #include <windows.h>
@@ -388,10 +390,18 @@ std::atomic<bool> sm1ExeKnown{};
 // them TemporalAa has nowhere to write.
 std::atomic<bool> sm1TargetsOk{}, sm1Targets{};
 std::atomic<uint32_t> sm1Reason{}, sm1Percent{}, sm1UpscaleBad{};
+// Build 2b: own-TAA scene size, separate from SM1STYLE/game TAA.
+std::atomic<uint32_t> ownTaaRenderPercent{100};
 std::atomic<uintptr_t> sm1Jobs[2]{};
 } // namespace
 extern "C" {
 __declspec(dllexport) spidy::sm1style::Data SpidySm1StyleData;
+ // Build 2k consolidated, independent TAA census. 16 aligned QWORDs.
+ // Slots: all calls, unmatched, matched L/R, frame advances L/R,
+ // repeat frames L/R, AA off L/R, no output L/R, history gate miss L/R,
+ // camera cuts L/R. Only diagnostic; no rendering writes.
+ __declspec(align(8)) __declspec(dllexport) uint64_t SpidyTaaAuditData[16]{};
+
 // 0.0.76 JITTER FIX (include/spidy/jitter_log.hpp): each view's lens jitter, its first 200 frames (read-only).
 __declspec(dllexport) spidy::jitter_log::Data SpidyJitterLogData;
 }
@@ -1644,7 +1654,8 @@ std::array<uint32_t, 2> eyeRenderSize() {
     // followed a live switch would change under buffers already made).
     // 0.0.74 test 10 SM1STYLE: the percent the eyes were made at (set once, when the first eye's buffers are made).
     const uint32_t made = sm1Percent.load(std::memory_order_relaxed);
-    return spidy::eyeRenderSize(config.width, config.height, made ? made : 100);
+    const uint32_t own = ownTaaRenderPercent.load(std::memory_order_relaxed);
+    return spidy::eyeRenderSize(config.width, config.height, own < 100 ? own : made ? made : 100);
 }
 void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t height, uint32_t kind, uint8_t align) {
     originalSizeBuffers(buffers, name, width, height, kind, align);
@@ -1663,6 +1674,14 @@ void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t heigh
             }
     if (!eyeWidth)
         return;
+    // Own TAA resolves in the native GPU stage, not in the game's buffers.
+    // The eye's scene and its internal output are both 70%; the headset
+    // output is separately kept full-size by native_gpu::setEyeOutput.
+    if (ownTaaRenderPercent.load(std::memory_order_relaxed) < 100) {
+        const auto render = eyeRenderSize();
+        eyeWidth = render[0];
+        eyeHeight = render[1];
+    }
     // SM2 +1b978: render width, height; the anti-aliased image's width,
     // height; those in multiples of 8; the output's width, height (multiples
     // of 8 when aligned, SM2VR +1b990/+1b994); ... flags at +1b9b4, 2 among
@@ -1677,7 +1696,15 @@ void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t heigh
     // 0.0.74 test 10 SM1STYLE (SpidyVR src/stereo_probe.cpp:917-932): eyes made smaller than their image keep the
     // size they were made at (the game's TAA resolves it to sizes[2..3]); a later re-size must not ask for more than
     // the buffers have.
-    if (const uint32_t made = sm1Percent.load(std::memory_order_relaxed); made && made < 100) {
+    // Build 2h: these two paths have different output contracts.
+    // Own-upscale: the game produces a small eye image, and our GPU stage
+    // enlarges it after capture; all native dimensions remain small.
+    // SM1STYLE: the game must retain a full-size TAA output target while
+    // rendering the scene at 70%. Do not shrink sizes[0..1] here: the native
+    // TemporalAa shader reads its input size separately from its target size.
+    // Collapsing the two sizes defeats native temporal reconstruction and
+    // can leave its history and resolved target with incompatible dimensions.
+    if (ownTaaRenderPercent.load(std::memory_order_relaxed) < 100) {
         const auto render = eyeRenderSize();
         sizes[0] = render[0];
         sizes[1] = render[1];
@@ -1812,8 +1839,8 @@ bool initBuffers(void* buffers, const void* description, const char* name) {
             std::memcpy(local + 0x18, &noParent, 8);
             // As SM2VR does: the eye's sizes (sizeBuffers). Update 34: with -EngineTaa,
             // the TAA target kind as well (engineTaaBuffers).
-            sizingEye[0] = config.width;
-            sizingEye[1] = config.height;
+            sizingEye[0] = ownTaaRenderPercent.load(std::memory_order_relaxed) < 100 ? render[0] : config.width;
+            sizingEye[1] = ownTaaRenderPercent.load(std::memory_order_relaxed) < 100 ? render[1] : config.height;
             // 0.0.74 test 10 SM1STYLE step 2 (SpidyVR src/stereo_probe.cpp:961-990): the TAA targets for the eyes.
             const bool taaTargets = (eyeTemporal.load() & 0x10) ||
                                     (sm1 && sm1ExeKnown.load() && sm1Reason.load() == mt::none);
@@ -2271,7 +2298,12 @@ void temporalAa(void* a, void* b, void* c, void* d) {
     for (int i = 0; job && i < 2; ++i)
         if (sm1Jobs[i].load(std::memory_order_relaxed) == job)
             eye = i;
+    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[0]));
     if (eye < 0) {
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[1]));
+        // Build 2k: account for native TAA calls excluded by sm1Jobs pointer matching.
+        // This counter is diagnostic only; never change the game's rendering path.
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidySm1StyleData.reserved[0]));
         originalTemporalAa(a, b, c, d);
         return;
     }
@@ -2301,21 +2333,37 @@ void temporalAa(void* a, void* b, void* c, void* d) {
     const uintptr_t slot = haveIndex ? pointer(job + mt::jobSlots + 8 * index) : 0;
     const bool haveStamp = slot && read(slot, &stamp, 4);
     const bool ran = aa == 1 && frame && (jitter[0] != 0 || jitter[1] != 0) && output && haveStamp && stamp == frame;
+    // Atomic stage/reason counters remain meaningful even if render hooks overlap.
+    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[2 + eye]));
+    static std::atomic<int32_t> lastAuditFrame[2]{INT32_MIN, INT32_MIN};
+    const int32_t last = lastAuditFrame[eye].exchange(frame, std::memory_order_relaxed);
+    if (last == frame)
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[6 + eye]));
+    else
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[4 + eye]));
+    if (aa != 1)
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[8 + eye]));
+    if (!output)
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[10 + eye]));
+    if (ran && !(haveOther && other == frame - 1 && previous))
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[12 + eye]));
+    if (cut)
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyTaaAuditData[14 + eye]));
     auto& dd = SpidySm1StyleData;
-    ++dd.calls[eye];
+    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&dd.calls[eye]));
     if (ran)
-        ++dd.ran[eye];
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&dd.ran[eye]));
     if (ran && haveOther && other == frame - 1 && previous)
-        ++dd.history[eye];
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&dd.history[eye]));
     if (ran) {
         if (mt::ownHistory(eyeSet, previous, mainSet, otherSet))
-            ++dd.ownHistory[eye];
+            InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&dd.ownHistory[eye]));
         else
-            ++dd.sharedHistory[eye];
+            InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&dd.sharedHistory[eye]));
     }
     static uintptr_t lastJob[2]{};
     if (lastJob[eye] && lastJob[eye] != job)
-        ++dd.jobChanged[eye];
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&dd.jobChanged[eye]));
     lastJob[eye] = job;
     dd.frame[eye] = frame;
     dd.stamp[eye] = stamp;
@@ -2326,6 +2374,39 @@ void temporalAa(void* a, void* b, void* c, void* d) {
     dd.aa[eye] = aa;
     dd.inputWidth[eye] = input;
     dd.outputWidth[eye] = output;
+    // Build 2i: diagnose persistent city ghosting without modifying the
+    // camera, jitter, history pointers or motion vectors. Report each eye's
+    // actual TAA history ownership and frame gate at most once per 2 seconds.
+    // The existing ownHistory/sharedHistory counters alone do not reveal
+    // whether a shared set is the desktop set, the opposite eye, or whether
+    // the F-1 history stamp was rejected.
+    if (sm1Steps()) {
+        static uint64_t lastHistoryLog[2]{};
+        const uint64_t now = GetTickCount64();
+        if (now - lastHistoryLog[eye] >= 2000) {
+            lastHistoryLog[eye] = now;
+            const char* owner = !eyeSet ? "missing" :
+                eyeSet == mainSet ? "desktop" :
+                otherSet && eyeSet == otherSet ? "other-eye" : "own";
+            const char* previousOwner = !previous ? "missing" :
+                previous == mainSet ? "desktop" :
+                otherSet && previous == otherSet ? "other-eye" :
+                previous == eyeSet ? "own" : "different";
+            const bool historyReady = ran && haveOther && other == frame - 1 && previous;
+            char line[512];
+            std::snprintf(line, sizeof line,
+                "BUILD 2i TAA eye=%d frame=%d stamp=%d prevStamp=%d slot=%u "
+                "ran=%d historyReady=%d cut=%u set=%s prevSet=%s "
+                "input=%u output=%u ownRuns=%llu sharedRuns=%llu jobChanges=%llu\\n",
+                eye, frame, stamp, other, index, ran ? 1 : 0,
+                historyReady ? 1 : 0, static_cast<unsigned>(cut), owner,
+                previousOwner, input, output,
+                static_cast<unsigned long long>(dd.ownHistory[eye]),
+                static_cast<unsigned long long>(dd.sharedHistory[eye]),
+                static_cast<unsigned long long>(dd.jobChanged[eye]));
+            OutputDebugStringA(line);
+        }
+    }
     // The upscale (CANDIDATE): TemporalAa must read the smaller scene and write the eye's size. 30 runs that do not
     // and the console says so (the eyes stay as made: restart with SM1STYLE OFF for the full size).
     if (ran) {
@@ -2336,6 +2417,70 @@ void temporalAa(void* a, void* b, void* c, void* d) {
             sm1FallBack(mt::upscaleWrong);
     }
     ++dd.sequence;
+}
+// Build 1: bounded, read-only camera-history capture. No GPU hooks or rendering writes.
+// Captures the exact per-eye view descriptor that the game copies into its job.
+// File is placed beside the injected DLL, so no headset or external debugger is
+// needed to retrieve it. The first 240 paired samples are enough to spot a
+// repeated/stale previous camera, a shared stereo history, or a timing mismatch.
+// These descriptor offsets are already audited by copyJob; this is NOT the
+// shader b0 constant buffer and cannot establish its contents.
+SRWLOCK cameraCaptureLock = SRWLOCK_INIT;
+uint32_t cameraCaptureSamples[2]{};
+void captureCameraJob(unsigned eye, uintptr_t view, uintptr_t job, uint64_t frame) {
+    if (eye > 1 || cameraCaptureSamples[eye] >= 240)
+        return;
+    float current[3]{}, previous[3]{}, lens[4]{}, jitter[2]{};
+    const bool positions = read(view + 0x30, current, sizeof current) &&
+                           read(view + 0x560, previous, sizeof previous);
+    const bool projection = read(view + 0x400, lens, sizeof lens) &&
+                            read(view + 0x428, jitter, sizeof jitter);
+    if (!positions || !projection)
+        return;
+    AcquireSRWLockExclusive(&cameraCaptureLock);
+    if (cameraCaptureSamples[eye] >= 240) {
+        ReleaseSRWLockExclusive(&cameraCaptureLock);
+        return;
+    }
+    char path[MAX_PATH]{};
+    HMODULE self{};
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                           GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCSTR>(&captureCameraJob), &self) && self &&
+        GetModuleFileNameA(self, path, MAX_PATH)) {
+        if (char* slash = std::strrchr(path, '\\')) {
+            std::snprintf(slash + 1, MAX_PATH - static_cast<size_t>(slash + 1 - path),
+                          "herovr-camera-history-%lu.csv",
+                          static_cast<unsigned long>(GetCurrentProcessId()));
+            HANDLE file = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ,
+                                      nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (file != INVALID_HANDLE_VALUE) {
+                if (GetLastError() != ERROR_ALREADY_EXISTS) {
+                    constexpr char header[] =
+                        "frame,eye,job,current_x,current_y,current_z,previous_x,previous_y,previous_z,"
+                        "lens_left,lens_right,lens_top,lens_bottom,jitter_x,jitter_y\r\n";
+                    DWORD written{};
+                    WriteFile(file, header, sizeof(header) - 1, &written, nullptr);
+                }
+                char line[400]{};
+                const int n = std::snprintf(line, sizeof line,
+                    "%llu,%u,%llx,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,"
+                    "%.9g,%.9g,%.9g,%.9g,%.9g,%.9g\r\n",
+                    static_cast<unsigned long long>(frame), eye,
+                    static_cast<unsigned long long>(job),
+                    current[0], current[1], current[2],
+                    previous[0], previous[1], previous[2],
+                    lens[0], lens[1], lens[2], lens[3], jitter[0], jitter[1]);
+                if (n > 0 && n < static_cast<int>(sizeof line)) {
+                    DWORD written{};
+                    if (WriteFile(file, line, static_cast<DWORD>(n), &written, nullptr))
+                        ++cameraCaptureSamples[eye];
+                }
+                CloseHandle(file);
+            }
+        }
+    }
+    ReleaseSRWLockExclusive(&cameraCaptureLock);
 }
 void copyJob(void* view, void* settings, void* a, void* b, bool c) {
     // Update 36: EYE BLOOM, before the job copies the view settings (a, its r8).
@@ -2378,6 +2523,8 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
             const auto job = reinterpret_cast<void*>(pointer(reinterpret_cast<uintptr_t>(settings) + 0x650));
             if (!job)
                 return;
+            captureCameraJob(i, reinterpret_cast<uintptr_t>(view),
+                             reinterpret_cast<uintptr_t>(job), frameIndex.load(std::memory_order_relaxed));
             // The job's render context (0x7a0 bytes, copied to 7a2e200 while its
             // commands run): +40c is its anti-aliasing, 1 the engine's temporal
             // one, the only value at which TemporalAa (1842e10) runs. With an
@@ -5100,6 +5247,28 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTemporal(void* packed) {
         return 4101;
     if (percent)
         eyeRenderPercent = percent;
+    // Native TemporalAa and the experimental own-upscale path are mutually
+    // exclusive: both otherwise claim the same 70%-size eye scene. When the
+    // launcher explicitly requests SM1STYLE (bit 0x20), leave the scene and
+    // output-size bookkeeping to the game's own TemporalAa. In particular,
+    // do not activate the separate bilinear GPU upscale just because vr_aa
+    // was previously set to ours. SM1STYLE's existing safety checks decide
+    // whether native per-eye TAA can actually start.
+    const uint32_t requestedTemporal = static_cast<uint32_t>(value >> 8);
+    const bool nativeTemporal = (requestedTemporal & spidy::sm1style::eyeTemporalBit) != 0;
+    const bool own70 = percent == 70 && !nativeTemporal &&
+                       spidy::native_gpu::vrAa() == spidy::vr_aa::ours;
+    ownTaaRenderPercent = own70 ? 70u : 100u;
+    if (own70) {
+        // The experimental path reads a smaller eye image and enlarges it
+        // after capture in our GPU stage.
+        spidy::native_gpu::setEyeOutput(config.width, config.height);
+    } else if (nativeTemporal) {
+        // Native TemporalAa resolves the small scene *inside the game* to
+        // the full-size eye target. Never ask our GPU stage to enlarge it
+        // again; also clear a stale own-upscale output override.
+        spidy::native_gpu::setEyeOutput(0, 0);
+    }
     // SM2 port: SM2VR 0.0.27's export (DLL +b040) keeps the size and always
     // stores 0 here: no jittered lens, no eye temporal AA, no extra reflection
     // targets (SM2VR 0.0.3/0.0.5). Update 34: bit 0x10 (-EngineTaa) is kept: the

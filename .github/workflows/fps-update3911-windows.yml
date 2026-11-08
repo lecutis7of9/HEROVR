@@ -1,11 +1,11 @@
-name: Update 39.11 exact-source FPS build
+name: Update 39.11 experimental shadow reuse build
 
 on:
   workflow_dispatch:
   pull_request:
   push:
     branches:
-      - fix/078-update3911-fps
+      - experiment/078-shadow-reuse-guarded
 
 jobs:
   build-windows:
@@ -28,7 +28,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: herovr-078-fps-build-failure-logs
+          name: herovr-078-shadow-build-failure-logs
           path: |
             build/windows-ninja/CMakeFiles/CMakeConfigureLog.yaml
             build/windows-ninja/Testing/Temporary/LastTest.log
@@ -38,7 +38,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: herovr-078-update3911-fps-windows
+          name: herovr-078-shadow-experimental-windows
           path: |
             build/windows-ninja/*.dll
             build/windows-ninja/*.exe

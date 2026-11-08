@@ -6,6 +6,7 @@ on:
     branches:
       - experiment/078-own-taa-70
       - experiment/078-own-taa-70-color-fix
+      - experiment/078-temporal-upscale
 
 jobs:
   build-windows:

@@ -74,6 +74,19 @@ if ($missing) {
            'powershell -ExecutionPolicy Bypass -File .\tools\build.ps1 -Observer')
 }
 foreach ($module in $modules) { Copy-Item -LiteralPath (Join-Path $bin $module) -Destination (Join-Path $stage 'build\windows-ninja') }
+# 0.0.79: the launcher keeps both exact native renderers in the mod files,
+# so first-time installs AND 0.0.78 -> 0.0.79 prebuilt updates can toggle.
+# Do not put these in reports/; ModFiles.Install intentionally replaces
+# build/windows-ninja, not personal reports or settings.
+foreach ($mode in @('original', 'revamped')) {
+    $source = Join-Path $bin "renderer-modes\$mode\spidy_stereo_probe.dll"
+    if (-not (Test-Path -LiteralPath $source)) {
+        throw "HERO VR 0.0.79 release is missing $mode renderer DLL: $source"
+    }
+    $target = Join-Path $stage "build\windows-ninja\renderer-modes\$mode"
+    New-Item -ItemType Directory -Force -Path $target | Out-Null
+    Copy-Item -LiteralPath $source -Destination (Join-Path $target 'spidy_stereo_probe.dll')
+}
 # Spidy Launcher.exe: optional (the starter does not need it), in tools\ so "Launch Spidy VR.cmd" is the one file
 # to start at the folder's top. It finds the package from there (it looks up for tools\run_game_vr.py).
 $launcher = Join-Path $bin 'spidy_launcher.exe'

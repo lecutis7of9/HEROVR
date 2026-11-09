@@ -432,6 +432,7 @@ int main() {
         f.hands[1].trigger = .42f; // Prowler analog RT
         f.hands[0].squeeze = .9f; // native LB (tether)
         f.hands[1].squeeze = .9f; // native RB (photo shutter / tether)
+        f.hands[1].valid = true; // Quest right-hand pose is tracked
         f.hands[1].stickY = .95f; // native D-pad up (camera gadget)
         const auto mission = pad::fromControllers(f, pad::Mapping::pad);
         check((mission.buttons & (pad::y | pad::x | pad::dpadUp | pad::leftShoulder | pad::rightShoulder)) ==

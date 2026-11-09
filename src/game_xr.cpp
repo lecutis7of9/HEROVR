@@ -13397,6 +13397,14 @@ DWORD WINAPI run(void*) {
                         pose.reserved = strideActive
                                             ? static_cast<uint32_t>(std::clamp(strideSpeed, 0.f, 30.f) * 100.f)
                                             : 0u;
+                        // 79.1 Dynamic Body flip tuck: use the *actual* tracking
+                        // FlipMotion tilt, not the combined pose.tilt, because
+                        // fly lean and wall-body roll also change the latter.
+                        // The quaternion can change sign at a full turn, so
+                        // compare |w| to recognise only an active in-air flip.
+                        const bool nativeFlip = !motion.standing && swingState.owned &&
+                                                std::isfinite(motion.flipTilt.w) &&
+                                                std::abs(motion.flipTilt.w) < .9998f;
                         // Test build 10 ONE BODY: a worn suit shown in first person replaces the game's body (its arms too).
                         pose.flags = (flatScreen || (strictBody && !strictVerified) ||
                                               !suit_wear::gameBodyDrawn(values.body || strictBody, hero_modes::gameBodyShown(heroNow()),
@@ -13409,7 +13417,8 @@ DWORD WINAPI run(void*) {
                                      (calibratedEye > 0 ? native_body::calibrated : 0u) |
                                      (motion.standing || crawlsFloor ? native_body::standing : 0u) |
                                      (kneels ? native_body::kneel : 0u) |
-                                     (strideActive ? native_body::wallStride : 0u);
+                                     (strideActive ? native_body::wallStride : 0u) |
+                                     (nativeFlip ? native_body::flipPose : 0u);
                         pose.standUp = motion.standUp;
                         pose.floor = motion.floor;
                         pose.eyes = Vec3{(motion.eyes[0][12] + motion.eyes[1][12]) / 2,

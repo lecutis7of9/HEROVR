@@ -1,6 +1,7 @@
 #include "spidy/game_tracking.hpp"
 #include "spidy/fly_feel074.hpp"
 #include "spidy/presentation_gate.hpp"
+#include "spidy/wall_run_clearance.hpp"
 
 namespace spidy {
 native_rays::Command controllerAimRays(const Input& input, uint64_t serial) {
@@ -668,6 +669,14 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         placed.tilt = unit(yaw.conjugate() * surfaceTurn_ * yaw * rig_.tilt);
         placed.pivot = {};
     }
+    // During an owned wall run, the surface turn can position the world-space
+    // HMD at (or just behind) the facade. The normal wall camera-distance
+    // offset only handles level climbing and can be skipped here.
+    // Keep the VR head / hands / anchored body outside the BUILDING face,
+    // without moving the physics actor or affecting native wall crawl.
+    if (wallRun && holds)
+        placed.origin += wall_run_clearance::headPush(
+            true, placed.toWorld(f.head).position, surface.anchor, held, wallDistance_);
     if (!holds || f.jump)
         wallRoll_.reset();
     const bool rollAllowed = handClimb_ && holds && !standing_ && !walks && !f.jump && std::abs(held.y) < .5f;

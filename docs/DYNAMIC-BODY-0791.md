@@ -15,11 +15,22 @@ mistaken for an animated stride. When the game changes these lower-body
 joints, it blends the planted-foot constraint out and retains the game's
 animated pose. When motion stops, it blends the constraint back in.
 
-The menu path is **Settings > SPIDY VR > BODY > LEG ANIMATIONS**:
+**Also new: animated hip and torso follow-through.** The original game
+pose's hip up-axis and hip-to-head direction are read before VR IK. When they
+change, HERO VR carries a small, smoothed amount of their lean and sway into
+the pelvis and spine aligned to the player's body direction. Hips are limited
+to 0.12 rad (~7 degrees), and the upper torso to 0.20 rad (~11 degrees);
+they settle back to neutral when animation stops. This affects the avatar
+only: the HMD stays at its independently tracked viewpoint and both wrists
+are still solved to their motion controllers after the body adjusts.
+
+The menu path is **Settings > SPIDY VR > BODY > BODY ANIMATIONS**:
 
 - **CLASSIC** (default): the existing 0.0.79 solver.
-- **DYNAMIC**: preserve actively moving game leg poses. Keep planted feet in
-  stationary or static-crawl wall states, where the game's pose is not moving.
+- **DYNAMIC**: preserve actively moving game leg poses **and** a capped,
+  smoothly animated hip/torso sway from Spider-Man's original animations.
+  Keep planted feet in stationary or static-crawl wall states, where the
+  game's pose is not moving.
 
 The setting is persisted as `leg_animations=0/1` alongside the other tab-only
 options; the native pose solver is updated when the menu setting changes, without
@@ -54,9 +65,10 @@ animation without handing camera and arms back to the game.
 
 ## Safety, build, and status
 
-- The existing `tests/game_body_tests.cpp` has a synthetic moving-leg
-  regression that compares CLASSIC and DYNAMIC and checks head and hand
-  positions remain identical.
+- The existing `tests/game_body_tests.cpp` has synthetic moving-leg and
+  airborne hip/torso-sway regressions comparing CLASSIC and DYNAMIC,
+  including fixed head and independently controller-driven wrist positions,
+  and an idle-sway fallback.
 - This branch enables the **test-build** notice (0.0.79.1 TEST 1) rather than
   claiming to be a new public version or modifying the existing release.
 - The branch has an isolated Windows Actions workflow

@@ -23,6 +23,7 @@
 #include "spidy/native_hud.hpp"
 #include "spidy/perf077.hpp"
 #include "spidy/native_view.hpp"
+#include "spidy/vr_building_detail.hpp" // isolated 0.0.78 building streaming + window light experiment
 #include "spidy/native_address_finder.hpp"
 #include "spidy/native_shadow_distance.hpp"
 #include "spidy/native_webs.hpp"
@@ -574,12 +575,10 @@ std::atomic<uint32_t> farWindowsPercent{100};
 // 0.0.73 test 2 CULL MARGIN (recording_fov::cullMarginOf): the degrees the game's view reaches past the head's lens.
 std::atomic<uint32_t> cullMarginDegrees{recording_fov::cullMarginChoices[0]};
 bool farWindowsReady{};
-// Test build 11: write 2 (the CANDIDATE +88) is gated OFF. The Oct 28 build 9 log had it
-// writing every eye query (31497 writes, 145 m -> 290 m) and the window lights flickering;
-// the game reads +88 per view and region changes rewrite it, so the eyes' far models could
-// switch between impostor and full model from one picture to the next. FAR WINDOWS keeps
-// write 1 (LOD REACH, CONFIRMED) only.
-constexpr bool farWindowsCandidateWrite = false;
+// Earlier +88 writes to both eye visibility results caused flickering. This
+// isolated experiment never modifies per-eye results. Only the primary
+// view's result is eligible, and only when FAR WINDOWS is enabled, capped
+// at +50% with valid data and known byte layout. +88 semantics remain unproven.
 std::atomic<uint64_t> farWindowsCalls{}, farWindowsWrites{};
 std::atomic<float> farWindowsGame{}, farWindowsOurs{};
 // The HUD panel (native_hud.hpp): PlayerModelHudFollower's placement 73ab80,
@@ -876,7 +875,14 @@ uint64_t setupModels(void* context, void* job, void* third, uint64_t fourth, uin
             marks = drawn;
     }
 #endif
-    const auto view = enabled && distances ? pointer(reinterpret_cast<uintptr_t>(context) + 8) : 0;
+    // Revamped building experiment: the legacy 'distances' byte signature
+    // checks Remastered addresses and is false on Spider-Man 2. The SM2
+    // model-job hook is checked independently. Only lift the eye's texture
+    // request, not its LOD/visibility policy, and cap it at +50%.
+    const bool experiment = enabled && !distances && (config.createViews & 4);
+    const auto view = enabled && (distances || experiment)
+                          ? pointer(reinterpret_cast<uintptr_t>(context) + 8)
+                          : 0;
     // The exact half tangents (+400..+40c): an eye's +420/+424 cover its whole lens (WINDOW EDGES).
     float lens[4]{}, half[2]{};
     if (eyeView(view) < 0 || !read(view + 0x400, lens, sizeof(lens)))
@@ -887,16 +893,19 @@ uint64_t setupModels(void* context, void* job, void* third, uint64_t fourth, uin
         return result;
     const float wanted = native_view::requestScale(static_cast<float>(config.width),
                                                    static_cast<float>(config.height), half[0], half[1]);
-    auto& asked = *reinterpret_cast<float*>(static_cast<uint8_t*>(context) + 0x2fc);
-    if (!std::isfinite(wanted) || !(asked > 0) || !(wanted > asked))
+    float asked{};
+    const uintptr_t requestField = reinterpret_cast<uintptr_t>(context) + 0x2fc;
+    if (!read(requestField, &asked, sizeof asked) || !std::isfinite(wanted) || !(asked > 0))
+        return result;
+    const float raised = distances ? wanted : spidy::vr_building_detail::textureRequest(asked, wanted);
+    if (!std::isfinite(raised) || !(raised > asked) || !writeFloat(requestField, raised))
         return result;
     AcquireSRWLockExclusive(&telemetry);
     InterlockedIncrement64(&SpidyAppearanceData.sequence);
     ++SpidyAppearanceData.requestJobs;
-    SpidyAppearanceData.requestRaise = wanted / asked;
+    SpidyAppearanceData.requestRaise = raised / asked;
     InterlockedIncrement64(&SpidyAppearanceData.sequence);
     ReleaseSRWLockExclusive(&telemetry);
-    asked = wanted;
     return result;
 }
 // HERO VR 0.0.78 WORLD LIGHT (world_light.hpp). CONFIRMED: 0x2c67f40 fills g_World (rcx the buffer, rdx the
@@ -2964,13 +2973,17 @@ void* impostorQueries(void* view, void* cull) {
         read(reinterpret_cast<uintptr_t>(result) + 0x88, &reach, 4) && std::isfinite(reach) && reach > 0)
         writeFloat(reinterpret_cast<uintptr_t>(result) + 0x88, reach * impostorReach.load() / 100.f);
     else if (const uint32_t farPercent = farWindowsPercent.load(std::memory_order_relaxed);
-             farWindowsCandidateWrite && result && farWindowsReady && enabled && farPercent > 100 && eyeView(reinterpret_cast<uintptr_t>(view)) >= 0) {
-        // Update 38.3 FAR WINDOWS (CANDIDATE, byte-checked above).
+             result && spidy::vr_building_detail::primaryWindowOwner(
+                 enabled, rested.load(std::memory_order_relaxed) != 0, farWindowsReady,
+                 reinterpret_cast<uintptr_t>(view), pointer(base + 0xc2ca220), farPercent)) {
+        // Revamped window experiment: only the engine's primary/active camera
+        // gets extended full-model reach. Never change the left/right eye's
+        // separate queries: doing so caused the earlier window-light flicker.
+        // +0x88 is byte-guarded, but its meaning is still CANDIDATE.
         farWindowsCalls.fetch_add(1, std::memory_order_relaxed);
-        if (read(reinterpret_cast<uintptr_t>(result) + 0x88, &reach, 4) && std::isfinite(reach) && reach > 1.f &&
-            reach < 5000.f) {
-            const float ours = reach * static_cast<float>(farPercent) / 100.f;
-            if (writeFloat(reinterpret_cast<uintptr_t>(result) + 0x88, ours)) {
+        if (read(reinterpret_cast<uintptr_t>(result) + 0x88, &reach, 4)) {
+            const float ours = spidy::vr_building_detail::windowReach(reach, farPercent);
+            if (ours > reach && writeFloat(reinterpret_cast<uintptr_t>(result) + 0x88, ours)) {
                 farWindowsWrites.fetch_add(1, std::memory_order_relaxed);
                 farWindowsGame.store(reach, std::memory_order_relaxed);
                 farWindowsOurs.store(ours, std::memory_order_relaxed);

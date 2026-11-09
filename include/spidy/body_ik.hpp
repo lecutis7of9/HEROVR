@@ -262,6 +262,13 @@ struct Config {
     float legMotionThreshold = .012f; // metres of knee/ankle motion between game poses
     float legMotionHold = .15f;        // seconds before replanting after motion stops
     float legBlendSpeed = 9.f;         // shares per second, prevents a pose snap
+    // Natural torso/hip follow-through from the GAME pose, never from headset
+    // movement. Limit sway so game rolls and flips cannot roll the VR camera.
+    float swayMotionThreshold = .008f; // change in unit spine/hip directions
+    float swayMotionHold = .22f;       // settle to classic after animation stops
+    float swayBlendSpeed = 7.f;        // smooth on/off and avoid motion snaps
+    float maxHipSway = .12f;           // radians (~7 degrees)
+    float maxTorsoSway = .20f;         // radians (~11.5 degrees)
     // Shrinks the head to a millimetre, so the eyes are not inside it.
     bool hideHead = true;
     // The hands take the controllers' orientation; false keeps the game's.
@@ -287,6 +294,10 @@ struct State {
     std::array<Vec3, 4> previousLegPose{};
     bool previousLegPoseSet{};
     float legMotionLeft{}, legAnimationWeight{};
+    Vec3 previousGameTorso{}, previousGameHipUp{};
+    Vec3 gameHipSway{}, gameTorsoSway{};
+    bool previousSwayPoseSet{};
+    float swayMotionLeft{}, swayWeight{};
 };
 // Turns the body's yaw by `radians` about the up, at once: the player snap
 // turned (body and all), or the model turned under the body (the hero's
@@ -296,6 +307,7 @@ struct Result {
     bool solved{}, grounded{};
     float weight{};
     float legAnimation{}; // 0 classic planted legs, 1 the game's animation
+    float bodySway{};     // 0 classic upright body, 1 full safe pose-derived sway
     // Distance left between each wrist and its target, and between the head
     // joint and its target, model units (-1: not placed).
     std::array<float, 2> handError{-1, -1};

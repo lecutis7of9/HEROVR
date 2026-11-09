@@ -204,6 +204,9 @@ struct Targets {
     // supplies a speed-driven wall stride while preserving head/hand IK.
     bool wallStride{};
     float wallSpeed{}; // tangential metres/second along the supporting wall
+    // TRUE only for the player's actual FlipMotion rotation. A wall-body
+    // tilt, flight lean or game cutscene tilt must never trigger a knee tuck.
+    bool flipPose{};
 };
 struct Config {
     // Where the wrist joint sits from the grip point of a right hand, in its
@@ -277,6 +280,10 @@ struct Config {
     float wallStrideBlendSpeed = 9.f;  // transition between planted and running legs
     float wallStrideReach = .24f;      // forward/back foot travel in metres
     float wallStrideLift = .14f;       // foot lift away from the wall in metres
+    float flipTuckSpeed = 11.f;        // blend into/out of flip tuck per second
+    float flipSpineBend = .30f;        // total spine curl in radians
+    float flipFootHeight = .46f;       // share of straight leg length below hip
+    float flipFootForward = .27f;      // forward travel for knees/ankles in metres
     // Shrinks the head to a millimetre, so the eyes are not inside it.
     bool hideHead = true;
     // The hands take the controllers' orientation; false keeps the game's.
@@ -307,6 +314,7 @@ struct State {
     bool previousSwayPoseSet{};
     float swayMotionLeft{}, swayWeight{};
     float wallStridePhase{}, wallStrideWeight{};
+    float flipTuckWeight{};
 };
 // Turns the body's yaw by `radians` about the up, at once: the player snap
 // turned (body and all), or the model turned under the body (the hero's
@@ -318,6 +326,7 @@ struct Result {
     float legAnimation{}; // 0 classic planted legs, 1 the game's animation
     float bodySway{};     // 0 classic upright body, 1 full safe pose-derived sway
     float wallStride{};   // 0 no procedural wall run, 1 full run gait
+    float flipTuck{};     // 0 fully extended, 1 mid-flip body curl
     // Distance left between each wrist and its target, and between the head
     // joint and its target, model units (-1: not placed).
     std::array<float, 2> handError{-1, -1};

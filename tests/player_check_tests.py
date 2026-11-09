@@ -86,9 +86,9 @@ class Folder(unittest.TestCase):
     def test_nested_artifact_path_checks_longest_staged_dll(self):
         # A realistic nested artifact directory can let stereo load (254
         # characters) while render-memory exceeds MAX_PATH (262).
-        root = 'C:\\\\' + 'x' * 140
+        root = 'C:\\' + 'x' * 140
         self.assertEqual(len(root), 143)
-        deepest = '\\\\reports\\\\render-memory-modules\\\\' + 'a' * 64 + '\\\\spidy_render_memory.dll'
+        deepest = '\\reports\\render-memory-modules\\' + 'a' * 64 + '\\spidy_render_memory.dll'
         self.assertEqual(pc.DEEPEST, len(deepest))
         self.assertGreater(len(root) + pc.DEEPEST, pc.LONG_PATH)
         self.assertTrue(any('long' in warning for warning in self.problems(root)[1]))

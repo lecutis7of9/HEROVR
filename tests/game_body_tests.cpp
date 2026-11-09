@@ -10,6 +10,7 @@
 #include "spidy/arm_sprint.hpp"
 #include "spidy/glove_overlay.hpp"
 #include "spidy/native_body.hpp"
+#include "spidy/game_pad.hpp"
 #include "spidy/wall_run_clearance.hpp"
 #include "spidy/vr_settings.hpp"
 #include <chrono>
@@ -421,6 +422,22 @@ int main() {
         check(!sameHands, "moving both hands together must not trigger sprint");
         in.tracked[1] = false;
         check(!detector.update(in), "losing a hand must release sprint");
+    });
+    test("79.1 Peter combat L3+R3 activates the native Surge chord only when safe", [] {
+        namespace pad = game_pad;
+        check(pad::symbioteSurgeChord(true, true, true, false, false, false, true, true),
+              "Peter combat must pass both native thumb-clicks for Surge");
+        check(!pad::symbioteSurgeChord(true, true, false, false, false, false, true, true),
+              "outside combat the same chord must still open the VR Pad Layer");
+        check(!pad::symbioteSurgeChord(true, false, true, false, false, false, true, true),
+              "other heroes keep their existing chords");
+        check(!pad::symbioteSurgeChord(true, true, true, true, false, false, true, true),
+              "an active Pad Layer owns its normal full controller");
+        check(!pad::symbioteSurgeChord(false, true, true, false, false, false, true, true) &&
+              !pad::symbioteSurgeChord(true, true, true, false, true, false, true, true) &&
+              !pad::symbioteSurgeChord(true, true, true, false, false, true, true) &&
+              !pad::symbioteSurgeChord(true, true, true, false, false, false, true, false),
+              "no mission input while in menus, calibration, phone, or one click only");
     });
     test("79.1 vertical and lateral wall-run view stays outside the building", [&] {
         const Vec3 face{0, 3, 0}, outward{0, 0, 1};

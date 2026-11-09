@@ -35,6 +35,7 @@ void* writerHook{};
 bool hooked{};
 std::atomic<bool> enabled{};
 std::atomic<float> heroK{1.f}; // Version 0.0.5 HERO HEIGHT
+std::atomic<bool> dynamicLegsEnabled{false}; // 0.0.79.1: classic until opted in
 SRWLOCK lifecycle = SRWLOCK_INIT, commandLock = SRWLOCK_INIT, solveLock = SRWLOCK_INIT,
         statusLock = SRWLOCK_INIT;
 Command command{};
@@ -380,6 +381,7 @@ void solveHero(float* out, uintptr_t job, uintptr_t instance) {
         body::Config config;
         config.hideHead = wanted.flags & native_body::hideHead;
         config.handOrientation = wanted.flags & native_body::handTurn;
+        config.dynamicLegs = dynamicLegsEnabled.load(std::memory_order_relaxed);
         // The player's size: their T-pose calibration's eye height and arm,
         // or the headset's running height and the hero's own arms.
         heroProportions = body_calibration::proportions(cache.ik);
@@ -565,6 +567,7 @@ void native_body::retarget(uintptr_t heroRecord) {
     record = heroRecord;
 }
 void native_body::heroHeight(float k) { heroK.store(hero_height::clampFactor(k), std::memory_order_relaxed); }
+void native_body::dynamicLegs(bool on) { dynamicLegsEnabled.store(on, std::memory_order_relaxed); }
 void native_body::submit(const Command& next) {
     AcquireSRWLockExclusive(&commandLock);
     command = next;

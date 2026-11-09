@@ -38,6 +38,52 @@ jobs:
           Remove-Item Env:SM2VR_LAUNCHER -ErrorAction SilentlyContinue
           ./tools/build.ps1 -Observer -FromSource
           if ($LASTEXITCODE) { throw "Build/tests failed ($LASTEXITCODE)" }
+      - name: Preserve the original 0.0.79 renderer and stage updated Revamped renderer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force previous | Out-Null
+          gh release download v0.0.79 --pattern 'HERO-VR-0.0.79-mod-win64.zip' --pattern 'HERO-VR-0.0.79-mod-win64.zip.sha256' --dir previous --clobber
+          if ($LASTEXITCODE) { throw 'Cannot download official original 0.0.79 renderer' }
+          $zip = 'previous/HERO-VR-0.0.79-mod-win64.zip'
+          $checksum = 'previous/HERO-VR-0.0.79-mod-win64.zip.sha256'
+          $wanted = [regex]::Match([IO.File]::ReadAllText((Resolve-Path $checksum)), '(?i)[0-9a-f]{64}').Value
+          $actual = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
+          if ($wanted.Length -ne 64 -or $wanted.ToLowerInvariant() -ne $actual.ToLowerInvariant()) { throw 'Official 0.0.79 ZIP SHA256 mismatch' }
+          Expand-Archive -LiteralPath $zip -DestinationPath previous/mod -Force
+          $old = @(Get-ChildItem -LiteralPath previous/mod -Filter spidy_stereo_probe.dll -Recurse -File |
+            Where-Object { $_.FullName -match '[\\/]renderer-modes[\\/]original[\\/]spidy_stereo_probe\\.dll        run: |
+          $name = 'HERO-VR-0.0.79.1-DYNAMIC-BODY-TEST-mod'
+          ./tools/package.ps1 -Name $name
+          if ($LASTEXITCODE) { throw "Packaging failed ($LASTEXITCODE)" }
+          $zip = "dist/$name-win64.zip"
+          if (-not (Test-Path -LiteralPath $zip)) { throw "No mod test ZIP: $zip" }
+          python -B tools/check_bundled_python.py $zip --run
+          if ($LASTEXITCODE) { throw 'Bundled Python check failed' }
+          "$((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant())  $name-win64.zip" |
+            Set-Content "$zip.sha256" -NoNewline -Encoding ascii
+          "Preview package: $zip" >> $env:GITHUB_STEP_SUMMARY
+      - name: Attach test ZIP to this run (not a public release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: hero-0791-dynamic-body-preview
+          path: |
+            dist/HERO-VR-0.0.79.1-DYNAMIC-BODY-TEST-mod-win64.zip
+            dist/HERO-VR-0.0.79.1-DYNAMIC-BODY-TEST-mod-win64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+ })
+          if ($old.Count -ne 1) { throw "Expected one official Original renderer DLL, got $($old.Count)" }
+          $base = 'build/windows-ninja/renderer-modes'
+          New-Item -ItemType Directory -Force "$base/original", "$base/revamped" | Out-Null
+          Copy-Item -LiteralPath $old[0].FullName -Destination "$base/original/spidy_stereo_probe.dll"
+          Copy-Item -LiteralPath 'build/windows-ninja/spidy_stereo_probe.dll' -Destination "$base/revamped/spidy_stereo_probe.dll"
+          $originalHash = (Get-FileHash "$base/original/spidy_stereo_probe.dll" -Algorithm SHA256).Hash
+          $revampedHash = (Get-FileHash "$base/revamped/spidy_stereo_probe.dll" -Algorithm SHA256).Hash
+          if ($originalHash -eq $revampedHash) { throw 'Distinct mode DLLs expected: Original must be unchanged' }
+          "Original renderer: official unmodified 0.0.79; Revamped: Dynamic Body test" >> $env:GITHUB_STEP_SUMMARY
       - name: Package isolated test mod (never uploads to Releases)
         run: |
           $name = 'HERO-VR-0.0.79.1-DYNAMIC-BODY-TEST-mod'

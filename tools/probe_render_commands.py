@@ -13,6 +13,7 @@ Scaleform (the HUD), VisualEffectsCPUReadback and StreamingVideo, queued on that
 """
 import argparse
 import json
+import math
 import pathlib
 import struct
 import sys
@@ -74,7 +75,7 @@ def trace(game, seconds):
                 text = game.read(name, 48).split(b'\0')[0].decode() if name else '?'
             except (OSError, UnicodeDecodeError):
                 text = '?'
-            commands[f'{command:#04x} {text}'] = [round(c/max(frames, 1), 2) for c in row]
+            commands[f'{command:#04x} {text}'] = [c / frames for c in row]
     return dict(frames=frames, seconds=seconds, commands=commands)
 
 

@@ -145,6 +145,9 @@ void submit(const Command&);
 // Version 0.0.5 HERO HEIGHT (hero_height.hpp): the hero is k times the player (1 to 1.6; 1 none).
 // The Command's eyes and height are already the hero's; this widens the size limits to match.
 void heroHeight(float k);
+// 0.0.79.1: opt-in dynamic lower body; affects only leg planting in the pose
+// solver. Menu calls this on choice changes; OFF exactly preserves classic IK.
+void dynamicLegs(bool on);
 // A render frame begins (the stereo module's render setup, main thread).
 void renderFrame();
 // The body turned the hero's joints in the last moments, its head shrunk:

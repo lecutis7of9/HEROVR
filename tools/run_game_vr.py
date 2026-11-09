@@ -3042,6 +3042,22 @@ def session(a, startup, session_off=()):
             queue = wait_for_renderer(game, process, render_data, problems=startup.fields.setdefault('queue_search', []),
                                       tick=watch_start)
         except RuntimeError as error:
+            # The game's own log sometimes ends mid-graphics-init without a
+            # [Crash] entry (e.g. 0xC0000409 from a native probe thread).
+            # Collect Windows' faulting-module evidence automatically instead
+            # of requiring the player to open Event Viewer.
+            if not getattr(a, 'no_clear_errors', False):
+                try:
+                    import windows_fault
+                    faults = windows_fault.recent_game_faults(pid=game.pid)
+                    if faults:
+                        startup.fields['windows_application_faults'] = faults
+                        print('Windows Application Error reports: ' +
+                              ', '.join(f.get('ModuleName', 'unknown module') +
+                                        ' (' + f.get('ExceptionCode', '?') + ')' for f in faults),
+                              flush=True)
+                except Exception:
+                    pass  # diagnostics must never prevent display restoration
             if str(error) != 'The game closed while starting.' or getattr(a, 'no_clear_errors', False):
                 raise
             clearer = crash_while_loading(game.path.parent, game_modules, startup)

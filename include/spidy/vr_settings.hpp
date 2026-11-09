@@ -45,6 +45,9 @@ struct Values {
     // tab's CALIBRATE BODY: ON RESUME); the XR worker clears it once the
     // calibration starts (body_calibration.hpp).
     bool calibrate = false;
+    // 0.0.79.1 DYNAMIC BODY: original moving leg animations instead of
+    // stationary foot IK; CLASSIC is the safe default.
+    bool legAnimations = false;
     // Experimental, off unless chosen: the left stick and A in the air flip
     // you (game_tracking's FlipMotion); off, A does nothing there.
     bool flips = false;
@@ -191,8 +194,9 @@ enum class Item : uint8_t {
     hapticMovement,
     recordingFov,
     uiStyle,
+    legAnimations, // appended so existing setting IDs do not change
 };
-inline constexpr Item lastItem = Item::uiStyle;
+inline constexpr Item lastItem = Item::legAnimations;
 // The SPIDY VR tab, top to bottom: a section's heading (item none) or a
 // setting. The sections: WEBS, SWINGING, COMFORT, HAPTICS, DISPLAY, BODY and
 // EXPERIMENTAL (the player, October 19: "sort the options in spidy vr
@@ -210,7 +214,7 @@ struct Row {
     // menu (the one with resume)").
     bool page{};
 };
-const std::array<Row, 43>& rows();
+const std::array<Row, 44>& rows();
 // The most choices a row shows (game_menu's buffers): a row with more would
 // lose its last ones.
 inline constexpr size_t maxChoices = 9;

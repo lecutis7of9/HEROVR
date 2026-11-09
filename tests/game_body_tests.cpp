@@ -9,6 +9,7 @@
 #include "spidy/body_calibration.hpp"
 #include "spidy/glove_overlay.hpp"
 #include "spidy/native_body.hpp"
+#include "spidy/vr_settings.hpp"
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -257,6 +258,57 @@ int main() {
                 check(!std::memcmp(&pose[k * 16], &rest[k * 16], 64), std::string("moved ") + name);
             }
         }
+    });
+    test("79.1 dynamic legs preserve moving game joints without moving headset or hands", [&] {
+        gb::Table t;
+        check(gb::parseJoints(bytes.joints, 237, t), "parse");
+        std::vector<float> rest;
+        check(gb::restToModel(bytes.rest, t, rest), "rest");
+        body::Rig rig;
+        check(gb::identify(t, rig) && body::prepare(rig, rest), "rig");
+        body::Targets tg;
+        tg.head = true;
+        tg.plant = true; // classic mode would force both feet under the hips
+        tg.eyes = {0, 1.7f, .08f};
+        tg.facing = Quat::yaw(3.14159265f);
+        tg.hands[0] = {true, {.32f, 1.2f, .3f}, gripFacing({.2f, 0, 1}), 0, 0};
+        tg.hands[1] = {true, {-.32f, 1.2f, .3f}, gripFacing({-.2f, 0, 1}), 0, 0};
+        auto run = [&](bool dynamic) {
+            body::Config c;
+            c.dynamicLegs = dynamic;
+            body::State state;
+            std::vector<float> out;
+            body::Result result;
+            for (int frame = 0; frame < 40; ++frame) {
+                out = rest; // each frame starts with the GAME pose, not last frame's VR pose
+                const float stride = (frame % 2 ? .11f : -.11f);
+                for (const auto& leg : rig.legs)
+                    for (const int j : rig.below[leg.lower])
+                        out[static_cast<size_t>(j) * 16 + 14] += stride;
+                body::Pose pose(out.data(), 237);
+                result = body::solve(pose, rig, tg, c, state, true, 1.f / 90);
+            }
+            return std::pair{out, result};
+        };
+        const auto [classic, classicResult] = run(false);
+        const auto [animated, animatedResult] = run(true);
+        check(classicResult.solved && animatedResult.solved, "both solutions run");
+        check(classicResult.legAnimation == 0.f, "classic must keep original foot planting");
+        check(animatedResult.legAnimation > .9f, "moving game legs should turn off planted-foot IK");
+        for (const auto& leg : rig.legs)
+            check(length(at(classic, leg.foot) - at(animated, leg.foot)) > .06f,
+                  "dynamic foot should retain the game's moving pose");
+        check(length(at(classic, rig.head) - at(animated, rig.head)) < .001f,
+              "the HMD's head anchor changed");
+        for (const auto& arm : rig.arms)
+            check(length(at(classic, arm.hand) - at(animated, arm.hand)) < .001f,
+                  "controller-driven hands changed");
+        vr_settings::Values settings;
+        check(!settings.legAnimations && vr_settings::choice(vr_settings::Item::legAnimations, settings) == 0,
+              "Classic must be the default");
+        check(vr_settings::choose(vr_settings::Item::legAnimations, 1, settings), "enable dynamic");
+        const auto text = vr_settings::tabOnlyText(settings);
+        check(vr_settings::withTabOnly({}, text).legAnimations, "leg animation preference survives reload");
     });
     test("the head shrinks at once and the body blends at 4/s", [&] {
         gb::Table t;

@@ -204,6 +204,10 @@ struct Targets {
     // supplies a speed-driven wall stride while preserving head/hand IK.
     bool wallStride{};
     float wallSpeed{}; // tangential metres/second along the supporting wall
+    Vec3 wallNormal{}; // outward wall normal in model axes (wallStride only)
+    Vec3 wallTravel{}; // tangent motion direction; handles lateral AND upward runs
+    float wallDistance{}; // actor centre to wall surface in metres
+    bool wallCrawl{}; // native game wall-crawl pose, preserve animated legs
     // TRUE only for the player's actual FlipMotion rotation. A wall-body
     // tilt, flight lean or game cutscene tilt must never trigger a knee tuck.
     bool flipPose{};

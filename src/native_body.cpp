@@ -364,14 +364,18 @@ void solveHero(float* out, uintptr_t job, uintptr_t instance) {
             // And the game's legs are no stance there - the crawl's, splayed
             // on the wall, or the air pose: the feet are planted on that
             // surface under the hips instead.
-            t.plant = standing;
-            t.floor = standing ? toModel.rotate(wanted.floor) : Vec3{};
             t.kneel = standing && (wanted.flags & native_body::kneel);
             t.wallStride = (wanted.flags & native_body::wallStride) != 0 && !t.kneel;
-            t.wallSpeed = t.wallStride ? std::min((wanted.reserved & 0xffffu) * .01f, 30.f) : 0.f;
-            t.wallDistance = t.wallStride ? std::min((wanted.reserved >> 16) * .01f, 3.f) : 0.f;
-            t.wallNormal = t.wallStride && finite(wanted.standUp) ? toModel.rotate(wanted.standUp) : Vec3{};
-            t.wallTravel = t.wallStride && finite(wanted.floor) ? toModel.rotate(wanted.floor) : Vec3{};
+            t.wallCling = (wanted.flags & native_body::wallCling) != 0 && !t.kneel && !t.wallStride;
+            const bool ownWall = t.wallStride || t.wallCling;
+            // No ground-foot planting while HEROVR owns a wall run/crawl:
+            // the command's floor is its tangent, not a ground anchor.
+            t.plant = standing && !ownWall;
+            t.floor = t.plant ? toModel.rotate(wanted.floor) : Vec3{};
+            t.wallSpeed = ownWall ? std::min((wanted.reserved & 0xffffu) * .01f, 30.f) : 0.f;
+            t.wallDistance = ownWall ? std::min((wanted.reserved >> 16) * .01f, 3.f) : 0.f;
+            t.wallNormal = ownWall && finite(wanted.standUp) ? toModel.rotate(wanted.standUp) : Vec3{};
+            t.wallTravel = ownWall && finite(wanted.floor) ? toModel.rotate(wanted.floor) : Vec3{};
             t.wallCrawl = standing && (wanted.flags & native_body::wallCrawl) != 0;
             t.flipPose = (wanted.flags & native_body::flipPose) != 0;
             // The player can flip during an ordinary jump before HEROVR's

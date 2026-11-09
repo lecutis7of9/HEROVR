@@ -22,7 +22,9 @@ namespace Sm2VrLauncher
         }
         public static string Store(string root, string mode)
         {
-            return Path.Combine(root, "reports", "renderer-modes", Normal(mode), "spidy_stereo_probe.dll");
+            // Public 0.0.79: distribute both renderers inside build/windows-ninja so
+            // the launcher's normal prebuilt updater installs them automatically.
+            return Path.Combine(root, "build", "windows-ninja", "renderer-modes", Normal(mode), "spidy_stereo_probe.dll");
         }
         static string Hash(string path)
         {
@@ -45,7 +47,7 @@ namespace Sm2VrLauncher
                     throw new InvalidOperationException("Close Spider-Man 2 before changing renderer mode. VR modules cannot be swapped inside a running game.");
                 string source = Store(root, mode);
                 if (!File.Exists(source))
-                    throw new FileNotFoundException("The private test pack needs both renderer DLLs installed first. Re-run the private-preview installer.", source);
+                    throw new FileNotFoundException("The Original/Revamped renderer files are missing. Install the complete 0.0.79 mod package or use Update to repair it.", source);
                 string target = SystemInfo.BuiltModule(root);
                 if (!File.Exists(target)) throw new FileNotFoundException("The HERO VR mod is not installed.", target);
                 string digest = Hash(source);
@@ -77,11 +79,14 @@ namespace Sm2VrLauncher
                 }
                 // The new 70% path is selected only with VR AA = ours and this
                 // staged marker. Retain every other user's visual preference.
-                if (mode == Revamped)
-                {
-                    if (!LiveFile.Set(root, "vr_aa", "ours"))
-                        throw new IOException("Could not set the Revamped reconstruction in live.txt.");
-                }
+                // Switching modes should also switch the engine-AA selection:
+                // Original uses the 0.0.78 native eye/game-AA route. Revamped
+                // enables the tested own 70%-to-100% temporal reconstruction.
+                string aa = mode == Revamped ? "ours" : "game";
+                if (!LiveFile.Set(root, "vr_aa", aa) ||
+                    !LiveFile.Set(root, "vr_render", "native") ||
+                    !LiveFile.Set(root, "sm1style", "on"))
+                    throw new IOException("Could not set the selected renderer's picture mode in live.txt.");
                 info = (mode == Revamped ? "REVAMPED: 70% temporal reconstruction" : "ORIGINAL: HERO VR 0.0.78 renderer") +
                        " (DLL SHA256 " + digest.Substring(0, 12) + "...)";
                 return true;

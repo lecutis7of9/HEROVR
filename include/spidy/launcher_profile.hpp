@@ -84,6 +84,7 @@ inline constexpr ProfileSetting profileSettings[] = {
     launcherOption("hud", Item::hud, 0, 3, &SessionOptions::hud),
     tabOnly("ui_style", Item::uiStyle, 0, 1, &Values::uiStyle),
     tabOnly("near_clip_mm", Item::nearClip, 10, 100, &Values::nearClipMm),
+    tabOnly("leg_animations", Item::legAnimations, &Values::legAnimations),
     launcherOption("flips", Item::flips, &SessionOptions::flips),
     launcherOption("flip_speed", Item::flipSpeed, 90, 480, &SessionOptions::flipSpeed),
     tabOnly("hand_climb", Item::handClimb, &Values::handClimb),

@@ -6758,6 +6758,22 @@ DWORD WINAPI run(void*) {
                             applySettings();
                         }
                     }
+                    // Recognize native Web Line aim BEFORE sending the swing
+                    // bridge its hand input. In trigger-web mode an L2 aim
+                    // must not fire an unrelated swing rope on this frame.
+                    const bool webLineInput = motion.active && !flatScreen && controlsVisible &&
+                        mapping == game_pad::Mapping::gameplay &&
+                        heroNow() == hero_modes::spiderMan &&
+                        !calibrationInput && !padLayer.latched() &&
+                        !phone.open() && !gadgetWheel.open() &&
+                        !swingState.owned && !flyNow.flying &&
+                        moverTable != config.base + bridge::combatCamera &&
+                        frame.hands[0].valid &&
+                        std::isfinite(frame.hands[0].trigger) &&
+                        frame.hands[0].trigger >= .7f &&
+                        std::isfinite(frame.hands[0].squeeze) &&
+                        frame.hands[0].squeeze < .3f &&
+                        !swingState.webs[0].attached && !swingState.webs[1].attached;
                     environmentGripFrame = {};
                     if (!swingStarted) {
                         environmentGrip.reset();
@@ -6902,9 +6918,11 @@ DWORD WINAPI run(void*) {
                                 }
                             }
                             const bool envOwns = (environmentGripFrame.claimed & (1u << i)) != 0;
+                            const bool nativeAimOwns = i == 0 && webLineInput;
                             input.hands[i] = {hand.aim, hand.gripRelativeToHead, hand.tracked,
-                                              envOwns ? 0.f : hand.trigger,
-                                              envOwns || u37.holdsGrip[i] || grabWebs[i].on ? 0.f : hand.grip};
+                                              envOwns || nativeAimOwns ? 0.f : hand.trigger,
+                                              envOwns || nativeAimOwns || u37.holdsGrip[i] || grabWebs[i].on
+                                                  ? 0.f : hand.grip};
                             // Version 0.0.73 (fix 5): DAREDEVIL's held grapple aims along the baton, from its tip.
                             if (ddAimHeld[i] && heroNow() == hero_modes::daredevil && finite(ddAimFrom[i]) && finite(ddAimDir[i]) &&
                                 validTrackedPose(frame.head) && validTrackedPose(motion.headPose)) {
@@ -8264,14 +8282,7 @@ DWORD WINAPI run(void*) {
                         // Line action. The game chooses whether its stealth
                         // Web Line can attach here. Do NOT create a fake rope
                         // or swallow native stealth takedown prompts.
-                        const bool nativeWebLineAim =
-                            steering && !calibrationInput && !layerOn &&
-                            heroNow() == hero_modes::spiderMan && !swingState.owned &&
-                            !inFlight && !fight && !fly076Flying &&
-                            frame.hands[0].valid &&
-                            std::isfinite(frame.hands[0].trigger) &&
-                            frame.hands[0].trigger >= .7f &&
-                            !(swingState.webs[0].attached || swingState.webs[1].attached);
+                        const bool nativeWebLineAim = webLineInput && steering && !layerOn;
                         walk.interact = interactStep.pressed() || airWebZipY ||
                             (nativeWebLineAim && (origins.play() & buttonY) &&
                              !(named & game_pad::NamedPress::controlY));

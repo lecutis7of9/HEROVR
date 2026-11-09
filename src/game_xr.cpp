@@ -7929,20 +7929,23 @@ DWORD WINAPI run(void*) {
                             frame.hands[1].squeeze > .6f || frame.hands[0].trigger > .6f ||
                             frame.hands[1].trigger > .6f ||
                             std::hypot(frame.hands[1].stickX, frame.hands[1].stickY) > .5f;
-                        // In Peter's combat a click of both thumbsticks activates
-                        // the game's own Symbiote Surge (if charged/unlocked).
-                        // Elsewhere this chord still toggles the VR Pad Layer.
+                        // The native L3+R3 combo is Peter's Symbiote Surge,
+                        // even in special story fights without a combat camera.
+                        // Pad Layer instead takes BOTH physical triggers plus
+                        // L3+R3 held for .35s. These cannot fire together.
+                        const bool physicalPadChord = game_pad::dualTriggerPadChord(
+                            frame.hands[0].trigger, frame.hands[1].trigger,
+                            frame.hands[0].stickClick, frame.hands[1].stickClick);
                         const bool nativeSurge = game_pad::symbioteSurgeChord(
                             mapping == game_pad::Mapping::gameplay && playing,
                             heroNow() == hero_modes::spiderMan,
-                            moverTable == config.base + bridge::combatCamera,
                             padLayer.latched(), calibrationInput,
                             phone.open() || gadgetWheel.open() || seatedLock,
-                            frame.hands[0].stickClick, frame.hands[1].stickClick);
+                            frame.hands[0].stickClick, frame.hands[1].stickClick,
+                            physicalPadChord);
                         bool layerOn =
                             padLayer.update(frame.seconds, playing && !calibrationInput,
-                                            nativeSurge ? false : frame.hands[0].stickClick,
-                                            nativeSurge ? false : frame.hands[1].stickClick, layerBusy);
+                                            physicalPadChord, physicalPadChord, layerBusy);
                         // Update 38.5 PAD MODE (the holo's button) and PROMPT HANDLING AUTO: never in a
                         // fight (the combat camera), never while a web carries you; AUTO needs the
                         // game's prompts hooked (prompts::hooked, 9699 in SM2 so far).
@@ -8927,10 +8930,15 @@ DWORD WINAPI run(void*) {
                         screenControls.apply(frame.seconds,
                                              flatScreen && motion.active && mapping == game_pad::Mapping::menus,
                                              buttons, pad);
-                        // Both thumbsticks held in pause the game in every mapping, the menu button as
-                        // before: under SteamVR a Quest's menu button opens SteamVR's dashboard instead.
+                        // L3+R3 is Surge or Pad Layer during VR gameplay.
+                        // Never turn a held Surge/Pad chord into a Pause.
+                        // The menu button and screen-mode pause still work.
+                        const bool gameChord = (mapping == game_pad::Mapping::gameplay ||
+                                                mapping == game_pad::Mapping::pad) &&
+                                               frame.hands[0].stickClick && frame.hands[1].stickClick;
                         if (pausePress.update(frame.seconds, mapping != game_pad::Mapping::none,
-                                              frame.hands[0].stickClick, frame.hands[1].stickClick))
+                                              gameChord ? false : frame.hands[0].stickClick,
+                                              gameChord ? false : frame.hands[1].stickClick))
                             pad.buttons |= game_pad::start;
                         if (pausePress.spent())
                             pad.buttons &=

@@ -396,7 +396,12 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         rig_.turn(turn > 0 ? -snap_ : snap_, f.head.position);
         turnHeld_ = true;
     }
-    if (std::abs(turn) < .3f)
+    // A right-stick cartwheel may end on the ground while its X axis is
+    // still held. Never snap-turn the view unexpectedly on landing: require
+    // a return through centre before ground turning resumes.
+    if (flipRightStick && handValid(f.hands[1]) && std::abs(f.hands[1].stickX) > .3f)
+        turnHeld_ = true;
+    else if (std::abs(turn) < .3f)
         turnHeld_ = false;
     // On a wall the head stands off it level, under a ceiling straight down.
     // On a wall the game's actor rocks up to 14 degrees about the wall's

@@ -1,0 +1,44 @@
+name: HERO VR 0.0.78 isolated building textures and far-window experiment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experiment/078-building-streaming-windows
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+      - name: Build full VR mod and run project tests
+        shell: pwsh
+        run: |
+          & .\tools\build.ps1 -FromSource -Observer -Configuration Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path 'build\windows-ninja\spidy_stereo_probe.dll')) {
+            throw 'Required VR module was not produced'
+          }
+      - name: Upload build and test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: herovr-078-building-streaming-windows-build-failure-logs
+          path: |
+            build/windows-ninja/CMakeFiles/CMakeConfigureLog.yaml
+            build/windows-ninja/Testing/Temporary/LastTest.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Upload exact-source FPS binaries
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: herovr-078-building-streaming-windows-test-dll
+          path: |
+            build/windows-ninja/spidy_stereo_probe.dll
+          if-no-files-found: error
+          retention-days: 7

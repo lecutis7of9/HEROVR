@@ -129,7 +129,13 @@ def analyse(sample):
     line = dict(seconds=round(sample['seconds'], 4), frame=sample['frame'],
                 view=VIEWS[sample['view']] if sample['view'] < len(VIEWS) else sample['view'],
                 result=bool(flags & 1), game_active=bool(flags & 2), lens_path=bool(flags & 4),
-                read_ok=bool(flags & 8), view_flags=sample['view_flags'], near_far=sample['near_far'],
+                read_ok=bool(flags & 8),
+                # Revamped primary-window experiment, using spare flags without
+                # changing the 376-byte ABI. These distinguish direct calls
+                # from contexts owning the main view while showing window pops.
+                primary_direct=bool(flags & 16), primary_context=bool(flags & 32),
+                primary_resting=bool(flags & 64), window_reach_bytes_known=bool(flags & 128),
+                view_flags=sample['view_flags'], near_far=sample['near_far'],
                 reach=round(sample['reach'], 3) if math.isfinite(sample['reach']) else None)
     if not flags & 8:
         return line

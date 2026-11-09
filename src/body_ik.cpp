@@ -577,8 +577,8 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
         const float degrees = std::atan2(side, std::max(0.f, dot(d, up)));
         return flat * (std::sin(std::min(maxRadians, degrees)) / side);
     };
-    const Vec3 targetHipSway = state.swayWeight * limitedSway(gameHipUp, c.maxHipSway);
-    const Vec3 targetTorsoSway = state.swayWeight * limitedSway(gameTorso, c.maxTorsoSway);
+    const Vec3 targetHipSway = limitedSway(gameHipUp, c.maxHipSway) * state.swayWeight;
+    const Vec3 targetTorsoSway = limitedSway(gameTorso, c.maxTorsoSway) * state.swayWeight;
     const float swayStep = std::min(1.f, c.swayBlendSpeed * dt);
     state.gameHipSway += (targetHipSway - state.gameHipSway) * swayStep;
     state.gameTorsoSway += (targetTorsoSway - state.gameTorsoSway) * swayStep;

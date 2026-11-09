@@ -2616,6 +2616,7 @@ DWORD WINAPI run(void*) {
         game_pad::PullPress pullPress;
         environment_yank::GripPull environmentGrip;
         environment_yank::Output environmentGripFrame{};
+        bool environmentThrowWas{};
         game_swing::AimData aimed{};
         uint64_t pullsBefore{};
         // The right thumbstick pushed down is the game's D-pad down (heal),
@@ -6758,8 +6759,10 @@ DWORD WINAPI run(void*) {
                         }
                     }
                     environmentGripFrame = {};
-                    if (!swingStarted)
+                    if (!swingStarted) {
                         environmentGrip.reset();
+                        environmentThrowWas = false;
+                    }
                     if (swingStarted) {
                         game_swing::Command input;
                         input.wallRotate = motion.wallRotate;
@@ -6811,8 +6814,9 @@ DWORD WINAPI run(void*) {
                                 yi.aim[i] = hand.aim.orientation.rotate({0, 0, -1});
                             }
                             environmentGripFrame = environmentGrip.update(yi);
-                            if (environmentGripFrame.nativeThrow)
+                            if (environmentGripFrame.nativeThrow && !environmentThrowWas)
                                 game_prompts::note("79.1 ENV THROW: grip and yank -> native L1+R1");
+                            environmentThrowWas = environmentGripFrame.nativeThrow;
                         }
                         for (unsigned i = 0; i < 2; ++i) {
                             const auto& hand = motion.swing.hands[i];
@@ -7961,12 +7965,10 @@ DWORD WINAPI run(void*) {
                         // in mid-flight dropped players at the game's fall speed.
                         const bool inFlight = steering && swingState.owned && !onWall && !calibrationInput;
                         gestureInFlight = inFlight; // Update 38.5 GESTURE MOVES' airborne (next frame)
-                        // Clicking both thumbsticks latches the whole pad, for the
-                        // controls play has no room for (the game's X, its L3, each
-                        // bumper and trigger on its own, three ways of its D-pad).
-                        // Neither stick's own press is half of the chord (PullPress,
-                        // slow_motion's StickPress both drop one), so nothing else
-                        // answers it. A press of any kind keeps the layer open.
+                        // Holding both triggers and clicking both thumbsticks
+                        // toggles PAD MODE. L3+R3 alone belongs to Peter's native
+                        // Surge; the old pad/pause chord must never steal it.
+                        // The full pad grants the otherwise unavailable controls.
                         const bool layerBusy =
                             frame.buttons != 0 || frame.hands[0].squeeze > .6f ||
                             frame.hands[1].squeeze > .6f || frame.hands[0].trigger > .6f ||
@@ -8020,8 +8022,8 @@ DWORD WINAPI run(void*) {
                             runtime.haptic(0, .5f);
                             runtime.haptic(1, .5f);
                             message(3, 0, "Pad layer on - your grips are the game's LB and RB, your triggers its "
-                                          "LT and RT, X its X, the right stick its D-pad; click both sticks "
-                                          "again to leave it");
+                                          "LT and RT, X its X, the right stick its D-pad; hold BOTH triggers "
+                                          "and BOTH sticks again to leave it");
                         } else if (padLayerWas && !layerOn) {
                             runtime.haptic(0, .25f);
                             runtime.haptic(1, .25f);

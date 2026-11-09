@@ -60,7 +60,7 @@ float wallRunHeadYaw(Quat head, float previous) {
         change += pi;
     return previous + change;
 }
-/// The left stick as a flip's turn in the tracking space: the head goes the
+/// The right stick as a flip's turn in the tracking space: the head goes the
 // way the stick points (from where the headset looks) and down. Its length is
 // how far the stick is tilted: 0 within the dead zone, 1 from stickFull.
 Vec3 stickTurn(const FlipMotion::Sample& s) {
@@ -364,8 +364,19 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
             rig_.preserveHead(lastHead_, f.head);
         }
     }
-    // Update 38.5: while FLY ROLL has the right stick it rolls the view (below), it turns nothing.
-    const float turn = handValid(f.hands[1]) && !flyStick_ && !stickLocked_ ? f.hands[1].stickX : 0;
+    // FLIPS owns the right stick IN FREE AIR; ground snap/smooth turn,
+    // flying and wall-contact view controls retain their original behavior.
+    // This keeps left-stick movement free while turning in the air.
+    const Vec3 headSurface = normalized(surfaceUp);
+    const Vec3 heldSurface = normalized(surface.normal);
+    const bool onSolidSurface = (finite(headSurface) && length(headSurface) > .5f &&
+                                 headSurface.y < surfaceEnterCos) ||
+                                (finite(heldSurface) && length(heldSurface) > .5f &&
+                                 finite(surface.anchor));
+    const bool flipRightStick = flips_ && airborne && !onSolidSurface && !flyOwns_;
+    // Update 38.5: FLY ROLL also owns the right stick.
+    const float turn = handValid(f.hands[1]) && !flyStick_ && !stickLocked_ && !flipRightStick
+                           ? f.hands[1].stickX : 0;
     // Version 0.0.73 PUNISHER VAN: the van's turn (asked last frame, with its carry), once.
     if (vehicleTurn_ != 0.f && gameplay)
         rig_.turn(vehicleTurn_, f.head.position);
@@ -404,9 +415,9 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
     flip.jump = f.jump && !flyOwns_; // 0.0.76 FLIGHT: A is the flight's while it flies
     flip.airborne = airborne && !holds;
     flip.surface = onSurface || holds;
-    if (handValid(f.hands[0]) && !flyOwns_) {
-        flip.stickX = f.hands[0].stickX;
-        flip.stickY = f.hands[0].stickY;
+    if (handValid(f.hands[1]) && !flyOwns_) {
+        flip.stickX = f.hands[1].stickX;
+        flip.stickY = f.hands[1].stickY;
     }
     flip.head = f.head.orientation;
     flip.seconds = f.seconds;
@@ -414,7 +425,7 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         rig_.pivot = f.head.position;
     // REALISTIC FLIPS: the swing's flight and the arms turn the player
     // (RealisticFlip). A pressed in the air rights them; with FLIPS on, the
-    // left stick, let go once in the air, steers the turn.
+    // right stick, let go once in the air, steers the turn.
     bool automaticSteering = false;
     if (autoSettings_.enabled) {
         flip_.reset();
@@ -726,9 +737,8 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
     out.locatedTime = f.locatedTime; // 0.0.76 JITTER FIX: POSE CHECK
     out.anchor = feet;
     out.swing = trackedSwingInput(f, placed, triggerWebs_);
-    // The left stick turns the flip: the player does not walk or drift.
-    if (flip_.steering() || automaticSteering)
-        out.swing.move = {};
+    // The left stick remains locomotion even while the RIGHT stick drives
+    // a flip; do not erase movement just because a flip is steering.
     // The game takes the stick as the player stands, level; the swing takes
     // it as they see it: on a wall they stand on, along that wall.
     const Vec3 levelMove = out.swing.move;

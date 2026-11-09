@@ -3474,7 +3474,7 @@ const char* helpText(Control c) {
     case Control::doubleHealth:
         return extras385::double_health::help;
     case Control::bodyAnimations:
-        return "CLASSIC: standard body IK. DYNAMIC: animated swing sway, wall-crawl legs, wall runs, and flip tucks. Head and controller hands stay tracked.";
+        return "DYNAMIC adds wall, swing and flip poses; CLASSIC does not.";
     case Control::flyMode:
         return extras385::fly::help;
     case Control::flyVignette:

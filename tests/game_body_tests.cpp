@@ -10,6 +10,7 @@
 #include "spidy/arm_sprint.hpp"
 #include "spidy/glove_overlay.hpp"
 #include "spidy/native_body.hpp"
+#include "spidy/wall_run_clearance.hpp"
 #include "spidy/vr_settings.hpp"
 #include <chrono>
 #include <cmath>
@@ -420,6 +421,24 @@ int main() {
         check(!sameHands, "moving both hands together must not trigger sprint");
         in.tracked[1] = false;
         check(!detector.update(in), "losing a hand must release sprint");
+    });
+    test("79.1 vertical and lateral wall-run view stays outside the building", [&] {
+        const Vec3 face{0, 3, 0}, outward{0, 0, 1};
+        for (const Vec3 eye : {Vec3{0, 3, .03f}, Vec3{4, 3, .06f}}) {
+            const Vec3 pushed = eye + wall_run_clearance::headPush(true, eye, face, outward, .4f);
+            check(dot(pushed - face, outward) >= .499f,
+                  "running on a vertical wall left the tracked head inside the building face");
+            check(std::abs(pushed.x - eye.x) < 1e-5f && std::abs(pushed.y - eye.y) < 1e-5f,
+                  "wall-clearance correction changed sideways or vertical travel");
+            check(length(wall_run_clearance::headPush(true, pushed, face, outward, .4f)) < 1e-5f,
+                  "a properly cleared wall camera should not move again");
+        }
+        check(length(wall_run_clearance::headPush(false, {0, 3, .02f}, face, outward, .4f)) < 1e-5f,
+              "ground / native wall crawl must not gain the owned-wall run correction");
+        check(length(wall_run_clearance::headPush(true, {0, 3, .02f}, face, {0, 1, 0}, .4f)) < 1e-5f,
+              "ceiling or floor contact must not be treated as a vertical facade");
+        check(length(wall_run_clearance::headPush(true, {0, 3, .9f}, face, outward, .4f)) < 1e-5f,
+              "an already clear wall-run head must not be pushed");
     });
     test("79.1 moving on a VR-owned wall runs both legs instead of leaving the game AIR crouch", [&] {
         gb::Table table;

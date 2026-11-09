@@ -575,8 +575,11 @@ enum class Control : uint8_t {
     // 0.0.76 DOUBLE HEALTH (extras385::double_health): a press, ON/OFF, OFF by default, live; at the top of
     // POWERS with INVINCIBLE (N/A, as INVINCIBLE, off the confirmed health record). Result::doubleHealth.
     doubleHealth,
+    // 0.0.79.1 Dynamic Body lives on HEROVR's own wrist holo,
+    // never on the SM1 game Settings tab.
+    bodyAnimations,
 };
-constexpr int controls = 248; // 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 PICTURE 72: - IMAGE, IMAGE STYLE, STREAMER MODE / SMOOTH / EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (0.0.72's picture); 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING (the uint8_t Control is full); 0.0.73: + COMING SOON; // 0.0.73 MPSUIT: + PLAYER 2 BODY; // 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; // 0.0.73 AA: + SHARPEN MATCH; // 0.0.73 test 6: + MP SOLO TEST (mp-solo-test merged); // 0.0.73 test 5: + HERO HANDS (IRON MAN), GRAPPLE AIM (DAREDEVIL), CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH (WOLVERINE); // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; // 0.0.73: + IMAGE; // 0.0.73 test 3: + VAN PEDALS; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
+constexpr int controls = 249; // 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 PICTURE 72: - IMAGE, IMAGE STYLE, STREAMER MODE / SMOOTH / EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (0.0.72's picture); 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING (the uint8_t Control is full); 0.0.73: + COMING SOON; // 0.0.73 MPSUIT: + PLAYER 2 BODY; // 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; // 0.0.73 AA: + SHARPEN MATCH; // 0.0.73 test 6: + MP SOLO TEST (mp-solo-test merged); // 0.0.73 test 5: + HERO HANDS (IRON MAN), GRAPPLE AIM (DAREDEVIL), CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH (WOLVERINE); // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; // 0.0.73: + IMAGE; // 0.0.73 test 3: + VAN PEDALS; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
 // Version 0.0.72: + 40 combat rows, + 2 sections; build 6: + THOR HAMMER MODEL, THOR FLIGHT
 constexpr int combatControls = 163; // HERO VR 0.0.78: + PUNISHER ARSENAL, SCOPE ZOOM, MAG EJECT (live.txt only); 0.0.76 MP WORLD: + PLAYER 2 PLACE (live.txt only); 0.0.74 test 10 PICTURE 72: the nine 0.0.73 picture switches 0.0.72 never had taken out; 0.0.74 test 10: + GLIDE TILT (live.txt only); 0.0.74 test 10: + QUICK HOOK, GRAPPLE YANK, SURE GRAPPLE, BELT ZONES; 0.0.74 test 10: + ENTRY FACING, HIDEOUT HOLD; 0.0.74 test 10: + THROW BY SWING (live.txt only); 0.0.74 test 10: the 0.0.74 tests' picture / AA options taken out (the 0.0.73 picture again); 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING, BATMOBILE, BATMOBILE CHOICE; 0.0.73: + MP SOLO TEST, PLAYER 2 BODY, COMING SOON; // 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; // 0.0.73 AA: + SHARPEN MATCH; // 0.0.73 test 6: + MP SOLO TEST (mp-solo-test merged); // 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; // 0.0.73: + IMAGE; // 0.0.73 test 3: + VAN PEDALS; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // combat38::options (checked in wrist_hud.cpp); build 9: + SUIT BODY
 // 0.0.74 test 1: the options with a wrist row (the uint8_t Control is full; BATMOBILE and
@@ -607,7 +610,7 @@ static_assert(static_cast<int>(Control::colorStrength) >= maskedControls, "a liv
 static_assert(static_cast<int>(Control::foveaInner) >= maskedControls, "a live slider past the mask");
 static_assert(static_cast<int>(Control::heroTabSpider) >= maskedControls, "only presses past the mask");
 static_assert(static_cast<int>(Control::section0) >= maskedControls, "only presses past the mask");
-static_assert(static_cast<int>(Control::doubleHealth) == controls - 1);
+static_assert(static_cast<int>(Control::bodyAnimations) == controls - 1);
 // Each the value of the live.txt key it is named for, as the mod runs now.
 struct Settings {
     float widthCm = 1.3f; // web_width
@@ -1028,6 +1031,7 @@ struct View {
     // Update 38.5 EXTRAS: each row's state (extras385.hpp).
     bool invincible{}, invincibleNa{}, flyVignette{}, symbiote{}, padMode{}, padByPrompt{}, monitorArmed{};
     bool doubleHealth{}; // 0.0.76 DOUBLE HEALTH on
+    bool bodyAnimations{}; // 0.0.79.1 Dynamic Body selected in VR SETTINGS
     uint32_t flyMode{};        // extras385::fly::Speed
     uint32_t flyRoll = 1;      // extras385::fly::RollMode (1 COMFORT, the default)
     bool flyAutoLevel = true;
@@ -1171,6 +1175,7 @@ class Menu {
         bool bloodVisor{};                                          // Update 38.5: VISOR DROPS pressed
         bool invincible{}, flyMode{}, flyVignette{}, symbiote{};    // Update 38.5 EXTRAS: pressed
         bool doubleHealth{};                                        // 0.0.76 DOUBLE HEALTH pressed
+        bool bodyAnimations{};                                      // 0.0.79.1 BODY ANIMATIONS pressed
         bool flyRoll{}, flyRollSpeed{}, flyAutoLevel{};             // Update 38.5: FLY ROLL pressed, ROLL SPEED moved
         bool padMode{}, promptHandling{}, playOnMonitor{};
         bool gestureMoves{};                                        // Update 38.5: GESTURE MOVES pressed

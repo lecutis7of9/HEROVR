@@ -2320,6 +2320,27 @@ def wait_for_renderer(game, process, render_data, timeout=180, problems=None, te
         except (OSError, RuntimeError) as error:
             # Startup can show no queue, or a second one, for a moment; a module list can fail meanwhile.
             problem = str(error)
+            # A remote native entry point returned an NTSTATUS failure, not a
+            # transient absence of graphics work. Repeated injection is unsafe
+            # after a fail-fast (0xC0000409) or other native exception.
+            if problem.startswith('Render discovery start: '):
+                raw_status = problem.removeprefix('Render discovery start: ').strip()
+                try:
+                    native_status = int(raw_status, 0)
+                except ValueError:
+                    try:
+                        native_status = int(raw_status, 10)
+                    except ValueError:
+                        native_status = None
+                if native_status is not None and native_status >= 0xC0000000:
+                    if problems is not None:
+                        problems.append(problem)
+                    raise RuntimeError(
+                        f"Native render discovery failed with Windows status "
+                        f"0x{native_status:08X} ({native_status}). "
+                        "Stop; do not retry this game process. Check the matching "
+                        "game-vr-*-game.log and Windows crash details before changing DLLs."
+                    ) from error
             if problem == 'Render discovery start: 1001':
                 # SM2 port: 1001 is the probe refusing this process as not Spider-Man2.exe. That never
                 # changes while the game runs, so stop now rather than retry for three minutes.

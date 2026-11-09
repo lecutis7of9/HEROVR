@@ -8,6 +8,10 @@
 #ifndef SPIDY_TEST_VERSION
 #define SPIDY_TEST_VERSION "0.0.74"
 #endif
+#include <atomic>
+// FRAME OVERLAP test (include/spidy/frame_overlap.hpp). 0 off: the VR thread waits for the
+// previous overlay fence before it records. The launcher writes live.txt frame_overlap.
+std::atomic<uint32_t> frameOverlapWant{0};
 #include "spidy/thor_grip.hpp"
 #include "spidy/mirror_guard.hpp"
 #include "spidy/mirror_props074.hpp" // 0.0.74 test 10 MIRROR PROPS
@@ -14355,6 +14359,16 @@ DWORD WINAPI run(void*) {
                     return !code;
                 },
                 [&](std::array<XrRuntime::EyeTarget, 2>& targets) {
+                    const uint32_t overlap = frameOverlapWant.load(std::memory_order_relaxed);
+                    overlay.setFrameOverlap(overlap != 0);
+                    static int overlapLogged = -1;
+                    if (overlapLogged != static_cast<int>(overlap)) {
+                        if (overlapLogged >= 0 || overlap)
+                            consoleLine(overlap ? "FRAME OVERLAP test: on. The next headset frame is recorded while the "
+                                                  "graphics card finishes the last one. The picture is unchanged."
+                                                : "FRAME OVERLAP test: off. Baseline timing.");
+                        overlapLogged = static_cast<int>(overlap);
+                    }
                     const auto copyStart = std::chrono::steady_clock::now();
                     // HERO VR 0.0.77 CUTSCENES immersive: the scene's pair at the tracked eyes it was asked for (a
                     // normal stereo view, no hands, webs, markers or body), the game frame's subtitles - while a
@@ -18266,6 +18280,14 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyWalkLegs(void* v) {
     if (value > 1)
         return 7474;
     walkLegsOn = value == 0;
+    return 0;
+}
+// FRAME OVERLAP test (live.txt frame_overlap). 0 off, 1 on. Refused above 1. Live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyFrameOverlap(void* on) {
+    const auto value = reinterpret_cast<uintptr_t>(on);
+    if (value > 1)
+        return 4713;
+    frameOverlapWant.store(static_cast<uint32_t>(value), std::memory_order_relaxed);
     return 0;
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebTravel(void* on) {

@@ -389,6 +389,67 @@ int main() {
                      normalized(classicStillPose.direction(rig.pelvis, rig.pelvisUp))) < .015f,
               "stationary pose should return to classic pelvis orientation");
     });
+    test("79.1 moving on a VR-owned wall runs both legs instead of leaving the game AIR crouch", [&] {
+        gb::Table table;
+        check(gb::parseJoints(bytes.joints, 237, table), "parse joints");
+        std::vector<float> rest;
+        check(gb::restToModel(bytes.rest, table, rest), "rest");
+        body::Rig rig;
+        check(gb::identify(table, rig) && body::prepare(rig, rest), "prepared body");
+        body::Targets target;
+        target.head = true;
+        target.airborne = true; // the game's actual movement state on HEROVR's wall
+        target.wallStride = true;
+        target.wallSpeed = 6.f;
+        target.eyes = {0, 1.7f, .08f};
+        target.facing = Quat::yaw(3.14159265f);
+        target.hands[0] = {true, {.32f, 1.2f, .3f}, gripFacing({.2f, 0, 1}), 0, 0};
+        target.hands[1] = {true, {-.32f, 1.2f, .3f}, gripFacing({-.2f, 0, 1}), 0, 0};
+        struct Sample {
+            std::vector<float> final, earlier;
+            body::Result result;
+        };
+        auto run = [&](bool dynamic, bool moving) {
+            body::Config config;
+            config.dynamicLegs = dynamic;
+            body::State state;
+            Sample sample;
+            for (int frame = 0; frame < 61; ++frame) {
+                auto gameFrame = rest;
+                body::Pose framePose(gameFrame.data(), 237);
+                body::Targets t = target;
+                if (!moving)
+                    t.wallStride = false;
+                sample.result = body::solve(framePose, rig, t, config, state, true, 1.f / 90.f);
+                if (frame == 22)
+                    sample.earlier = gameFrame;
+                if (frame == 60)
+                    sample.final = std::move(gameFrame);
+            }
+            return sample;
+        };
+        const Sample classic = run(false, true);
+        const Sample dynamic = run(true, true);
+        const Sample idle = run(true, false);
+        check(classic.result.solved && dynamic.result.solved, "body solve failed");
+        check(classic.result.wallStride == 0 && dynamic.result.wallStride > .99f,
+              "wall stride must be opt-in and active during moving wall contact");
+        check(idle.result.wallStride == 0, "stationary wall must not walk the legs");
+        for (const auto& leg : rig.legs) {
+            check(length(at(dynamic.final, leg.foot) - at(classic.final, leg.foot)) > .07f,
+                  "the leg was still folded in the airborne game pose");
+            check(length(at(dynamic.final, leg.foot) - at(dynamic.earlier, leg.foot)) > .07f,
+                  "the foot did not actually cycle through a running stride");
+        }
+        check(length(at(dynamic.final, rig.head) - at(classic.final, rig.head)) < .001f,
+              "wall gait must not move the head anchor");
+        for (const auto& arm : rig.arms)
+            check(length(at(dynamic.final, arm.hand) - at(classic.final, arm.hand)) < .001f,
+                  "wall gait must not move a controller wrist");
+        for (const auto& leg : rig.legs)
+            check(length(at(idle.final, leg.foot) - at(classic.final, leg.foot)) < .001f,
+                  "stationary or non-wall body must leave the game's pose alone");
+    });
     test("the head shrinks at once and the body blends at 4/s", [&] {
         gb::Table t;
         gb::parseJoints(bytes.joints, 237, t);

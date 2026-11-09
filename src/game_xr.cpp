@@ -13402,7 +13402,7 @@ DWORD WINAPI run(void*) {
                         // fly lean and wall-body roll also change the latter.
                         // The quaternion can change sign at a full turn, so
                         // compare |w| to recognise only an active in-air flip.
-                        const bool nativeFlip = !motion.standing && swingState.owned &&
+                        const bool nativeFlip = !motion.standing &&
                                                 std::isfinite(motion.flipTilt.w) &&
                                                 std::abs(motion.flipTilt.w) < .9998f;
                         // Test build 10 ONE BODY: a worn suit shown in first person replaces the game's body (its arms too).

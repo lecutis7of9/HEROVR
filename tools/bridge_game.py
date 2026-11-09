@@ -83,12 +83,20 @@ def prepare(pid, process, dll=DLL, staging=STAGING,
         if not path.exists(): shutil.copyfile(dll, path)
     if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
         raise RuntimeError('Bridge staging hash mismatch')
+    load_result = None
     if not loaded:
-        call_with_payload(process, remote_system_export(pid, b'LoadLibraryW'),
-                          (str(path)+'\0').encode('utf-16-le'))
+        load_result = call_with_payload(process, remote_system_export(pid, b'LoadLibraryW'),
+                                        (str(path)+'\0').encode('utf-16-le'))
         loaded = next((x for x in modules(pid) if x['name'].lower() == dll.name.lower()), None)
     if not loaded or pathlib.Path(loaded['path']).resolve() != path:
-        raise RuntimeError('Bridge failed to load from the expected staging path')
+        where = f"loaded from {loaded['path']}" if loaded else 'not loaded'
+        result = f"0x{load_result:08X}" if load_result is not None else 'not called'
+        length = len(str(path))
+        hint = (' The extracted mod folder is too deeply nested for reliable '
+                'Windows DLL loading; use a short folder path.' if length >= 240 else '')
+        raise RuntimeError(f"{dll.name} did not load from its expected staging path "
+                           f"({where}; full DLL path {length} characters; "
+                           f"LoadLibraryW returned {result}).{hint}")
     local = load_library(str(path))
     if not local: raise c.WinError(c.get_last_error())
     try:

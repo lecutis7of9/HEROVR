@@ -423,6 +423,26 @@ int main() {
         in.tracked[1] = false;
         check(!detector.update(in), "losing a hand must release sprint");
     });
+    test("79.1 mission pad forwards Web Line, stealth, photo and Prowler controls", [] {
+        namespace pad = game_pad;
+        XrFrame f{};
+        f.buttons = buttonY | buttonX;
+        f.hands[0].trigger = .55f; // Prowler analog LT, Web Line aim
+        f.hands[1].trigger = .42f; // Prowler analog RT
+        f.hands[0].squeeze = .9f; // native LB (tether)
+        f.hands[1].squeeze = .9f; // native RB (photo shutter / tether)
+        f.hands[1].stickY = .95f; // native D-pad up (camera gadget)
+        const auto mission = pad::fromControllers(f, pad::Mapping::pad);
+        check((mission.buttons & (pad::y | pad::x | pad::dpadUp | pad::leftShoulder | pad::rightShoulder)) ==
+                (pad::y | pad::x | pad::dpadUp | pad::leftShoulder | pad::rightShoulder),
+              "mission input must retain Y Web Line, X takedown, D-pad camera, and LB/RB");
+        check(mission.leftTrigger > 100 && mission.leftTrigger < 170 &&
+              mission.rightTrigger > 85 && mission.rightTrigger < 140,
+              "Prowler code puzzle requires genuine independent analog trigger pressure");
+        const auto ordinary = pad::fromControllers(f, pad::Mapping::gameplay);
+        check(ordinary.leftTrigger == 0 && ordinary.rightTrigger == 0,
+              "ordinary web-slinging must not send accidental analog game triggers");
+    });
     test("79.1 Peter combat L3+R3 activates the native Surge chord only when safe", [] {
         namespace pad = game_pad;
         check(pad::symbioteSurgeChord(true, true, true, false, false, false, true, true),

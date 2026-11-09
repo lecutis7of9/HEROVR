@@ -1,0 +1,135 @@
+name: HERO VR 0.0.79 public release - Original and Revamped
+on:
+  push:
+    branches: [release/079-original-revamped, main]
+permissions:
+  contents: write
+
+jobs:
+  release079:
+    if: github.repository == 'lecutis7of9/HEROVR' && github.actor == github.repository_owner
+    runs-on: windows-2022
+    timeout-minutes: 100
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check release metadata and approved credits
+        run: |
+          if ((Get-Content VERSION -TotalCount 1).Trim() -ne '0.0.79') { throw 'Source version wrong' }
+          if ((Get-Content PORT-VERSION -TotalCount 1).Trim() -ne 'Update 39.12') { throw 'Internal build wrong' }
+          if (-not (Select-String tools/launcher/src/RendererModes.cs -SimpleMatch 'renderer-modes' -Quiet)) { throw 'Renderer selector missing' }
+          if (-not (Select-String tools/launcher/src/Cinematic.cs -SimpleMatch 'Venom Cash, Gogeta and Tim The KoolAid Lover for testing' -Quiet)) { throw 'Tester credits missing' }
+      - name: Download SHA256-verified official 0.0.78 baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path previous -Force | Out-Null
+          gh release download v0.0.78 --pattern 'HERO-VR-Launcher-0.0.78.zip' --pattern 'HERO-VR-Launcher-0.0.78.zip.sha256' --pattern 'HERO-VR-0.0.78-mod-win64.zip' --pattern 'HERO-VR-0.0.78-mod-win64.zip.sha256' --pattern 'version.json' --dir previous --clobber
+          if ($LASTEXITCODE) { throw 'Official previous release download failed' }
+          foreach ($name in @('HERO-VR-Launcher-0.0.78.zip', 'HERO-VR-0.0.78-mod-win64.zip')) {
+            $checkfile = Join-Path previous "$name.sha256"
+            $want = [regex]::Match([IO.File]::ReadAllText((Resolve-Path $checkfile)), '(?i)[0-9a-f]{64}').Value
+            $got = (Get-FileHash (Join-Path previous $name) -Algorithm SHA256).Hash
+            if ($want.Length -ne 64 -or $want.ToLowerInvariant() -ne $got.ToLowerInvariant()) { throw "Original ZIP checksum mismatch: $name" }
+          }
+          Expand-Archive previous/HERO-VR-0.0.78-mod-win64.zip previous/oldmod -Force
+          $found = @(Get-ChildItem previous/oldmod -Filter spidy_stereo_probe.dll -Recurse -File)
+          if ($found.Count -ne 1) { throw 'Cannot identify original 0.0.78 DLL' }
+          $sha = (Get-FileHash $found[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sha -ne '30e5e277359827e45c95a0fac9642422734e180d5034571d9ae9f64838000f0a') { throw "Original DLL SHA256 mismatch: $sha" }
+          New-Item -ItemType Directory -Path baseline -Force | Out-Null
+          Copy-Item $found[0].FullName baseline/spidy_stereo_probe.dll
+      - name: Download native dependencies
+        run: |
+          & ./tools/bootstrap.ps1 -Observer
+          if ($LASTEXITCODE) { throw "Bootstrap error $LASTEXITCODE" }
+      - name: Compile Revamped native renderer and run C++ tests
+        run: |
+          & ./tools/build.ps1 -Observer -FromSource
+          if ($LASTEXITCODE) { throw "Native build error $LASTEXITCODE" }
+          if (-not (Test-Path build/windows-ninja/spidy_stereo_probe.dll)) { throw 'Missing compiled renderer' }
+      - name: Stage both renderers
+        run: |
+          foreach ($mode in @('original','revamped')) {
+            New-Item -ItemType Directory -Path "build/windows-ninja/renderer-modes/$mode" -Force | Out-Null
+          }
+          Copy-Item baseline/spidy_stereo_probe.dll build/windows-ninja/renderer-modes/original/spidy_stereo_probe.dll
+          Copy-Item build/windows-ninja/spidy_stereo_probe.dll build/windows-ninja/renderer-modes/revamped/spidy_stereo_probe.dll
+          $a = (Get-FileHash build/windows-ninja/spidy_stereo_probe.dll -Algorithm SHA256).Hash
+          $r = (Get-FileHash build/windows-ninja/renderer-modes/revamped/spidy_stereo_probe.dll -Algorithm SHA256).Hash
+          $o = (Get-FileHash build/windows-ninja/renderer-modes/original/spidy_stereo_probe.dll -Algorithm SHA256).Hash
+          if ($a -ne $r -or $o -eq $r) { throw 'Mode binaries not distinct or default module wrong' }
+          Write-Host "Original DLL: $o; Revamped DLL: $r"
+      - name: Compile public C# launcher and check .NET support
+        run: |
+          $ws = $env:GITHUB_WORKSPACE
+          & "$ws/tools/launcher/build.ps1" -Out "$ws/out/ci/SM2VRLauncher.exe"
+          Set-Location $ws
+          if (-not (Test-Path "$ws/out/ci/SM2VRLauncher.exe")) { throw 'Launcher compilation failed' }
+          python -B "$ws/tools/launcher/tools/check-netfx.py" "$ws/tools/launcher/src"
+          if ($LASTEXITCODE) { throw 'Launcher framework check failed' }
+      - name: Package mod files with bundled Python and both renderers
+        run: |
+          & ./tools/package.ps1 -Name 'HERO-VR-0.0.79-mod'
+          if ($LASTEXITCODE -or -not (Test-Path dist/HERO-VR-0.0.79-mod-win64.zip)) { throw 'Mod packaging failed' }
+          python -B tools/check_bundled_python.py dist/HERO-VR-0.0.79-mod-win64.zip --run
+          if ($LASTEXITCODE) { throw 'Bundled Python check failed' }
+      - name: Build full public player ZIP and manifest
+        run: |
+          python -B tools/release079/build_release.py --previous previous/HERO-VR-Launcher-0.0.78.zip --mod dist/HERO-VR-0.0.79-mod-win64.zip --launcher out/ci/SM2VRLauncher.exe --old-manifest previous/version.json --out dist
+          if ($LASTEXITCODE) { throw 'Full archive build failed' }
+          $m = Get-Content dist/version.json -Raw | ConvertFrom-Json
+          if ($m.version_number -ne '0.0.79' -or $m.launcher_build -ne 22) { throw 'Wrong manifest version' }
+          if (@($m.files).Count -ne 2) { throw 'Manifest must contain 2 full downloads' }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          foreach ($path in @('dist/HERO-VR-0.0.79-mod-win64.zip','dist/HERO-VR-Launcher-0.0.79.zip')) {
+            $z = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $path))
+            try {
+              $names = @($z.Entries | ForEach-Object FullName)
+              foreach ($mode in @('original','revamped')) {
+                if (-not ($names | Where-Object { $_ -like "*/build/windows-ninja/renderer-modes/$mode/spidy_stereo_probe.dll" })) {
+                  throw "$path does not include the $mode renderer"
+                }
+              }
+            } finally { $z.Dispose() }
+          }
+          Copy-Item RELEASE-NOTES-v0.0.79.md dist/RELEASE-NOTES-v0.0.79.md
+      - name: Keep candidate files even when not yet published
+        uses: actions/upload-artifact@v4
+        with:
+          name: HERO-VR-0.0.79-release-candidate
+          path: |
+            dist/HERO-VR-Launcher-0.0.79.zip
+            dist/HERO-VR-0.0.79-mod-win64.zip
+            dist/*.sha256
+            dist/SHA256SUMS.txt
+            dist/version.json
+            dist/RELEASE-NOTES-v0.0.79.md
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish complete v0.0.79 and mark latest (only on main)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ($env:GITHUB_ACTOR -ne 'lecutis7of9') { throw 'Only repository owner can release' }
+          gh release view v0.0.79 --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'Release already exists; refuse overwrite' }
+          $assets = @(
+            'dist/HERO-VR-Launcher-0.0.79.zip', 'dist/HERO-VR-0.0.79-mod-win64.zip',
+            'dist/HERO-VR-Launcher-0.0.79.zip.sha256', 'dist/HERO-VR-0.0.79-mod-win64.zip.sha256',
+            'dist/SHA256SUMS.txt', 'dist/version.json', 'dist/RELEASE-NOTES-v0.0.79.md'
+          )
+          gh release create v0.0.79 @assets --target "$env:GITHUB_SHA" --title 'HERO VR 0.0.79 - Revamped Performance' --notes-file RELEASE-NOTES-v0.0.79.md --latest
+          if ($LASTEXITCODE) { throw 'GitHub Release publication failed' }
+          gh release view v0.0.79 --json tagName,url,assets

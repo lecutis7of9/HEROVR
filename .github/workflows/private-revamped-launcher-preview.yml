@@ -21,10 +21,12 @@ jobs:
       - name: Compile actual Windows launcher from source
         shell: pwsh
         run: |
+          # build.ps1 changes the caller's working directory to its own
+          # source folder. Verify the actual output with an absolute path.
           & .\tools\launcher\build.ps1 -Out 'out\SM2VRLauncher.exe'
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path 'tools\launcher\out\SM2VRLauncher.exe')) {
-              throw 'Private C# launcher compile failed'
-          }
+          $builtExe = Join-Path $env:GITHUB_WORKSPACE 'tools\launcher\out\SM2VRLauncher.exe'
+          if (-not (Test-Path $builtExe)) { throw 'Private C# launcher compile failed' }
+          Set-Location $env:GITHUB_WORKSPACE
 
       - name: Fetch official 0.0.78 Original renderer and headset-tested Revamped Clarity v2
         shell: pwsh

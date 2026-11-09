@@ -856,6 +856,10 @@ void submitEye(void* eye, Descriptor& descriptor) {
     reinterpret_cast<Submit>(base + 0x2c95200)(eye, &descriptor);
     ec::restore(descriptor.values, saved);
 }
+// The SM2 model-job hook is defined earlier than the existing guarded native
+// float writer; declare it here so this isolated texture-request experiment
+// can use the same SEH-protected write as the other rendering hooks.
+bool writeFloat(uintptr_t p, float value);
 // 1796d20 sets up a view's model job (the view at context +8): its distance
 // scale (+2f8, view +1cc4 x +1cc8; +310, 16 times that, for texture requests)
 // and how strongly it asks for textures (+2fc, requestScale of the view's

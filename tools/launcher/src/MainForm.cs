@@ -278,7 +278,7 @@ namespace Sm2VrLauncher
         {
             rendererPicker = new RendererModePicker
             {
-                Selection = RendererModes.Normal(settings.Get(RendererModes.Key, RendererModes.Original))
+                Selection = RendererModes.Normal(settings.Get(RendererModes.Key, RendererModes.Revamped))
             };
             Controls.Add(rendererPicker);
             PositionRendererModePicker();
@@ -287,7 +287,7 @@ namespace Sm2VrLauncher
             {
                 if (job != Job.None)
                 {
-                    rendererPicker.Enabled = false;
+                    rendererPicker.Selection = RendererModes.Normal(settings.Get(RendererModes.Key, RendererModes.Revamped));
                     return;
                 }
                 settings.Set(RendererModes.Key, rendererPicker.Selection);

@@ -24,7 +24,12 @@ they settle back to neutral when animation stops. This affects the avatar
 only: the HMD stays at its independently tracked viewpoint and both wrists
 are still solved to their motion controllers after the body adjusts.
 
-The menu path is **Settings > SPIDY VR > BODY > BODY ANIMATIONS**:
+The menu path is **Settings > SPIDY VR > BODY > BODY ANIMATIONS**.
+
+**Renderer requirement for this preview:** select **Revamped** in the
+HERO VR launcher. The package deliberately preserves the official 0.0.79
+**Original** renderer unchanged as a fallback; that Original DLL predates
+this body feature and does not implement the new body setting.
 
 - **CLASSIC** (default): the existing 0.0.79 solver.
 - **DYNAMIC**: preserve actively moving game leg poses **and** a capped,
@@ -69,8 +74,10 @@ animation without handing camera and arms back to the game.
   airborne hip/torso-sway regressions comparing CLASSIC and DYNAMIC,
   including fixed head and independently controller-driven wrist positions,
   and an idle-sway fallback.
-- This branch enables the **test-build** notice (0.0.79.1 TEST 1) rather than
-  claiming to be a new public version or modifying the existing release.
+- This branch uses a separately named **0.0.79.1 Dynamic Body TEST** ZIP.
+  The old in-game test notice is **disabled** because its hardcoded fallback
+  instructs players to revert to 0.0.73; the correct baseline for this
+  experiment is the public **0.0.79** release.
 - The branch has an isolated Windows Actions workflow
   `.github/workflows/dynamic-body-0791.yml`. On a passing build it attaches a
   test mod ZIP to that workflow run as an **Actions artifact**, never to the

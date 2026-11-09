@@ -669,14 +669,29 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
     //   direction. The body stays world-upright under its fixed headset.
     // A wall normal is not the head's up! Rotating the view with it is wrong.
     const Vec3 rawNormal = normalized(t.wallNormal);
+    const bool wallSurface = finite(rawNormal) && length(rawNormal) > .5f &&
+                             std::isfinite(t.wallDistance) && t.wallDistance >= 0.f;
     const Vec3 rawTravel = t.wallTravel - rawNormal * dot(t.wallTravel, rawNormal);
     const Vec3 travel = normalized(rawTravel);
-    const bool wallFrame = finite(rawNormal) && length(rawNormal) > .5f &&
-                           finite(travel) && length(travel) > .5f &&
-                           std::isfinite(t.wallDistance) && t.wallDistance >= 0.f;
+    const bool movingTangent = finite(travel) && length(travel) > .5f;
+    // Clinging to a wall is valid even at ZERO velocity. A stopped player
+    // has no reliable travel direction, so use gravity projected along the
+    // wall as the procedural crawl's "up" axis. For ceilings or unusual
+    // geometry where gravity projects to zero, choose a stable tangent from
+    // the facing direction, then a model axis.
+    Vec3 climb = up - rawNormal * dot(up, rawNormal);
+    if (length(climb) < .1f)
+        climb = F - rawNormal * dot(F, rawNormal);
+    if (length(climb) < .1f) {
+        const Vec3 basis = std::abs(rawNormal.x) < .8f ? Vec3{1, 0, 0} : Vec3{0, 0, 1};
+        climb = basis - rawNormal * dot(basis, rawNormal);
+    }
+    const Vec3 wallDirection = movingTangent ? travel : normalized(climb);
     const bool wallRun = c.dynamicLegs && t.wallStride && !t.kneel &&
-                         std::isfinite(t.wallSpeed) && t.wallSpeed > 1.5f && wallFrame;
-    const bool wallCling = c.dynamicLegs && t.wallCling && !t.kneel && wallFrame;
+                         std::isfinite(t.wallSpeed) && t.wallSpeed > 1.5f &&
+                         wallSurface && movingTangent;
+    const bool wallCling = c.dynamicLegs && t.wallCling && !t.kneel &&
+                           wallSurface && length(wallDirection) > .5f;
     state.wallStrideWeight = c.dynamicLegs
                                  ? approach(state.wallStrideWeight, wallRun ? 1.f : 0.f,
                                             c.wallStrideBlendSpeed * dt)
@@ -687,7 +702,7 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
                                 : 0.f;
     if (wallRun || wallCling) {
         state.lastWallNormal = rawNormal;
-        state.lastWallTravel = travel;
+        state.lastWallTravel = wallDirection;
         state.lastWallDistance = t.wallDistance;
     }
     if (wallCling && t.wallSpeed > .12f) {
@@ -697,7 +712,7 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
     r.wallCling = state.wallClingWeight;
     if (wallRun) {
         state.lastWallNormal = rawNormal;
-        state.lastWallTravel = travel;
+        state.lastWallTravel = wallDirection;
         state.lastWallDistance = t.wallDistance;
         // Distance-driven stride. The same cadence works upward and sideways,
         // but the foot targets follow the appropriate tangent.

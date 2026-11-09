@@ -137,7 +137,7 @@ namespace Sm2VrLauncher
             }
             using (var label = new SolidBrush(Theme.Sub))
             using (var format = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center })
-                g.DrawString("RENDER", Theme.UiBold(10f), label, new RectangleF(11, 0, originalButton.Left - 14, Height), format);
+                g.DrawString("PRIVATE TEST\nRENDER", Theme.UiBold(9f), label, new RectangleF(11, 0, originalButton.Left - 14, Height), format);
             DrawChoice(g, originalButton, "ORIGINAL", selected == RendererModes.Original, hoverOriginal);
             DrawChoice(g, revampedButton, "REVAMPED", selected == RendererModes.Revamped, hoverRevamped);
         }

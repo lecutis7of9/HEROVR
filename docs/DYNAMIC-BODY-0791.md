@@ -26,10 +26,12 @@ are still solved to their motion controllers after the body adjusts.
 
 **Following the November 9 headset recordings:** HEROVR's own wall movement
 sometimes leaves the Spider-Man 2 actor in an AIR state with tucked knees.
-DYNAMIC now synthesizes a short alternating leg stride driven by the real
-tangential wall-running speed, but only while moving on a HEROVR-owned wall.
-Stopped wall poses retain the existing fallback. This is a procedural
-footstep gait, not a newly discovered native Spider-Man running clip.
+DYNAMIC distinguishes three wall states: **the game's native wall crawl**
+(preserve the game's authored knee/ankle animation), **a HEROVR-owned slow
+wall crawl or stationary cling** (procedural splayed legs with feet against
+the surface), and **a fast HEROVR-owned wall run** (alternating gait with
+feet/soles facing the wall, toes following actual sideways or upward velocity).
+These are pose fallbacks, not recovered native Spider-Man run clips.
 
 **Acrobatic flips:** the game tracking rig already turns Spider-Man through a
 flip, but a rigid body rotating as one piece is not an acrobatic animation.
@@ -39,7 +41,9 @@ FlipMotion flag (not wall-body tilt or flight lean), works for ordinary
 airborne jumps as well as swings, and never changes the headset view or
 controller positions.
 
-The menu path is **Settings > SPIDY VR > BODY > BODY ANIMATIONS**.
+The user-facing toggle is in **HEROVR wrist hologram → VR SETTINGS →
+BODY AND VIEW → BODY ANIMATIONS**. It switches CLASSIC/DYNAMIC live; the
+older SM1 game-settings tab is not the user's control surface.
 
 **Renderer requirement for this preview:** select **Revamped** in the
 HERO VR launcher. The package deliberately preserves the official 0.0.79
@@ -49,13 +53,14 @@ this body feature and does not implement the new body setting.
 - **CLASSIC** (default): the existing 0.0.79 solver.
 - **DYNAMIC**: preserve actively moving game leg poses **and** a capped,
   smoothly animated hip/torso sway from Spider-Man's original animations.
-  Keep planted feet in stationary or static-crawl wall states, where the
-  game's pose is not moving. Add wall-speed-driven running legs if HEROVR
-  controls wall movement but the game supplies static AIR legs; add a
-  spine-and-knee tuck during actual FlipMotion turns.
+  Leave the game's native wall-crawl animation on its legs when available.
+  For HEROVR's own wall, keep a spider-like crouch when stationary, move the
+  feet on a wall when slow crawling, or use a travel-direction-based running
+  gait sideways or straight up. Add a spine-and-knee tuck during actual
+  FlipMotion turns.
 
-The setting is persisted as `leg_animations=0/1` alongside the other tab-only
-options; the native pose solver is updated when the menu setting changes, without
+The setting is persisted as `leg_animations=0/1` in the existing compatibility
+INI; the native pose solver is updated from the **HEROVR wrist hologram** live, without
 a camera/headset or arm-controller mode change. The 0.0.79 native command
 structure and status wire layout remain unchanged.
 
@@ -71,19 +76,28 @@ VR-driven head or arms.
 1. Launch a private Windows test build, load normal Spider-Man free roam and
    choose CLASSIC. Look down while stationary on the ground and wall, walking,
    wall-running, swinging, and vaulting. This is the baseline.
-2. Switch to DYNAMIC in the BODY menu, without restarting. Repeat the same
+2. Switch to DYNAMIC on the wrist holo's VR SETTINGS / BODY AND VIEW section,
+   without restarting. Repeat the same
    movements, looking down to inspect thigh, knee and foot movement.
 3. Check that both hands still aim and web independently, the headset does not
    bob, spin or follow canned head animations, and the legs do not snap when
    you stop or resume moving.
-4. While airborne, use FLIPS and REALISTIC FLIPS if enabled. Watch for a
+4. While airborne, use the **right stick** for FLIPS (the left stick stays
+   movement) and REALISTIC FLIPS if enabled. Watch for a
    clear knee tuck and torso curl midway through the turn, then a smooth
    extension at the end. The headset and hands should continue tracking.
-5. Repeat a stationary wall cling/ceiling and a low-ceiling kneel: the fallback
-   should still plant the legs, not impose a static splayed crawl pose.
+5. Test the game's **native crawl** (native legs should retain their pose),
+   HEROVR's **stationary own-wall cling** (bent splayed legs and soles against
+   the wall), HEROVR's **slow crawl**, and **fast sideways and vertical runs**
+   separately. Ceiling/duct kneel must not trigger an inappropriate wall gait.
 6. Switch back to CLASSIC, repeat the stationary wall pose and confirm that the
    older behavior returns immediately.
-7. If the legs still look static, capture the pre-solve game pose (the existing
+7. On the ground, hold the **left stick forward** and pump both tracked,
+   empty hands in a real alternating running motion to request the game's
+   RT Sprint/Parkour input (not L3, which is Dive). Let go or stop pumping to
+   disengage. While airborne in the Sandman fight, press **Y** to request
+   the game's native web-strike / web-zip to a target.
+8. If the legs still look static, capture the pre-solve game pose (the existing
    `SpidyBodyCapture` / `SpidyBodyPoses.game` diagnostic) during the movement
    in question. A static game pose is the blocker, not a missing IK setting.
 
@@ -106,3 +120,15 @@ VR-driven head or arms.
   configured CI workflow **does not prove** the game was tested in-headset.
 - Run a private test build in a separate folder; do not overwrite or publish
   the known-good 0.0.79 launcher/mod folder.
+
+## Sandman release blocker
+
+The user's headset recording showed Sandman dust/clouds rotating with the
+head. **This renderer/particles regression is NOT fixed or validated by
+these body and input changes.** Native stereo's active-view camera feeds
+frame-wide shader and effects state; changing it blindly risks broad
+rendering regressions. Before any release, reproduce the same scene with
+CLASSIC and DYNAMIC on Revamped and with the unchanged Original renderer,
+then identify and correct the exact camera-space VFX path. A passing CI
+build is not proof that the scripted Sandman web strike is accepted or
+that cloud transforms stay world-locked. **Keep the PR draft.**

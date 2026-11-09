@@ -7929,9 +7929,20 @@ DWORD WINAPI run(void*) {
                             frame.hands[1].squeeze > .6f || frame.hands[0].trigger > .6f ||
                             frame.hands[1].trigger > .6f ||
                             std::hypot(frame.hands[1].stickX, frame.hands[1].stickY) > .5f;
+                        // In Peter's combat a click of both thumbsticks activates
+                        // the game's own Symbiote Surge (if charged/unlocked).
+                        // Elsewhere this chord still toggles the VR Pad Layer.
+                        const bool nativeSurge = game_pad::symbioteSurgeChord(
+                            mapping == game_pad::Mapping::gameplay && playing,
+                            heroNow() == hero_modes::spiderMan,
+                            moverTable == config.base + bridge::combatCamera,
+                            padLayer.latched(), calibrationInput,
+                            phone.open() || gadgetWheel.open() || seatedLock,
+                            frame.hands[0].stickClick, frame.hands[1].stickClick);
                         bool layerOn =
                             padLayer.update(frame.seconds, playing && !calibrationInput,
-                                            frame.hands[0].stickClick, frame.hands[1].stickClick, layerBusy);
+                                            nativeSurge ? false : frame.hands[0].stickClick,
+                                            nativeSurge ? false : frame.hands[1].stickClick, layerBusy);
                         // Update 38.5 PAD MODE (the holo's button) and PROMPT HANDLING AUTO: never in a
                         // fight (the combat camera), never while a web carries you; AUTO needs the
                         // game's prompts hooked (prompts::hooked, 9699 in SM2 so far).
@@ -12457,6 +12468,10 @@ DWORD WINAPI run(void*) {
                                 game_prompts::note(line);
                             }
                         }
+                        // Native Symbiote Surge: send both click bits together.
+                        // The game itself checks story unlock and charge.
+                        if (nativeSurge && mapping == game_pad::Mapping::gameplay)
+                            pad.buttons |= game_pad::leftThumb | game_pad::rightThumb;
                         // HERO VR 0.0.77 SWITCH HERO (story077::SwapMacro): the game's own switch, pressed in order -
                         // its FNSM app opened (story_swap's way), X held, then the hero probe watched; no new hero
                         // within 3 s closes the app with B. While it runs its presses are the pad's only ones.

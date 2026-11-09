@@ -8,6 +8,7 @@ on:
       - experiment/078-own-taa-70-color-fix
       - experiment/078-temporal-upscale
       - experiment/078-temporal-detail-stability
+      - experiment/078-revamped-clarity
 
 jobs:
   build-windows:

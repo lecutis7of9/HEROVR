@@ -562,8 +562,11 @@ int main() {
         t.airborne = true; // HEROVR owns a wall, but game animation is AIR.
         t.wallCling = true;
         t.wallSpeed = 0;
+        // Side of a building, not a ceiling: own-wall contact is horizontal,
+        // while the body still stands with gravity.
+        t.up = {0, 1, 0};
         t.wallNormal = {0, 0, 1};
-        t.wallTravel = {0, 1, 0};
+        t.wallTravel = {}; // stopped: no travel vector to sample
         t.wallDistance = .35f;
         t.eyes = {0, 1.7f, .08f};
         t.facing = Quat::yaw(3.14159265f);
@@ -579,7 +582,10 @@ int main() {
                 auto poseData = rest;
                 body::Pose p(poseData.data(), 237);
                 auto tg = t;
-                if (moving) tg.wallSpeed = 1.1f; // below wall-run threshold
+                if (moving) {
+                    tg.wallSpeed = 1.1f; // below wall-run threshold
+                    tg.wallTravel = {0, 1, 0};
+                }
                 sample.result = body::solve(p, rig, tg, config, state, true, 1.f/90.f);
                 if (i == 26) sample.atRest = poseData;
                 if (i == 61) sample.later = std::move(poseData);
@@ -591,12 +597,22 @@ int main() {
         auto crawl = run(true, true);
         check(classic.result.wallCling == 0 && cling.result.wallCling > .9f &&
                   crawl.result.wallCling > .9f,
-              "only Dynamic can pose an owned-wall crouch/crawl");
-        for (const auto& leg : rig.legs) {
+              "stationary owned-wall cling must not require movement direction");
+        body::Pose clingPose(const_cast<float*>(cling.later.data()), 237);
+        for (int side = 0; side < 2; ++side) {
+            const auto& leg = rig.legs[side];
             check(length(at(cling.later, leg.foot) - at(classic.later, leg.foot)) > .04f,
                   "clinging on a wall still uses an airborne straight leg");
             check(length(at(crawl.later, leg.foot) - at(crawl.atRest, leg.foot)) > .035f,
                   "slow wall crawl did not animate the climbing foot");
+            const Vec3 ankle = at(cling.later, leg.foot);
+            const Vec3 hip = at(cling.later, leg.upper);
+            const Vec3 tangent = (ankle - hip) - t.wallNormal * dot(ankle - hip, t.wallNormal);
+            check(length(tangent) > .16f,
+                  "side-building cling leg must bend and spread along wall, not point straight into it");
+            check(dot(normalized(clingPose.direction(leg.foot, rig.footUp[side])),
+                      t.wallNormal) > .65f,
+                  "side-building cling sole must face the wall");
         }
         check(length(at(cling.later, rig.head) - at(classic.later, rig.head)) < .001f,
               "wall cling changed the headset anchor");

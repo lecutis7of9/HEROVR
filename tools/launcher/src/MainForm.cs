@@ -50,6 +50,7 @@ namespace Sm2VrLauncher
         TextLabel stateTitle, stateSub, optionsSummary;
         StatusRow step1, step2, step3;
         AccentButton btnPlay, btnFlat, btnStop, btnChangeOptions;
+        RendererModePicker rendererPicker; // Private Revamped preview: visible on startup in both launcher designs
         StatusRow rowGame, rowGameVer, rowVr, rowBuild;
         LogBox sessionLog;
         AccentButton btnSendStats;
@@ -121,6 +122,9 @@ namespace Sm2VrLauncher
                 ShowPage(tabs.Selected);
                 BuildGamePicker();
             }
+            // Outside classicChrome: the mode switch must be visible from the
+            // FIRST launcher screen in either design, not buried in Options.
+            BuildRendererModePicker();
             poll.Tick += (s, e) => { if (!preview) RefreshLive(); };
             sessionLog.FilePath = LogFile("session");
             buildLog.FilePath = LogFile("build-update");
@@ -268,6 +272,48 @@ namespace Sm2VrLauncher
                 Controls.Add(pages[i]);
                 pages[i].BringToFront();
             }
+        }
+
+        void BuildRendererModePicker()
+        {
+            rendererPicker = new RendererModePicker
+            {
+                Selection = RendererModes.Normal(settings.Get(RendererModes.Key, RendererModes.Original))
+            };
+            Controls.Add(rendererPicker);
+            PositionRendererModePicker();
+            rendererPicker.BringToFront();
+            rendererPicker.Changed += (sender, args) =>
+            {
+                if (job != Job.None)
+                {
+                    rendererPicker.Enabled = false;
+                    return;
+                }
+                settings.Set(RendererModes.Key, rendererPicker.Selection);
+                settings.Save();
+                if (sessionLog != null)
+                    sessionLog.Line("RENDERER: " + rendererPicker.Selection.ToUpperInvariant() +
+                        " selected. The DLL changes safely before the next PLAY VR.", Theme.Info);
+            };
+            tip.SetToolTip(rendererPicker,
+                "ORIGINAL: public HERO VR 0.0.78 rendering. REVAMPED: tested 70% temporal reconstruction (~59 FPS walking, ~52 FPS swinging on the developer system). " +
+                "Changes apply when the next VR session begins. Private preview; no public release is installed.");
+        }
+
+        void PositionRendererModePicker()
+        {
+            if (rendererPicker == null) return;
+            if (hero)
+            {
+                float k = content.Height / 720f;
+                rendererPicker.Bounds = new Rectangle(
+                    content.X + (int)Math.Round(365 * k),
+                    content.Y + (int)Math.Round(45 * k),
+                    Math.Max(270, (int)Math.Round(365 * k)),
+                    Math.Max(36, (int)Math.Round(52 * k)));
+            }
+            else rendererPicker.Bounds = Theme.R(438, 18, 372, 48);
         }
 
         void BuildBar()
@@ -734,6 +780,20 @@ namespace Sm2VrLauncher
 
         void LaunchVr(List<string> extra)
         {
+            // Switch the staged original/Revamped DLL while Spider-Man 2 is
+            // closed. Never hot-swap a DLL in an already-running game.
+            if (rendererPicker != null && !Sm1Selected)
+            {
+                string rendererInfo;
+                if (!RendererModes.Apply(root, rendererPicker.Selection, out rendererInfo))
+                {
+                    MessageBox.Show(this, rendererInfo, "HERO VR - renderer selection",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    sessionLog.Line("RENDERER NOT CHANGED: " + rendererInfo, Theme.Bad);
+                    return;
+                }
+                sessionLog.Line(rendererInfo, Theme.Good);
+            }
             var args = LaunchOptions.Arguments(OptValue, scriptParams);
             args.AddRange(extra);
             string more = settings.Get("ExtraArgs", "").Trim();

@@ -123,12 +123,34 @@ VR-driven head or arms.
 
 ## Sandman release blocker
 
-The user's headset recording showed Sandman dust/clouds rotating with the
-head. **This renderer/particles regression is NOT fixed or validated by
-these body and input changes.** Native stereo's active-view camera feeds
-frame-wide shader and effects state; changing it blindly risks broad
-rendering regressions. Before any release, reproduce the same scene with
-CLASSIC and DYNAMIC on Revamped and with the unchanged Original renderer,
-then identify and correct the exact camera-space VFX path. A passing CI
-build is not proof that the scripted Sandman web strike is accepted or
-that cloud transforms stay world-locked. **Keep the PR draft.**
+**Confirmed from the user's in-headset observation (November 9):** The defect
+occurs in the **free-roam Sandman sand-cloud encounters where crystals are
+collected**. The **entire cloud shape** appears to rotate as a single rigid
+object when the player turns their head, like one flat cutout facing the viewer.
+Its position remains fixed in the world: it does **not** travel with the HMD,
+and it does **not** follow the player when looking away. Other objects/effects
+do not exhibit this problem.
+
+**Working hypothesis, not yet proven:** a view-facing *whole-effect billboard*
+or cloud quad/mesh is receiving camera-orientation data from the stereo active
+view. This is more specific than individual dust sprites turning independently
+and does not imply a bad camera position. In `src/stereo_probe.cpp`,
+`activeView()` replaces the stock active-view descriptor with the tracked
+head pose (around lines 2518–2629); `placeEyes` also updates the world-facing
+view later in the frame (around lines 3120–3171). Active-view globals are a
+possible influence, but no cloud-specific draw pass, material, or orientation
+write has been located. Do not blindly change the camera, culling, global
+shader constants, all billboards, or world transforms.
+
+**Required next investigation:** reproduce the crystal cloud in the same
+location while turning the HMD in place; compare Revamped CLASSIC and DYNAMIC,
+then Original versus Revamped using isolated installations. If possible,
+capture the affected cloud in headset and desktop simultaneously. Identify
+the **specific effect instance/material/draw call and its whole-cloud facing
+transform** before designing a narrowly gated correction, with fallback and
+regression checks for other effects and scenes.
+
+The renderer/particle regression is **NOT** fixed or validated by these body
+and input changes. Passing Windows CI does not prove that scripted Sandman
+web-strike input works or that this cloud stays correctly oriented in VR.
+**Keep PR draft and do not publish until headset verification.**

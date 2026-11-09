@@ -51,6 +51,10 @@ enum Flags : uint32_t {
     // Standing so, the view holds the head below the player's own under a
     // roof (a vent, a duct): the legs kneel (body::Targets::kneel).
     kneel = 64,
+    // 79.1: the VR swing owns a wall and is moving along it. The game can
+    // keep AIR legs in that state; Dynamic Body creates a running stride.
+    // Only meaningful with bodyOn and the user's DYNAMIC menu option.
+    wallStride = 128,
 };
 // 0.0.72 GAME BODY spec point 3: a command expires 250 ms after it came (a longer lease, up to the
 // 500 SpidyBodySubmit accepts from older probes, is cut to 250), so a stalled game thread never
@@ -60,6 +64,8 @@ constexpr uint32_t leaseOf(uint32_t ms) { return ms < maxLeaseMs ? ms : maxLease
 struct Command {
     uint32_t magic = 0x53424443, version = 4, bytes = sizeof(Command), flags{};
     uint64_t serial{};
+    // 79.1: reserved carries wall speed in cm/s only with wallStride.
+    // No Command version/size change, so the older probes remain compatible.
     uint32_t leaseMs = 250, reserved{};
     Vec3 eyes{};   // between the eyes, relative to the feet
     Quat facing{}; // the headset, world axes (OpenXR: -z where it looks)

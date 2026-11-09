@@ -55,6 +55,9 @@ enum Flags : uint32_t {
     // keep AIR legs in that state; Dynamic Body creates a running stride.
     // Only meaningful with bodyOn and the user's DYNAMIC menu option.
     wallStride = 128,
+    // 79.1: active user-driven FlipMotion rotation (not wall-body/flight
+    // tilt), so the animated body may curl without moving tracked camera.
+    flipPose = 256,
 };
 // 0.0.72 GAME BODY spec point 3: a command expires 250 ms after it came (a longer lease, up to the
 // 500 SpidyBodySubmit accepts from older probes, is cut to 250), so a stalled game thread never

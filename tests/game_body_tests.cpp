@@ -18,6 +18,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 using namespace spidy;
 namespace gb = spidy::game_body;

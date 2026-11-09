@@ -318,6 +318,8 @@ struct State {
     bool previousSwayPoseSet{};
     float swayMotionLeft{}, swayWeight{};
     float wallStridePhase{}, wallStrideWeight{};
+    Vec3 lastWallNormal{}, lastWallTravel{};
+    float lastWallDistance{};
     float flipTuckWeight{};
 };
 // Turns the body's yaw by `radians` about the up, at once: the player snap

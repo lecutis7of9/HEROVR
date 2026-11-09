@@ -14842,7 +14842,7 @@ int main() {
         // settings ingame into nice sections"), each with a setting in the tab.
         const std::pair<size_t, const char*> sections[] = {{0, "WEBS"},     {5, "SWINGING"}, {8, "COMFORT"},
                                                            {11, "HAPTICS"}, {18, "DISPLAY"}, {26, "BODY"},
-                                                           {28, "EXPERIMENTAL"}};
+                                                           {29, "EXPERIMENTAL"}};
         check(headings == std::size(sections),
               "the sections: webs, swinging, comfort, haptics, display, body, experimental");
         for (const auto& [at, title] : sections) {
@@ -14852,21 +14852,25 @@ int main() {
                 ++next;
             check(next < all.size() && all[next].item != Item::none, "a section with no setting in the tab");
         }
-        check(all[29].item == Item::flips && all[29].choices.empty() && std::strcmp(all[28].title, "EXPERIMENTAL") == 0,
+        check(all[28].item == Item::legAnimations && std::strcmp(all[28].title, "BODY ANIMATIONS") == 0 &&
+                  all[28].choices.size() == 2 && std::strcmp(all[28].choices[0], "CLASSIC") == 0 &&
+                  std::strcmp(all[28].choices[1], "DYNAMIC") == 0,
+              "the Dynamic Body setting under BODY, Classic by default");
+        check(all[30].item == Item::flips && all[30].choices.empty() && std::strcmp(all[29].title, "EXPERIMENTAL") == 0,
               "the flips: a switch under EXPERIMENTAL");
-        check(all[30].item == Item::flipSpeed && all[30].choices.size() == std::size(flipSpeeds),
+        check(all[31].item == Item::flipSpeed && all[31].choices.size() == std::size(flipSpeeds),
               "the flip speed under the flips");
-        check(all[31].item == Item::handClimb && all[31].choices.empty() && all[32].item == Item::wallDistance &&
-                  all[32].choices.size() == std::size(wallDistances),
+        check(all[32].item == Item::handClimb && all[32].choices.empty() && all[33].item == Item::wallDistance &&
+                  all[33].choices.size() == std::size(wallDistances),
               "hand wall climbing, a switch, and its camera distance under the flips");
         const Item realistic[] = {Item::realisticFlips,        Item::automaticStrength,    Item::automaticSpeed,
                                   Item::automaticMinimumSpeed, Item::automaticReleaseFlip, Item::automaticResponse,
                                   Item::automaticHandStrength, Item::automaticFalloff,     Item::automaticHandThreshold,
                                   Item::automaticAirBrake};
-        check(all.size() == 33 + std::size(realistic), "the realistic flips' rows are not the last");
+        check(all.size() == 34 + std::size(realistic), "the realistic flips' rows are not the last");
         for (size_t i = 0; i < std::size(realistic); ++i)
-            check(all[33 + i].item == realistic[i], "the realistic flips' rows out of order");
-        check(std::strcmp(all[33].title, "REALISTIC FLIPS") == 0 && all[33].choices.empty(),
+            check(all[34 + i].item == realistic[i], "the realistic flips' rows out of order");
+        check(std::strcmp(all[34].title, "REALISTIC FLIPS") == 0 && all[34].choices.empty(),
               "realistic flips: a switch, first of its rows");
         // The wall view has no row of its own any more: it turned only while
         // Spidy held the player on a wall, so it was never a choice of its own
@@ -15002,7 +15006,7 @@ int main() {
     test("VR settings only the tab offers: kept as key=value lines, read back sanitized, the rest left", [] {
         using namespace vr_settings;
         const Values defaults;
-        check(tabOnlyText(defaults) == "near_clip_mm=20\nhand_climb=0\nwall_distance_cm=40\nrealistic_flips=0\n"
+        check(tabOnlyText(defaults) == "near_clip_mm=20\nhand_climb=0\nleg_animations=0\nwall_distance_cm=40\nrealistic_flips=0\n"
                                        "rotation_strength=50\nrotation_speed=240\nflight_speed_min=3\n"
                                        "swing_momentum=1\nrotation_response_ms=500\nhand_momentum=100\n"
                                        "angular_drag_ms=3000\nhand_speed_min_cm=100\nair_rotation_brake=1\n"
@@ -31752,7 +31756,11 @@ int main() {
         check(tn::text == "You are on the latest test version, please be aware that some features do not work or are unfinished, "
                           "revert to 0.0.73 if unplayable and report issues in my discord server linked on the launcher",
               "the user's text word for word (test 10: 0.0.73 to go back to, not 0.0.63)");
-        check(!tn::testBuild, "the public 0.0.75 release builds with HERO_TEST_BUILD OFF (no test notice)");
+        #ifdef SPIDY_TEST_BUILD
+        check(tn::testBuild, "the private Dynamic Body preview enables the test notice");
+#else
+        check(!tn::testBuild, "public releases build with HERO_TEST_BUILD OFF (no test notice)");
+#endif
         for (char c : tn::text)
             check(c == ' ' || drawable(c), std::string("the font draws '") + c + "'");
         const auto ls = tn::lines(tn::text, tn::textHeight, tn::width - 2 * tn::margin);

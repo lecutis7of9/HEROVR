@@ -47,6 +47,17 @@ static_assert(prompt_buttons::padDpadUp == dpadUp && prompt_buttons::padDpadDown
               prompt_buttons::padRightShoulder == rightShoulder &&
               prompt_buttons::padA == a && prompt_buttons::padB == b && prompt_buttons::padX == x &&
               prompt_buttons::padY == y);
+// During Peter's combat, a simultaneous short L3+R3 click belongs to the
+// game's Symbiote Surge. Outside combat the exact same VR chord retains its
+// existing Pad Layer toggle (and a long chord still pauses).
+// Do not attempt to infer the symbiote meter: the game itself determines
+// whether Surge is unlocked and charged.
+inline bool symbioteSurgeChord(bool gameplay, bool peter, bool combat,
+                              bool padLayer, bool calibration, bool screenBusy,
+                              bool leftClick, bool rightClick) {
+    return gameplay && peter && combat && !padLayer && !calibration &&
+           !screenBusy && leftClick && rightClick;
+}
 enum class Mapping {
     none,
     // VR gameplay: the controllers swing, walk and jump. The menu button

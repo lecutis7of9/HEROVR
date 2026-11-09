@@ -465,6 +465,11 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
                                  {pose.direction(legs[1].foot, {1, 0, 0}), pose.direction(legs[1].foot, {0, 1, 0})}};
     const Vec3 hips = pose.position(rig.pelvis) * s;
     const Vec3 hipsForward = level(pose.direction(rig.pelvis, rig.pelvisForward));
+    // Capture upper-body animation BEFORE headset IK overwrites the game pose.
+    // These are model-space directions; the joint's rig and actor already
+    // provide position, so no synthetic camera motion is introduced.
+    const Vec3 gameHipUp = normalized(pose.direction(rig.pelvis, rig.pelvisUp));
+    const Vec3 gameTorso = normalized(pose.position(rig.head) - pose.position(rig.pelvis));
     // Feet stand on the ground only while the hero itself stands upright -
     // or on the player's own floor, planted, whichever way the hero is turned.
     const float lowest = std::min(dot(feet[0], up), dot(feet[1], up));
@@ -502,6 +507,35 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
                                    ? approach(state.legAnimationWeight, legTarget, c.legBlendSpeed * dt)
                                    : 0.f;
     r.legAnimation = state.legAnimationWeight;
+    // When the original game animates its hip or torso, allow a limited,
+    // smooth sway inside the headset-anchored body. Stationary wall crawl,
+    // idle poses and a roof kneel remain Classic. Source motion, not HMD
+    // movement, gates this animation.
+    const bool watchSway = c.dynamicLegs && !t.kneel &&
+                           finite(gameHipUp) && finite(gameTorso) &&
+                           length(gameHipUp) > .5f && length(gameTorso) > .5f;
+    if (watchSway) {
+        float motion = 0.f;
+        if (state.previousSwayPoseSet)
+            motion = std::max(length(gameHipUp - state.previousGameHipUp),
+                              length(gameTorso - state.previousGameTorso));
+        state.previousGameHipUp = gameHipUp;
+        state.previousGameTorso = gameTorso;
+        state.previousSwayPoseSet = true;
+        if (motion > c.swayMotionThreshold)
+            state.swayMotionLeft = c.swayMotionHold;
+        else
+            state.swayMotionLeft = std::max(0.f, state.swayMotionLeft - dt);
+    } else {
+        state.previousSwayPoseSet = false;
+        state.swayMotionLeft = 0.f;
+    }
+    state.swayWeight = c.dynamicLegs
+                           ? approach(state.swayWeight,
+                                      watchSway && state.swayMotionLeft > 0.f ? 1.f : 0.f,
+                                      c.swayBlendSpeed * dt)
+                           : 0.f;
+    r.bodySway = state.swayWeight;
     // The body is everything under its root; the rig's other roots (effects,
     // IK targets, camera targets) keep the game's pose.
     const auto& bodyJoints = rig.below[static_cast<size_t>(rig.pelvis)];
@@ -528,16 +562,39 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
     r.yaw = state.yaw;
     const Vec3 forward = reference * std::cos(state.yaw) + quarter * std::sin(state.yaw);
     const Vec3 left = cross(up, forward);
-    // 1. The hips upright, facing the body's way; everything turns with them.
+    // Carry the original body's pitch and roll into the player-aligned frame
+    // without carrying the game's heading (the player still decides which
+    // way their body faces). Clip even extreme flip/crawl animations to small,
+    // comfortable body-only lean angles.
+    const float gameYaw = length(hipsForward) > .2f ? yawOf(hipsForward) : state.yaw;
+    const Quat aligned = axisAngle(up, wrap(state.yaw - gameYaw));
+    const auto limitedSway = [&](Vec3 gameDirection, float maxRadians) {
+        const Vec3 d = normalized(aligned.rotate(gameDirection));
+        const Vec3 flat = level(d);
+        const float side = length(flat);
+        if (!finite(d) || side < 1e-5f)
+            return Vec3{};
+        const float degrees = std::atan2(side, std::max(0.f, dot(d, up)));
+        return flat * (std::sin(std::min(maxRadians, degrees)) / side);
+    };
+    const Vec3 targetHipSway = state.swayWeight * limitedSway(gameHipUp, c.maxHipSway);
+    const Vec3 targetTorsoSway = state.swayWeight * limitedSway(gameTorso, c.maxTorsoSway);
+    const float swayStep = std::min(1.f, c.swayBlendSpeed * dt);
+    state.gameHipSway += (targetHipSway - state.gameHipSway) * swayStep;
+    state.gameTorsoSway += (targetTorsoSway - state.gameTorsoSway) * swayStep;
+    // 1. The hips keep a little of the original roll/lean while facing the
+    // player; no camera rotation, since the head remains solved separately.
+    const Vec3 hipUp = normalized(up + state.gameHipSway);
     pose.turn(bodyJoints,
               partial(between(pose.direction(rig.pelvis, rig.pelvisForward), pose.direction(rig.pelvis, rig.pelvisUp),
-                              forward, up),
+                              forward, hipUp),
                       w),
               pose.position(rig.pelvis));
-    // 2. The spine bends toward the torso's lean: some of the head's pitch.
+    // 2. The spine follows the game's animated torso inclination *under*
+    // the fixed VR head. The headset pitch still contributes its old lean.
     const float lean =
         std::clamp(-std::asin(std::clamp(dot(F, up), -1.f, 1.f)) * c.lean, -c.maxLean, c.maxLean);
-    const Vec3 torso = up * std::cos(lean) + forward * std::sin(lean);
+    const Vec3 torso = normalized(up * std::cos(lean) + forward * std::sin(lean) + state.gameTorsoSway);
     const Quat bend = between(pose.position(rig.head) - pose.position(rig.pelvis), torso);
     const float spineShare = w / static_cast<float>(rig.spine.size());
     for (const auto j : rig.spine)

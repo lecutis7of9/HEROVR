@@ -2960,7 +2960,10 @@ float4 sampleCurrent(float2 uv) {
     const float4 base = current.SampleLevel(bilinear, uv, 0);
     const float3 difference = abs(reconstructed - base.rgb);
     const float disagreement = max(difference.r, max(difference.g, difference.b));
-    const float antiRing = 0.45 * saturate((disagreement - 0.025) * 6.0);
+    // Revamped clarity: the 45% bilinear safety blend was softening branches
+    // and middle-distance facades. Keep a small safety blend at pronounced
+    // overshoot only; otherwise preserve the sharper Catmull-Rom reconstruction.
+    const float antiRing = 0.18 * saturate((disagreement - 0.035) * 6.0);
     return float4(lerp(reconstructed, base.rgb, antiRing), base.a);
 }
 #endif
@@ -3340,7 +3343,17 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
         }
     }
 #endif
-    const float keep = saturate(extra.x);
+    float keep = saturate(extra.x);
+#ifdef TAA_UPSCALE
+    // Revamped clarity: avoid carrying a visibly different old image over
+    // moving branches, nearby objects or disocclusions. Only react when the
+    // global eye view is moving; the still image retains full reconstruction
+    // history for distant windows. Mild bound avoids hard on/off flicker.
+    const float motionShare = saturate((0.92 - keep) / 0.44);
+    const float lumaMismatch = abs(middle.x - before.x);
+    const float reactivity = motionShare * saturate((lumaMismatch - 0.06) * 4.0);
+    keep *= (1.0 - 0.30 * reactivity);
+#endif
     const float a = (1 - keep) / (1 + middle.x), b = keep / (1 + before.x);
     const float3 mixed = (middle * a + before * b) / max(a + b, 1e-6);
 #ifdef TAA_AGE
@@ -4324,12 +4337,17 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
             keep = vr_aa::keep(both, turn, travel);
         if (ours) // 0.0.76 TAA STILL (live.txt vr_taa_still): the still share only, unset the build's own
             keep = taa_still::withStill(keep, stillMilli);
-        // In the native 70% temporal-upscale experiment, preserve a little
-        // more full-size per-eye history only when the view is nearly still.
-        // The extra history vanishes continuously as head motion/travel rises;
-        // camera cuts and missing reprojection still force keep = 0.
-        if (ours && history.upscale && both && keep > 0.f)
-            keep = std::min(0.99f, keep + 0.035f * (1.f - vr_aa::motion(turn, travel)));
+        // Revamped clarity: preserve the calm, shake-free still view but
+        // reduce temporal persistence during fast swings and head movement.
+        // Eye object-motion vectors are not available; carrying 60% old-frame
+        // colour through large motion visibly smears near geometry.
+        // Both/keep guards ensure camera cuts and invalid history stay reset.
+        if (ours && history.upscale && both && keep > 0.f) {
+            const float movement = vr_aa::motion(turn, travel);
+            const float stillKeep = std::min(0.93f, keep + 0.02f);
+            const float movingKeep = std::min(keep, 0.48f);
+            keep = stillKeep + (movingKeep - stillKeep) * movement;
+        }
         for (int r = 0; r < 3; ++r)
             for (int c = 0; c < 3; ++c)
                 frame[i][r * 4 + c] = h[r * 3 + c];

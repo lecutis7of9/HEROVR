@@ -8184,7 +8184,19 @@ DWORD WINAPI run(void*) {
                         }
                         // The game's Y: the player's, and after a tap the time the
                         // hero takes to turn to what they look at.
-                        walk.interact = interactStep.pressed();
+                        // Y in FREE AIR is Spider-Man 2's WEB STRIKE /
+                        // web-zip-to-target. Previously the Y press went
+                        // through OfferUse -> InteractStep, which requires an
+                        // object interaction and may silently swallow it in
+                        // the Sandman boss fight. Pass the actual Y button
+                        // straight to the game's virtual Xbox pad in flight.
+                        // Prompt-owned Y still follows NamedPress. Ground Y,
+                        // vents and doors keep their existing interaction.
+                        const bool airWebZipY = inFlight && steering && !calibrationInput &&
+                                                !layerOn && !fly076Flying &&
+                                                (origins.play() & buttonY) != 0 &&
+                                                !(named & game_pad::NamedPress::controlY);
+                        walk.interact = interactStep.pressed() || airWebZipY;
                         yCardSentFrames += yCardNear && walk.interact;
                         { // CUT5 CINE PROMPT: each Y press near the scene's offer, and whether the game's Y went out.
                             const bool yDown = (origins.play() & buttonY) != 0;
@@ -8356,8 +8368,14 @@ DWORD WINAPI run(void*) {
                         const auto& turning = frame.hands[1];
                         // Not a push the game names a D-pad way for (NamedPress).
                         // HOVER FLIGHT: mid-flight the right stick's up / down is the climb - no heal or zip from it.
+                        // Airborne FLIPS now uses the right stick. Its up
+                        // cannot also zip and its down cannot heal mid-flip.
+                        // Y supplies the direct game web strike in the air.
+                        const bool flipStickOwns = values.flips && inFlight && !motion.standing &&
+                                                   !fly076Flying;
                         const bool sticking =
                             steering && !calibrationInput && !layerOn && !fly076Flying && !abilityX &&
+                            !flipStickOwns &&
                             !(named & (game_pad::NamedPress::stickUp | game_pad::NamedPress::stickLeft |
                                        game_pad::NamedPress::stickRight));
                         // Update 37: heal_hold_ms, how long a push is held before it counts.
@@ -8371,7 +8389,8 @@ DWORD WINAPI run(void*) {
                         // stick's down for camo (abilityX), nor a hover flight's climb; a push the game names a
                         // D-pad way for (NamedPress) heals too when it is held down.
                         const bool healLive = steering && !calibrationInput && !layerOn && !fly076Flying && !abilityX;
-                        if (healStick.update(frame.seconds, healLive && healOn.load(), turning.stickX, turning.stickY,
+                        if (healStick.update(frame.seconds, healLive && healOn.load() && !flipStickOwns,
+                                             turning.stickX, turning.stickY,
                                              static_cast<float>(healHoldMs.load()) / 1000.f)) {
                             if (!walk.heal && healStick.sends && !healing)
                                 game_prompts::note("HERO VR 0.0.77 HEAL ANYWHERE: right stick held down -> the game's "

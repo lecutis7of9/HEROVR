@@ -89,6 +89,7 @@
 #include "spidy/game_menu.hpp"
 #include "spidy/game_offers.hpp"
 #include "spidy/game_pad.hpp"
+#include "spidy/arm_sprint.hpp" // HEROVR 79.1: left-stick + natural opposite-arm running
 #include "spidy/extras385.hpp"
 #include "spidy/gestures385.hpp"
 #include "spidy/gesture_session.hpp"
@@ -2618,6 +2619,7 @@ DWORD WINAPI run(void*) {
         // pushed up its LT + RT (the zip to a point, a vent).
         game_pad::StickPush stickPush;
         game_pad::ZipPress zipPress;
+        arm_sprint::Detector armSprint;
         bool interacting{}, dodging{}, healing{}, zipping{};
         // The player asked the game for a move of its own while the swing carried him
         // in the air (game_swing::AirYield), for the next swing command.
@@ -8760,6 +8762,31 @@ DWORD WINAPI run(void*) {
                             ++crawlFeedForced77;
                         }
                         auto pad = game_pad::fromControllers(buttons, mapping, walk);
+                        // HEROVR: ground sprint by forward left-stick intent
+                        // AND repeated counter-phase arm swings. Send the
+                        // game's native L3 sprint input only when both hands
+                        // are tracked, unoccupied, and the hero is grounded.
+                        // Neither hand/head pose is moved or animated here.
+                        arm_sprint::Input sprintSample;
+                        sprintSample.seconds = frame.seconds;
+                        sprintSample.enabled = mapping == game_pad::Mapping::gameplay &&
+                                               heroNow() == hero_modes::spiderMan &&
+                                               steering && playing && swingState.grounded &&
+                                               !swingState.owned && !motion.onSurface &&
+                                               !calibrationInput && !layerOn && !phone.open() &&
+                                               !gadgetWheel.open() && !flyNow.flying &&
+                                               !frame.hands[0].stickClick && !frame.hands[1].stickClick;
+                        sprintSample.forwardStick = frame.hands[0].stickY;
+                        sprintSample.head = frame.head.position;
+                        sprintSample.headForward = frame.head.orientation.rotate({0, 0, -1});
+                        for (unsigned i = 0; i < 2; ++i) {
+                            const auto& hand = frame.hands[i];
+                            sprintSample.tracked[i] = hand.valid && validTrackedPose(hand.grip) &&
+                                                      hand.squeeze < .25f && hand.trigger < .25f;
+                            sprintSample.hands[i] = hand.grip.position;
+                        }
+                        if (armSprint.update(sprintSample))
+                            pad.buttons = static_cast<uint16_t>(pad.buttons | game_pad::leftThumb);
                         {
                             // HERO VR 0.0.77 HEAL ANYWHERE: on the game screen (the game's Focus Bar card, its
                             // menus) the right stick held down is the game's D-pad down while the hero is hurt.

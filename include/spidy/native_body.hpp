@@ -61,6 +61,9 @@ enum Flags : uint32_t {
     // Only the game's own wall-crawl state; preserve its authored leg pose
     // instead of replacing it with flat planted feet in DYNAMIC.
     wallCrawl = 512,
+    // HEROVR's own slow wall contact: game is AIR but the avatar needs a
+    // Spider-Man climbing/holding pose, distinct from a fast wall sprint.
+    wallCling = 1024,
 };
 // 0.0.72 GAME BODY spec point 3: a command expires 250 ms after it came (a longer lease, up to the
 // 500 SpidyBodySubmit accepts from older probes, is cut to 250), so a stalled game thread never
@@ -70,11 +73,12 @@ constexpr uint32_t leaseOf(uint32_t ms) { return ms < maxLeaseMs ? ms : maxLease
 struct Command {
     uint32_t magic = 0x53424443, version = 4, bytes = sizeof(Command), flags{};
     uint64_t serial{};
-    // 79.1: with wallStride, reserved packs wall-tangent speed in cm/s
+    // 79.1: with wallStride OR wallCling, reserved packs wall-tangent speed in cm/s
     // (low 16 bits) and game-measured body-centre wall clearance in cm
     // (high 16 bits). standUp carries the wall's OUTWARD normal, floor its
-    // tangential travel direction, but ONLY if standing is false and
-    // wallStride is set. Command version/size and original uses unchanged.
+    // tangential travel direction, but ONLY when one of the two owned-wall
+    // pose flags is set. These override the unused floor anchor while that
+    // native wall gait owns both feet. Command ABI stays unchanged.
     uint32_t leaseMs = 250, reserved{};
     Vec3 eyes{};   // between the eyes, relative to the feet
     Quat facing{}; // the headset, world axes (OpenXR: -z where it looks)

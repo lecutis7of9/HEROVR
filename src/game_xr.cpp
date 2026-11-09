@@ -8000,7 +8000,7 @@ DWORD WINAPI run(void*) {
                             frame.hands[0].trigger, frame.hands[1].trigger,
                             frame.hands[0].stickClick, frame.hands[1].stickClick);
                         const bool nativeSurge = game_pad::symbioteSurgeChord(
-                            mapping == game_pad::Mapping::gameplay && playing,
+                            mapping == game_pad::Mapping::gameplay && steering,
                             heroNow() == hero_modes::spiderMan,
                             padLayer.latched(), calibrationInput,
                             phone.open() || gadgetWheel.open() || seatedLock,

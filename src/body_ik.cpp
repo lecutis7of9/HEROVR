@@ -621,11 +621,50 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
         t.eyes - (F * rig.eyesFromHead.x + U * rig.eyesFromHead.y + cross(U, F) * rig.eyesFromHead.z) * s;
     pose.move(bodyJoints, (headTarget - pose.position(rig.head)) * w);
     r.headError = length(pose.position(rig.head) - headTarget);
-    // 5. Feet the game stands on stay on the ground, turned with the body,
-    // and follow the hips once they wander off; the knees bend forward.
-    // Dynamic Body reduces only leg IK while game animation is actually
-    // changing. The entire head/torso/arm solution above and below is intact.
-    const float legWeight = w * (1.f - state.legAnimationWeight);
+    // 5. Legs: a native HEROVR wall run can still be the game's AIR
+    // animation, so freeing the game's feet alone leaves a curled airborne
+    // pose. Only when the native wall mover is actually travelling, give
+    // each foot a grounded/swing half-cycle along the player's body-facing
+    // tangent, and alternately lift one foot off the wall. Stop smoothly.
+    // This is BELOW the headset solve and does not change either controller.
+    const bool wallRun = c.dynamicLegs && t.wallStride && !t.kneel &&
+                         std::isfinite(t.wallSpeed) && t.wallSpeed > 1.5f;
+    state.wallStrideWeight = c.dynamicLegs
+                                 ? approach(state.wallStrideWeight, wallRun ? 1.f : 0.f,
+                                            c.wallStrideBlendSpeed * dt)
+                                 : 0.f;
+    if (wallRun) {
+        // Both legs make one full cycle about every two steps. Use distance,
+        // not frame count, so the feet keep pace with the actual wall mover.
+        const float cycles = std::clamp(t.wallSpeed * .28f, .8f, 2.5f);
+        state.wallStridePhase = wrap(state.wallStridePhase + 2.f * pi * cycles * dt);
+    }
+    r.wallStride = state.wallStrideWeight;
+    if (wallRun && state.wallStrideWeight > 0.f) {
+        const float gait = w * state.wallStrideWeight;
+        for (int i = 0; i < 2; ++i) {
+            const auto& leg = legs[i];
+            const Vec3 hip = pose.position(leg.upper);
+            // With a surface under the player's feet use its plane. If the
+            // game still calls the wall-run airborne, use leg length instead
+            // of trusting that absent game-floor target.
+            const float legLength = (rig.thigh[i] + rig.shin[i]) * s;
+            const float depth = t.plant ? std::clamp(dot(hip - t.floor, up) - rig.ankleHeight[i] * s,
+                                                     legLength * .65f, legLength * .98f)
+                                        : legLength * .85f;
+            const float phase = state.wallStridePhase + (i ? pi : 0.f);
+            const float along = std::cos(phase) * c.wallStrideReach * s;
+            const float lift = std::max(0.f, std::sin(phase)) * c.wallStrideLift * s;
+            const Vec3 foot = hip - up * depth + forward * along + up * lift;
+            limb(pose, rig, leg.upper, leg.lower, leg.foot, foot, forward, gait);
+            const Quat orient = between(pose.direction(leg.foot, rig.footForward[i]),
+                                        pose.direction(leg.foot, rig.footUp[i]), forward, up);
+            pose.turn(rig.below[leg.foot], partial(orient, gait), pose.position(leg.foot));
+        }
+    }
+    // Traditional planting remains under stationary feet. Wall gait gets
+    // precedence while it is moving, and fades back into Classic at rest.
+    const float legWeight = w * (1.f - state.legAnimationWeight) * (1.f - state.wallStrideWeight);
     if (r.grounded && t.plant && legWeight > 0.f) {
         // Planted: under each hip on the floor, the ankle at its rest height,
         // the foot flat and facing the body's way. The game's pose has nothing

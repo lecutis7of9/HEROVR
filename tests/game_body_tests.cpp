@@ -11,6 +11,7 @@
 #include "spidy/glove_overlay.hpp"
 #include "spidy/native_body.hpp"
 #include "spidy/game_pad.hpp"
+#include "spidy/environment_yank.hpp"
 #include "spidy/wall_run_clearance.hpp"
 #include "spidy/vr_settings.hpp"
 #include <chrono>
@@ -442,6 +443,44 @@ int main() {
         const auto ordinary = pad::fromControllers(f, pad::Mapping::gameplay);
         check(ordinary.leftTrigger == 0 && ordinary.rightTrigger == 0,
               "ordinary web-slinging must not send accidental analog game triggers");
+    });
+    test("79.1 contextual grip yank claims only offered throwable interaction", [] {
+        using namespace environment_yank;
+        GripPull gesture;
+        Input in;
+        in.seconds = .02f;
+        in.gameplay = true;
+        in.head = {0, 1.7f, 0};
+        in.tracked[0] = true;
+        in.free[0] = true;
+        in.hands[0] = {-.25f, 1.4f, -.35f};
+        in.aim[0] = {0, 0, -1};
+        // No prompt: a grip stays a normal swinging web button.
+        in.squeeze[0] = .9f;
+        check(!gesture.update(in).claimed, "ordinary grip must not be stolen");
+        in.squeeze[0] = 0;
+        gesture.update(in);
+        in.eligible = true; // the game shows L1 + R1 to throw environment
+        in.squeeze[0] = .9f;
+        auto grabbed = gesture.update(in);
+        check(grabbed.claimed == 1 && !grabbed.nativeThrow,
+              "contextual grip should claim only this hand before swing");
+        in.hands[0].z += .05f; // controller tremor, not a yank
+        check(!gesture.update(in).nativeThrow, "minor hand movement must not throw objects");
+        in.hands[0].z += .20f; // pull back toward the head
+        auto yanked = gesture.update(in);
+        check(yanked.nativeThrow && yanked.hand == 0,
+              "pulling web-grip backwards should send native L1+R1 throw");
+        for (int i = 0; i < 18; ++i)
+            gesture.update(in); // held hand cannot retrigger
+        check(!gesture.update(in).nativeThrow, "a held grip must not spam throws");
+        in.squeeze[0] = 0;
+        check(!gesture.update(in).claimed, "release must return grip to swinging");
+        gesture.reset();
+        in.eligible = false;
+        in.squeeze[0] = .9f;
+        check(!gesture.update(in).nativeThrow && !gesture.update(in).claimed,
+              "unprompted throwing must never hijack swing");
     });
     test("79.1 Surge L3+R3 and PAD hold LT+RT+L3+R3 are distinct", [] {
         namespace pad = game_pad;

@@ -443,21 +443,41 @@ int main() {
         check(ordinary.leftTrigger == 0 && ordinary.rightTrigger == 0,
               "ordinary web-slinging must not send accidental analog game triggers");
     });
-    test("79.1 Peter combat L3+R3 activates the native Surge chord only when safe", [] {
+    test("79.1 Surge L3+R3 and PAD hold LT+RT+L3+R3 are distinct", [] {
         namespace pad = game_pad;
-        check(pad::symbioteSurgeChord(true, true, true, false, false, false, true, true),
-              "Peter combat must pass both native thumb-clicks for Surge");
-        check(!pad::symbioteSurgeChord(true, true, false, false, false, false, true, true),
-              "outside combat the same chord must still open the VR Pad Layer");
-        check(!pad::symbioteSurgeChord(true, false, true, false, false, false, true, true),
-              "other heroes keep their existing chords");
-        check(!pad::symbioteSurgeChord(true, true, true, true, false, false, true, true),
-              "an active Pad Layer owns its normal full controller");
-        check(!pad::symbioteSurgeChord(false, true, true, false, false, false, true, true) &&
-              !pad::symbioteSurgeChord(true, true, true, false, true, false, true, true) &&
-              !pad::symbioteSurgeChord(true, true, true, false, false, true, true) &&
-              !pad::symbioteSurgeChord(true, true, true, false, false, false, true, false),
-              "no mission input while in menus, calibration, phone, or one click only");
+        check(pad::symbioteSurgeChord(true, true, false, false, false, true, true, false),
+              "Peter native L3+R3 must work even without normal combat camera");
+        check(!pad::symbioteSurgeChord(true, true, false, false, false, true, true, true),
+              "holding both triggers must never accidentally fire Surge");
+        check(!pad::symbioteSurgeChord(true, false, false, false, false, true, true, false),
+              "other heroes must not fire Peter's Surge");
+        check(!pad::symbioteSurgeChord(true, true, true, false, false, true, true, false),
+              "while Pad Layer is active, L3+R3 belongs to the native pad");
+        check(!pad::symbioteSurgeChord(false, true, false, false, false, true, true, false) &&
+              !pad::symbioteSurgeChord(true, true, false, true, false, true, true, false) &&
+              !pad::symbioteSurgeChord(true, true, false, false, true, true, true, false) &&
+              !pad::symbioteSurgeChord(true, true, false, false, false, true, false, false),
+              "menus, calibration, phone, or incomplete chords cannot trigger Surge");
+        check(!pad::dualTriggerPadChord(.9f, .9f, true, false) &&
+              !pad::dualTriggerPadChord(.9f, .1f, true, true) &&
+              pad::dualTriggerPadChord(.9f, .9f, true, true),
+              "Pad Layer requires LT and RT plus both stick clicks together");
+        pad::PadLayer layer;
+        for (int i = 0; i < 10; ++i)
+            check(!layer.update(.05f, true, false, false, true),
+                  "L3+R3 alone must never enter Pad Layer");
+        for (int i = 0; i < 6; ++i)
+            check(!layer.update(.05f, true, true, true, true),
+                  "PAD hold needs 350 ms");
+        check(layer.update(.1f, true, true, true, true),
+              "holding LT+RT+L3+R3 should enter PAD mode");
+        for (int i = 0; i < 20; ++i)
+            check(layer.update(.05f, true, true, true, true),
+                  "a continued pad chord must not switch mode again");
+        layer.update(.05f, true, false, false, true);
+        for (int i = 0; i < 7; ++i)
+            layer.update(.05f, true, true, true, true);
+        check(!layer.latched(), "a second deliberate held pad chord should exit PAD mode");
     });
     test("79.1 vertical and lateral wall-run view stays outside the building", [&] {
         const Vec3 face{0, 3, 0}, outward{0, 0, 1};

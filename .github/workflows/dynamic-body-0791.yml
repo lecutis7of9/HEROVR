@@ -71,11 +71,19 @@ jobs:
           "Original: official unchanged 0.0.79; Revamped: Dynamic Body test" >> $env:GITHUB_STEP_SUMMARY
       - name: Package isolated test mod (never uploads to Releases)
         run: |
-          $name = 'HERO-VR-0.0.79.1-DYNAMIC-BODY-TEST-mod'
+          $name = 'HERO-VR-79.1-TEST'
           ./tools/package.ps1 -Name $name
           if ($LASTEXITCODE) { throw "Packaging failed ($LASTEXITCODE)" }
           $zip = "dist/$name-win64.zip"
           if (-not (Test-Path -LiteralPath $zip)) { throw "No mod test ZIP: $zip" }
+          # GitHub artifacts arrive as an outer download folder, then the ZIP
+          # extracts with another root folder. The Windows modules are staged
+          # under reports/<kind>-modules/<full sha256>/<dll>. Check that a
+          # realistic nested Downloads layout has ample MAX_PATH headroom.
+          $sampleRoot = 'C:\Users\LongExampleUsername\Downloads\herovr-79-1-test\HERO-VR-79.1-TEST-win64\HERO-VR-79.1-TEST'
+          $sampleDll = Join-Path $sampleRoot ('reports\render-memory-modules\' + ('a' * 64) + '\spidy_render_memory.dll')
+          if ($sampleDll.Length -ge 230) { throw "Test ZIP nesting makes DLL staging too long: $($sampleDll.Length) chars" }
+          "Sample nested staging path length: $($sampleDll.Length) chars" >> $env:GITHUB_STEP_SUMMARY
           python -B tools/check_bundled_python.py $zip --run
           if ($LASTEXITCODE) { throw 'Bundled Python check failed' }
           "$((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant())  $name-win64.zip" |
@@ -84,9 +92,9 @@ jobs:
       - name: Attach test ZIP to this run (not a public release)
         uses: actions/upload-artifact@v4
         with:
-          name: hero-0791-dynamic-body-preview
+          name: herovr-79-1-test
           path: |
-            dist/HERO-VR-0.0.79.1-DYNAMIC-BODY-TEST-mod-win64.zip
-            dist/HERO-VR-0.0.79.1-DYNAMIC-BODY-TEST-mod-win64.zip.sha256
+            dist/HERO-VR-79.1-TEST-win64.zip
+            dist/HERO-VR-79.1-TEST-win64.zip.sha256
           if-no-files-found: error
           retention-days: 14

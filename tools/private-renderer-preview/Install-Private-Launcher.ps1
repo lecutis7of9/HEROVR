@@ -1,6 +1,6 @@
 # HERO VR PRIVATE Original / Revamped launcher test — install into existing 0.0.78.
 # Run from the extracted PRIVATE zip, not while Spider-Man 2 or the launcher is open.
-param([string]$Root = "$HOME\Downloads\HERO-VR-Launcher-0.0.78\HV078")
+param([string]$Root = "$HOME\Downloads\HERO-VR-Launcher-0.0.78\HV078", [switch]$NoLaunch)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -75,5 +75,7 @@ Write-Host 'The CURRENT VR rendering DLL has NOT been changed.'
 Write-Host 'Original / Revamped are visible when the launcher opens.'
 Write-Host "Backup: $backup"
 Write-Host ''
-Write-Host 'Starting the launcher now...'
-Start-Process -FilePath $targetExe -WorkingDirectory (Split-Path -Parent $targetExe)
+if (-not $NoLaunch) {
+    Write-Host 'Starting the launcher now...'
+    Start-Process -FilePath $targetExe -WorkingDirectory (Split-Path -Parent $targetExe)
+}

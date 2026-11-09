@@ -536,6 +536,12 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
                                       c.swayBlendSpeed * dt)
                            : 0.f;
     r.bodySway = state.swayWeight;
+    // CLASSIC must take effect immediately, not leave a few frames of
+    // residual dynamic tilt when the user flips the menu switch back.
+    if (!c.dynamicLegs) {
+        state.gameHipSway = {};
+        state.gameTorsoSway = {};
+    }
     // The body is everything under its root; the rig's other roots (effects,
     // IK targets, camera targets) keep the game's pose.
     const auto& bodyJoints = rig.below[static_cast<size_t>(rig.pelvis)];

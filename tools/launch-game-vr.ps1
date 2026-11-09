@@ -206,6 +206,31 @@ foreach($name in @('spidy_headset_probe.exe','spidy_bridge.dll','spidy_render_pr
         throw "build\windows-ninja\$name is missing. Unzip the whole SM2 VR package again, into a new folder."
     }
 }
+# 0.0.79.1 standalone preview: the graphical HERO VR launcher ordinarily
+# places Revamped's 70% opt-in marker beside the SHA-staged native DLL.
+# "Launch Spidy VR.cmd" does not run that GUI. Reproduce its marker for
+# Revamped here, never for Original, so a fresh unzip uses the same native
+# mode as the renderer picker. Keep live.txt preferences untouched: 'vr_aa
+# = ours' and 'vr_render = native' are already the normal fresh defaults.
+# The original renderer DLL itself is NOT modified by this preparation.
+$modeRoot = Join-Path $projectRoot 'build\windows-ninja\renderer-modes'
+$activeStereo = Join-Path $projectRoot 'build\windows-ninja\spidy_stereo_probe.dll'
+$revampedStereo = Join-Path $modeRoot 'revamped\spidy_stereo_probe.dll'
+if ((Test-Path -LiteralPath $revampedStereo) -and (Test-Path -LiteralPath $activeStereo)) {
+    $activeDigest = (Get-FileHash -LiteralPath $activeStereo -Algorithm SHA256).Hash.ToLowerInvariant()
+    $revampedDigest = (Get-FileHash -LiteralPath $revampedStereo -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($activeDigest -eq $revampedDigest) {
+        $stagedRenderer = Join-Path $projectRoot ("reports\stereo-modules\" + $activeDigest)
+        New-Item -ItemType Directory -Path $stagedRenderer -Force | Out-Null
+        $enableMarker = Join-Path $stagedRenderer 'herovr-own-taa-70.enable'
+        if (-not (Test-Path -LiteralPath $enableMarker)) {
+            Set-Content -LiteralPath $enableMarker -Value 'Revamped 70% eye reconstruction' -Encoding ascii
+        }
+        Write-Host 'Renderer: REVAMPED module and staged 70% enable marker (live.txt VR AA preference still applies).' -ForegroundColor Green
+    } else {
+        Write-Host 'Renderer: active DLL is not the staged Revamped module; no 70% enable marker set.'
+    }
+}
 # An update zip extracted into a folder of its own rather than over the mod ($portVersion is printed at the start).
 $misplaced=Get-ChildItem -LiteralPath $projectRoot -Directory | Where-Object {
     $_.Name -notin @('tools','src','include','tests','apps','docs','build','reports','python','test logs') -and

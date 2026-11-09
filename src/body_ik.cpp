@@ -536,6 +536,18 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
                                       c.swayBlendSpeed * dt)
                            : 0.f;
     r.bodySway = state.swayWeight;
+    // The tracking system already rotates the body through the user's flip.
+    // On Dynamic Body, fold the body at mid-turn and extend again while
+    // returning upright. Never infer this from the game-camera direction,
+    // wall-body lay, or fly lean; those are not acrobatic flips.
+    const float flipProgress = t.flipPose && t.airborne && !t.kneel && tilted
+                                   ? std::sin(.5f * std::min(pi, angle(tilt)))
+                                   : 0.f;
+    state.flipTuckWeight = c.dynamicLegs
+                               ? approach(state.flipTuckWeight, flipProgress,
+                                          c.flipTuckSpeed * dt)
+                               : 0.f;
+    r.flipTuck = state.flipTuckWeight;
     // CLASSIC must take effect immediately, not leave a few frames of
     // residual dynamic tilt when the user flips the menu switch back.
     if (!c.dynamicLegs) {
@@ -605,6 +617,14 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
     const float spineShare = w / static_cast<float>(rig.spine.size());
     for (const auto j : rig.spine)
         pose.turn(rig.below[j], partial(bend, spineShare), pose.position(j));
+    // Natural acrobatic curl: each spine joint adds a small, bounded bend.
+    // Head and hands are re-solved after this step, so this is avatar-only
+    // follow-through rather than a synthetic camera bob.
+    if (state.flipTuckWeight > 0.f)
+        for (const auto j : rig.spine)
+            pose.turn(rig.below[j], axisAngle(left, c.flipSpineBend * w *
+                                              state.flipTuckWeight / static_cast<float>(rig.spine.size())),
+                      pose.position(j));
     // 3. The head takes the headset's orientation, the neck some of the way.
     const auto headTurn = [&] {
         return between(pose.direction(rig.head, rig.headForward), pose.direction(rig.head, rig.headUp), F, U);
@@ -621,7 +641,25 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
         t.eyes - (F * rig.eyesFromHead.x + U * rig.eyesFromHead.y + cross(U, F) * rig.eyesFromHead.z) * s;
     pose.move(bodyJoints, (headTarget - pose.position(rig.head)) * w);
     r.headError = length(pose.position(rig.head) - headTarget);
-    // 5. Legs: a native HEROVR wall run can still be the game's AIR
+    // 5. A flip also gathers the knees up to the chest, then extends them
+    // again when the rotation completes. The game's AIR pose can be static;
+    // a tracked flip, unlike an ordinary swing, has its own body-only tuck.
+    // Draw the feet into a compact form from the current hip orientation,
+    // and leave the arms to the independent controller IK below.
+    if (state.flipTuckWeight > 0.f) {
+        const float tuck = w * state.flipTuckWeight;
+        for (int i = 0; i < 2; ++i) {
+            const auto& leg = legs[i];
+            const Vec3 hip = pose.position(leg.upper);
+            const Vec3 side = i == 0 ? left : left * -1.f;
+            const float len = (rig.thigh[i] + rig.shin[i]) * s;
+            const Vec3 foot = hip - up * (len * c.flipFootHeight) +
+                              forward * (c.flipFootForward * s) + side * (.05f * s);
+            limb(pose, rig, leg.upper, leg.lower, leg.foot, foot,
+                 normalized(forward + side * .2f), tuck);
+        }
+    }
+    // 6. Legs: a native HEROVR wall run can still be the game's AIR
     // animation, so freeing the game's feet alone leaves a curled airborne
     // pose. Only when the native wall mover is actually travelling, give
     // each foot a grounded/swing half-cycle along the player's body-facing
@@ -664,7 +702,8 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
     }
     // Traditional planting remains under stationary feet. Wall gait gets
     // precedence while it is moving, and fades back into Classic at rest.
-    const float legWeight = w * (1.f - state.legAnimationWeight) * (1.f - state.wallStrideWeight);
+    const float legWeight = w * (1.f - state.legAnimationWeight) *
+                            (1.f - state.wallStrideWeight) * (1.f - state.flipTuckWeight);
     if (r.grounded && t.plant && legWeight > 0.f) {
         // Planted: under each hip on the floor, the ankle at its rest height,
         // the foot flat and facing the body's way. The game's pose has nothing

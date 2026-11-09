@@ -11012,45 +11012,52 @@ int main() {
         check(count(holding, tech::cyan) > count(waiting, tech::cyan), "the hold is not cyan");
         check(!panel(body_calibration::Phase::done).empty(), "the result did not show");
     });
-    test("the pad layer: a click of both sticks latches it as it is let go, a web or idleness lets it go", [] {
+    test("Pad Layer: qualified trigger-plus-sticks hold toggles once; carrying a web or idle ends it", [] {
         using game_pad::PadLayer;
-        const auto run=[](PadLayer& l,float seconds,bool allowed,bool left,bool right,bool busy=false){
-            bool on=false;
-            for(float t=0;t<seconds;t+=1.f/90)on=l.update(1.f/90,allowed,left,right,busy);
+        const auto run = [](PadLayer& layer, float seconds, bool allowed, bool left, bool right, bool busy = false) {
+            bool on = false;
+            for (float t = 0; t < seconds; t += 1.f / 90)
+                on = layer.update(1.f / 90, allowed, left, right, busy);
             return on;
         };
-        // A click: held chordSeconds, then let go.
-        const auto click=[&](PadLayer& l){run(l,PadLayer::chordSeconds+.05f,true,true,true);return run(l,1.f/90,true,false,false);};
+        // game_xr only passes left+right when BOTH physical triggers are
+        // already pressed. L3+R3 without triggers belongs to native Surge.
+        const auto hold = [&](PadLayer& l) {
+            return run(l, PadLayer::chordSeconds + .05f, true, true, true, true);
+        };
         PadLayer layer;
-        check(!run(layer,.3f,true,false,false),"latched with no chord");
-        check(!run(layer,.05f,true,true,true) && !run(layer,1.f/90,true,false,false),"latched before chordSeconds");
-        check(!run(layer,PadLayer::chordSeconds+.05f,true,true,true),"latched under the thumbs");
-        check(run(layer,1.f/90,true,false,false),"the click did not latch the layer as it was let go");
-        check(layer.entries()==1,"the entry was not counted");
-        check(run(layer,.2f,true,false,false),"letting the chord go let the layer go");
-        check(!click(layer),"the second click did not let it go");
-        check(layer.entries()==1,"letting go counted as an entry");
-        // Held on into the pause (PausePress), the chord toggles nothing.
-        PadLayer paused;
-        check(!run(paused,game_pad::pauseHoldSeconds+.1f,true,true,true) && !run(paused,.2f,true,false,false),
-              "the pause's hold latched the layer");
-        check(paused.entries()==0,"the pause's hold counted as an entry");
-        // One stick alone is no chord (it is the pull and the slow motion).
+        check(!run(layer, .3f, true, false, false), "latched with no qualified chord");
+        check(!run(layer, .05f, true, true, true, true) &&
+              !run(layer, 1.f / 90, true, false, false),
+              "latched before chordSeconds");
+        check(hold(layer), "held trigger/stick chord failed to enter PAD");
+        check(layer.entries() == 1, "PAD entry not counted");
+        check(run(layer, 1.f, true, true, true, true) && layer.entries() == 1,
+              "continued holding unexpectedly toggled PAD again");
+        run(layer, 1.f / 90, true, false, false);
+        check(!hold(layer), "second deliberate chord failed to leave PAD");
+        check(layer.entries() == 1, "leaving PAD counted as entry");
+        PadLayer longHold;
+        check(hold(longHold) && run(longHold, game_pad::pauseHoldSeconds + .1f, true, true, true, true),
+              "long held PAD chord was lost to old Pause shortcut");
         PadLayer single;
-        check(!run(single,1.f,true,false,true)&&!run(single,1.f,true,true,false),"one stick latched the layer");
-        // A web carrying the player ends it, and the chord it was holding is spent.
+        check(!run(single, 1.f, true, false, true) &&
+              !run(single, 1.f, true, true, false),
+              "one stick accidentally toggled PAD");
         PadLayer carried;
-        check(click(carried),"the click did not latch");
-        run(carried,.1f,true,true,true);
-        check(!carried.update(1.f/90,false,true,true,false),"a web did not end the layer");
-        check(!run(carried,.3f,true,true,true) && !run(carried,1.f/90,true,false,false),
-              "a chord held through a web latched it again");
-        // Nothing pressed for idleSeconds and it lets go by itself; a press keeps it.
+        check(hold(carried), "carried test: PAD did not enter");
+        check(!carried.update(1.f / 90, false, true, true, false),
+              "web carrying the player failed to end PAD");
+        check(!run(carried, .2f, true, true, true) &&
+              !run(carried, 1.f / 90, true, false, false),
+              "chord held across web unexpectedly entered PAD");
         PadLayer idle;
-        click(idle);
-        run(idle,.2f,true,false,false);
-        check(run(idle,PadLayer::idleSeconds-1,true,false,false,true),"a busy layer let go");
-        check(!run(idle,PadLayer::idleSeconds+1,true,false,false,false),"an idle layer did not let go");
+        check(hold(idle), "idle test: PAD did not enter");
+        run(idle, .1f, true, false, false);
+        check(run(idle, PadLayer::idleSeconds - 1, true, false, false, true),
+              "busy PAD timed out");
+        check(!run(idle, PadLayer::idleSeconds + 1, true, false, false, false),
+              "idle PAD did not time out");
     });
     test("both thumbsticks held in are the game's Start, once a hold, where the runtime keeps the menu button",
          [] {

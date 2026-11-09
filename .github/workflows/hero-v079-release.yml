@@ -24,8 +24,8 @@ jobs:
         run: |
           if ((Get-Content VERSION -TotalCount 1).Trim() -ne '0.0.79') { throw 'Source version wrong' }
           if ((Get-Content PORT-VERSION -TotalCount 1).Trim() -ne 'Update 39.12') { throw 'Internal build wrong' }
-          if (-not (Select-String tools/launcher/src/RendererModes.cs -SimpleMatch 'renderer-modes' -Quiet)) { throw 'Renderer selector missing' }
-          if (-not (Select-String tools/launcher/src/Cinematic.cs -SimpleMatch 'Venom Cash, Gogeta and Tim The KoolAid Lover for testing' -Quiet)) { throw 'Tester credits missing' }
+          if (-not (Select-String -Path tools/launcher/src/RendererModes.cs -Pattern 'renderer-modes' -SimpleMatch -Quiet)) { throw 'Renderer selector missing' }
+          if (-not (Select-String -Path tools/launcher/src/Cinematic.cs -Pattern 'Venom Cash, Gogeta and Tim The KoolAid Lover for testing' -SimpleMatch -Quiet)) { throw 'Tester credits missing' }
       - name: Download SHA256-verified official 0.0.78 baseline
         env:
           GH_TOKEN: ${{ github.token }}

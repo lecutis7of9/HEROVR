@@ -353,14 +353,13 @@ void solveHero(float* out, uintptr_t job, uintptr_t instance) {
             body::Targets t;
             t.head = true;
             t.airborne = wanted.flags & native_body::airborne;
-            // The player's up, as he stands: the world's, or the surface the
-            // view stands him on, whatever the hero's own frame does there -
-            // turned onto it by the game's crawl, upright in the air Spidy's
-            // own wall holds him in. The body stands with the player: taking
-            // the actor's frame for it on the crawl and the view's turn on
-            // top of that laid the body a quarter turn off, along the wall in
-            // front of him ("still body in front of me", October 14).
-            t.up = toModel.rotate(standing ? normalized(wanted.standUp) : Vec3{0, 1, 0});
+            // The game's native crawl is already rotated against the wall:
+            // its stance axis is the contact surface normal. But HEROVR's OWN
+            // wall hold/run leaves the actor upright in the game. In that
+            // case the contact normal is NOT the torso's up axis: using it
+            // pointed the legs perpendicular into the side of a building.
+            // Keep gravity-up for owned walls and use the separately supplied
+            // wallNormal only for contact targets and sole orientation.
             // And the game's legs are no stance there - the crawl's, splayed
             // on the wall, or the air pose: the feet are planted on that
             // surface under the hips instead.
@@ -368,6 +367,8 @@ void solveHero(float* out, uintptr_t job, uintptr_t instance) {
             t.wallStride = (wanted.flags & native_body::wallStride) != 0 && !t.kneel;
             t.wallCling = (wanted.flags & native_body::wallCling) != 0 && !t.kneel && !t.wallStride;
             const bool ownWall = t.wallStride || t.wallCling;
+            t.up = toModel.rotate(standing && !ownWall
+                                      ? normalized(wanted.standUp) : Vec3{0, 1, 0});
             // No ground-foot planting while HEROVR owns a wall run/crawl:
             // the command's floor is its tangent, not a ground anchor.
             t.plant = standing && !ownWall;

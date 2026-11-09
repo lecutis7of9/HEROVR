@@ -9,6 +9,7 @@
 // same code, from items copied from the game's own, and adds it to the list;
 // its items name settings 0x200 and up, which only Spidy answers for.
 #include "spidy/game_menu.hpp"
+#include "spidy/native_body.hpp" // 0.0.79.1 Dynamic Body setting drives the pose job
 #include "spidy/sm2_port.hpp"
 #include "spidy/game_prompts.hpp"
 #include <MinHook.h>
@@ -396,6 +397,10 @@ void change(Item item, int index) {
     const bool changed = vr_settings::choose(item, index, shown);
     if (changed)
         pending |= uint64_t{1} << static_cast<unsigned>(item);
+    // The pose writer uses an atomic setting: safe to change from a menu
+    // callback, without waiting for the next session's settings sync.
+    if (changed && item == Item::legAnimations)
+        native_body::dynamicLegs(shown.legAnimations);
     ReleaseSRWLockExclusive(&lock);
     if (changed)
         ++changesMade;
@@ -621,6 +626,7 @@ void game_menu::publish(const vr_settings::Values& values) {
     AcquireSRWLockExclusive(&lock);
     // A change from the tab not taken yet stays as the tab left it.
     shown = pending ? copyItems(shown, values, pending) : values;
+    native_body::dynamicLegs(shown.legAnimations);
     ReleaseSRWLockExclusive(&lock);
 }
 bool game_menu::take(vr_settings::Values& values) {
@@ -691,6 +697,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyMenuStart(void* input) {
     v.triggerWebs = s.flags & 256;
     v.standOnWalls = s.flags & 512;
     v.arcadeWebs = s.flags & 2048;
+    v.legAnimations = s.flags & 4096; // Dynamic Body; absent means Classic
     v.snapTurn = static_cast<int>(s.snapTurn);
     v.smoothTurn = static_cast<int>(s.smoothTurn);
     v.haptics = static_cast<int>(s.haptics);
@@ -718,7 +725,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyMenuSample(void* output) {
     s.flags = (v.webGrab ? 1u : 0u) | (v.punch ? 2u : 0u) | (v.body ? 4u : 0u) | (v.airWebs ? 8u : 0u) |
               (v.webShooter ? 16u : 0u) | (v.aimMarkers ? 32u : 0u) | (v.calibrate ? 64u : 0u) |
               (v.flips ? 128u : 0u) | (v.triggerWebs ? 256u : 0u) | (v.standOnWalls ? 512u : 0u) |
-              (v.flatScreen ? 1024u : 0u) | (v.arcadeWebs ? 2048u : 0u);
+              (v.flatScreen ? 1024u : 0u) | (v.arcadeWebs ? 2048u : 0u) |
+              (v.legAnimations ? 4096u : 0u);
     s.snapTurn = static_cast<uint32_t>(v.snapTurn);
     s.smoothTurn = static_cast<uint32_t>(v.smoothTurn);
     s.haptics = static_cast<uint32_t>(v.haptics);

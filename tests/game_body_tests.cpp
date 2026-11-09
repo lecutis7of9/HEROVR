@@ -334,7 +334,7 @@ int main() {
             for (int frame = 0; frame < 40; ++frame) {
                 out = rest;
                 body::Pose game(out.data(), 237);
-                const float gameLean = moving ? (frame % 2 ? .17f : -.17f) : .17f;
+                const float gameLean = moving ? .18f * std::sin(frame * .10f) : .17f;
                 // Game frame: Spider-Man's own pelvis/upper body lean in
                 // the swing arc. The body solver receives it before HMD IK.
                 game.turn(rig.below[rig.pelvis], body::axisAngle({0, 0, 1}, gameLean),

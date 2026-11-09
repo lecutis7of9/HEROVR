@@ -41,5 +41,7 @@ jobs:
           name: herovr-078-window-visibility-experimental-dll
           path: |
             build/windows-ninja/spidy_stereo_probe.dll
+            tools/live_settings.py
+            tools/window_probe.py
           if-no-files-found: error
           retention-days: 7

@@ -13405,7 +13405,8 @@ DWORD WINAPI run(void*) {
                         // Only HEROVR's own wall (not the game's authentic wall
                         // running), never a floor, ceiling rest or flip.
                         const Vec3 strideNormal = normalized(swingState.wallNormal);
-                        const bool strideWall = swingState.wall == static_cast<uint32_t>(game_swing::Surface::wall) &&
+                        const bool strideWall = swingFresh && swingState.owned &&
+                                                swingState.wall == static_cast<uint32_t>(game_swing::Surface::wall) &&
                                                 finite(strideNormal) && std::abs(strideNormal.y) < .7f &&
                                                 finite(swingState.velocity) && !kneels;
                         const Vec3 strideTravel = strideWall
@@ -13413,9 +13414,21 @@ DWORD WINAPI run(void*) {
                                                       : Vec3{};
                         const float strideSpeed = length(strideTravel);
                         const bool strideActive = strideWall && std::isfinite(strideSpeed) && strideSpeed > 1.5f;
-                        pose.reserved = strideActive
-                                            ? static_cast<uint32_t>(std::clamp(strideSpeed, 0.f, 30.f) * 100.f)
-                                            : 0u;
+                        // The body's actual distance to the wall and its
+                        // motion along the wall let the feet face/contact the
+                        // surface. Do NOT rotate the HMD to the wall.
+                        const uint32_t wallCm = strideActive && std::isfinite(swingState.wallDistance)
+                                                     ? static_cast<uint32_t>(
+                                                           std::clamp(swingState.wallDistance, 0.f, 3.f) * 100.f)
+                                                     : 0u;
+                        const uint32_t speedCm = strideActive
+                                                     ? static_cast<uint32_t>(
+                                                           std::clamp(strideSpeed, 0.f, 30.f) * 100.f)
+                                                     : 0u;
+                        pose.reserved = (wallCm << 16) | speedCm;
+                        const bool ownGameCrawl =
+                            swingFresh && !swingState.owned && motion.standing &&
+                            swingState.wall == static_cast<uint32_t>(game_swing::Surface::game);
                         // 79.1 Dynamic Body flip tuck: use the *actual* tracking
                         // FlipMotion tilt, not the combined pose.tilt, because
                         // fly lean and wall-body roll also change the latter.
@@ -13437,9 +13450,14 @@ DWORD WINAPI run(void*) {
                                      (motion.standing || crawlsFloor ? native_body::standing : 0u) |
                                      (kneels ? native_body::kneel : 0u) |
                                      (strideActive ? native_body::wallStride : 0u) |
+                                     (ownGameCrawl ? native_body::wallCrawl : 0u) |
                                      (nativeFlip ? native_body::flipPose : 0u);
-                        pose.standUp = motion.standUp;
-                        pose.floor = motion.floor;
+                        // The standing fields have no ground use while
+                        // airborne. For a wall stride they carry the true
+                        // world-space surface normal and tangent. The native
+                        // solver interprets these only with wallStride set.
+                        pose.standUp = strideActive ? strideNormal : motion.standUp;
+                        pose.floor = strideActive ? normalized(strideTravel) : motion.floor;
                         pose.eyes = Vec3{(motion.eyes[0][12] + motion.eyes[1][12]) / 2,
                                          (motion.eyes[0][13] + motion.eyes[1][13]) / 2,
                                          (motion.eyes[0][14] + motion.eyes[1][14]) / 2} -

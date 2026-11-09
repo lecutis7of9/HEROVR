@@ -19,6 +19,7 @@
 #include "spidy/native_body.hpp"
 #include "spidy/native_eye_frame.hpp"
 #include "spidy/native_eye_gpu.hpp"
+#include "spidy/vr_aa.hpp"
 #include "spidy/native_hud.hpp"
 #include "spidy/perf077.hpp"
 #include "spidy/native_view.hpp"
@@ -412,11 +413,12 @@ bool sm1Live() {
     return sm1AtStart() && sm1ExeKnown.load(std::memory_order_relaxed) && sm1Targets.load(std::memory_order_relaxed) &&
            (why == mt::none || why == mt::upscaleWrong || why == mt::hookFailed);
 }
-// Eyes made smaller than their image need the game's TAA every frame (its jitter and the job's AA) whatever the
-// safety says: without it TemporalAa leaves (0x2c2dccb, 0x2c2dd09) and nothing resolves them to the eye's size.
+// Only SM1STYLE's smaller scene needs the game's TAA to reconstruct it to a full-size eye image.
+// OWN AA's 70% path makes a smaller final eye color target instead; its own AA handles the image.
+// Do not activate SM1STYLE's game TAA and lens jitter just because that target is below 100%.
 bool sm1Upscaled() {
     const uint32_t made = sm1Percent.load(std::memory_order_relaxed);
-    return made && made < 100;
+    return sm1AtStart() && made && made < 100;
 }
 bool sm1Steps() { return sm1Live() || sm1Upscaled(); }
 // The first reason only (one console line: game_xr reads it).
@@ -1521,6 +1523,29 @@ std::array<uint32_t, 2> eyeRenderSize() {
     const uint32_t made = sm1Percent.load(std::memory_order_relaxed);
     return spidy::eyeRenderSize(config.width, config.height, made ? made : 100);
 }
+// Experimental startup opt-in for the mod's own AA. Keep the game's final
+// eye texture at scene size; the GPU bridge expands it to the XR output size.
+std::atomic<bool> ownReducedEyes{};
+bool requestOwnReducedEyes() {
+    HMODULE module{};
+    wchar_t path[MAX_PATH]{};
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                           GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCWSTR>(&requestOwnReducedEyes), &module))
+        return false;
+    const auto length = GetModuleFileNameW(module, path, MAX_PATH);
+    if (!length || length >= MAX_PATH)
+        return false;
+    auto* name = path + length;
+    while (name != path && name[-1] != L'\\')
+        --name;
+    constexpr wchar_t marker[] = L"herovr-own-taa-70.enable";
+    if (name == path || MAX_PATH - (name - path) < sizeof(marker) / sizeof(marker[0]))
+        return false;
+    std::memcpy(name, marker, sizeof(marker));
+    const DWORD attributes = GetFileAttributesW(path);
+    return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+}
 void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t height, uint32_t kind, uint8_t align) {
     originalSizeBuffers(buffers, name, width, height, kind, align);
     // As SM2VR 0.0.27's detour (94c0): the eye's size while its buffers are
@@ -1538,6 +1563,11 @@ void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t heigh
             }
     if (!eyeWidth)
         return;
+    if (ownReducedEyes) {
+        const auto render = eyeRenderSize();
+        eyeWidth = render[0];
+        eyeHeight = render[1];
+    }
     // SM2 +1b978: render width, height; the anti-aliased image's width,
     // height; those in multiples of 8; the output's width, height (multiples
     // of 8 when aligned, SM2VR +1b990/+1b994); ... flags at +1b9b4, 2 among
@@ -1669,7 +1699,8 @@ bool initBuffers(void* buffers, const void* description, const char* name) {
                 else if (sm1 && sm1ExeKnown.load() && !aaOk)
                     sm1FallBack(mt::gameAa);
                 sm1TargetsOk = maskStock && aaOk;
-                const uint32_t percent = mt::madePercent(sm1, sm1ExeKnown.load(), maskStock, aaOk,
+                const uint32_t percent = ownReducedEyes ? 70u :
+                    mt::madePercent(sm1, sm1ExeKnown.load(), maskStock, aaOk,
                                                                 eyeRenderPercent.load());  // 0.0.76 VISUAL
                 sm1Percent = percent;
                 SpidySm1StyleData.percent = percent;
@@ -3733,6 +3764,14 @@ void maintain(void* manager) {
         (!attempted || retired[0] || retired[1]) && valid && GetTickCount64() < deadline &&
         (config.durationMs || GetTickCount64() < commandDeadline)) {
         attempted = true;
+        if (!sm1Percent.load()) {
+            ownReducedEyes = !sm1AtStart() && !(eyeTemporal.load() & 0x10) &&
+                             spidy::native_gpu::vrAa() == spidy::vr_aa::ours && requestOwnReducedEyes();
+        }
+        // The native view creates its final color target from these dimensions
+        // before initBuffers sizes the scene. Keep the XR output config intact.
+        const auto eyeTarget = ownReducedEyes ? spidy::eyeRenderSize(config.width, config.height, 70)
+                                              : std::array<uint32_t, 2>{config.width, config.height};
         static const char* names[] = {"Spidy left eye test", "Spidy right eye test"};
         for (unsigned i = 0; i < 2; ++i) {
             if (!eyes[i]) {
@@ -3748,7 +3787,7 @@ void maintain(void* manager) {
                 else if (!(widened = lightChecksByte(stockByte, eq::roomByte(room))))
                     lightChecksState = 3;
                 creatingEye = true;
-                const CreateArgs args{names[i], main.nearZ(), main.farZ(), 90.f, config.width, config.height,
+                const CreateArgs args{names[i], main.nearZ(), main.farZ(), 90.f, eyeTarget[0], eyeTarget[1],
                                       28, nullptr, 0x100, 2, widened ? room : 0xffffffffu, 0};
                 eyes[i] = reinterpret_cast<Create>(base + 0x2c9c590)(manager, &args);
                 creatingEye = false;

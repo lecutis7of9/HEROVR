@@ -150,6 +150,7 @@ namespace Sm2VrLauncher
                 overlayDirty = true;
                 HeroLayoutSheets();
                 Sm1LayoutPicker();
+                PositionRendererModePicker();
                 foreach (var p in pages) if (p.Visible) { p.Bounds = sheetBounds[Array.IndexOf(pages, p)]; }
                 if (sheetSnapshot != null) HeroTakeSnapshot();
                 Invalidate();
@@ -214,6 +215,7 @@ namespace Sm2VrLauncher
         void HeroSheetChanged()
         {
             if (!hero || scene == null) return;
+            if (rendererPicker != null) rendererPicker.Visible = !SheetOpen;
             Sm1HeroTick();
             if (SheetOpen) HeroTakeSnapshot();
             else if (sheetSnapshot != null) { sheetSnapshot.Dispose(); sheetSnapshot = null; overlayDirty = true; Invalidate(); }
@@ -510,6 +512,11 @@ namespace Sm2VrLauncher
             }
             try { scene.Version = ShortVersion(SystemInfo.PortVersion(root) ?? LauncherInfo.Version).ToUpperInvariant(); } catch { }
             bool nowGame = job == Job.Vr || running;
+            if (rendererPicker != null)
+            {
+                rendererPicker.Enabled = job == Job.None && !running;
+                rendererPicker.Visible = !SheetOpen;
+            }
             Sm1HeroTiles(t, ref nowGame);
             if (nowGame && !gameOn) HeroGameStarting();
             else if (!nowGame && gameOn) { gameOn = false; HeroPauseCheck(); }

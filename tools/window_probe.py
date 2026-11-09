@@ -135,6 +135,7 @@ def analyse(sample):
                 # from contexts owning the main view while showing window pops.
                 primary_direct=bool(flags & 16), primary_context=bool(flags & 32),
                 primary_resting=bool(flags & 64), window_reach_bytes_known=bool(flags & 128),
+                window_visibility_enabled=bool(flags & 256),
                 view_flags=sample['view_flags'], near_far=sample['near_far'],
                 reach=round(sample['reach'], 3) if math.isfinite(sample['reach']) else None)
     if not flags & 8:

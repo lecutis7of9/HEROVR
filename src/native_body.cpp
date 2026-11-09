@@ -368,7 +368,11 @@ void solveHero(float* out, uintptr_t job, uintptr_t instance) {
             t.floor = standing ? toModel.rotate(wanted.floor) : Vec3{};
             t.kneel = standing && (wanted.flags & native_body::kneel);
             t.wallStride = (wanted.flags & native_body::wallStride) != 0 && !t.kneel;
-            t.wallSpeed = t.wallStride ? std::min(wanted.reserved * .01f, 30.f) : 0.f;
+            t.wallSpeed = t.wallStride ? std::min((wanted.reserved & 0xffffu) * .01f, 30.f) : 0.f;
+            t.wallDistance = t.wallStride ? std::min((wanted.reserved >> 16) * .01f, 3.f) : 0.f;
+            t.wallNormal = t.wallStride && finite(wanted.standUp) ? toModel.rotate(wanted.standUp) : Vec3{};
+            t.wallTravel = t.wallStride && finite(wanted.floor) ? toModel.rotate(wanted.floor) : Vec3{};
+            t.wallCrawl = standing && (wanted.flags & native_body::wallCrawl) != 0;
             t.flipPose = (wanted.flags & native_body::flipPose) != 0;
             // The player can flip during an ordinary jump before HEROVR's
             // swing owns the mover. A real flip is airborne for leg IK even

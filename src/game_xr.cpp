@@ -89,6 +89,7 @@
 #include "spidy/game_menu.hpp"
 #include "spidy/game_offers.hpp"
 #include "spidy/game_pad.hpp"
+#include "spidy/environment_yank.hpp"
 #include "spidy/arm_sprint.hpp" // HEROVR 79.1: left-stick + natural opposite-arm running
 #include "spidy/extras385.hpp"
 #include "spidy/gestures385.hpp"
@@ -2613,6 +2614,8 @@ DWORD WINAPI run(void*) {
         // click. aimed: what each hand's web button would do, markers or not.
         WebPull webPull;
         game_pad::PullPress pullPress;
+        environment_yank::GripPull environmentGrip;
+        environment_yank::Output environmentGripFrame{};
         game_swing::AimData aimed{};
         uint64_t pullsBefore{};
         // The right thumbstick pushed down is the game's D-pad down (heal),
@@ -6754,6 +6757,9 @@ DWORD WINAPI run(void*) {
                             applySettings();
                         }
                     }
+                    environmentGripFrame = {};
+                    if (!swingStarted)
+                        environmentGrip.reset();
                     if (swingStarted) {
                         game_swing::Command input;
                         input.wallRotate = motion.wallRotate;
@@ -6774,6 +6780,40 @@ DWORD WINAPI run(void*) {
                         if (const Vec3 look = motion.headPose.orientation.rotate({0, 0, -1});
                             input.focused && finite(look) && length(look) > .5f)
                             input.look = normalized(look);
+                        // The Spider-Man 2 physical prop adapter is disabled,
+                        // so this uses the game's native L1+R1 environmental
+                        // throw ONLY while the game offers that interaction.
+                        // A deliberate grip and arm yank claims that hand
+                        // before the swing bridge sees the grip press.
+                        {
+                            environment_yank::Input yi;
+                            yi.seconds = frame.seconds;
+                            yi.gameplay = input.focused &&
+                                          mapping == game_pad::Mapping::gameplay &&
+                                          heroNow() == hero_modes::spiderMan &&
+                                          !calibrationInput && !padLayer.latched() &&
+                                          !phone.open() && !gadgetWheel.open() &&
+                                          !swingState.owned && !flyNow.flying;
+                            const auto offered = game_prompts::demand();
+                            yi.eligible = (offered.buttons &
+                                (game_pad::leftShoulder | game_pad::rightShoulder)) ==
+                                (game_pad::leftShoulder | game_pad::rightShoulder);
+                            yi.head = frame.head.position;
+                            for (unsigned i = 0; i < 2; ++i) {
+                                const auto& hand = frame.hands[i];
+                                yi.tracked[i] = hand.valid && validTrackedPose(hand.grip) &&
+                                                validTrackedPose(hand.aim);
+                                yi.free[i] = !swingState.webs[i].attached &&
+                                             !grabWebs[i].on && !ropes[i].on &&
+                                             !u37.holdsGrip[i];
+                                yi.squeeze[i] = hand.squeeze;
+                                yi.hands[i] = hand.grip.position;
+                                yi.aim[i] = hand.aim.orientation.rotate({0, 0, -1});
+                            }
+                            environmentGripFrame = environmentGrip.update(yi);
+                            if (environmentGripFrame.nativeThrow)
+                                game_prompts::note("79.1 ENV THROW: grip and yank -> native L1+R1");
+                        }
                         for (unsigned i = 0; i < 2; ++i) {
                             const auto& hand = motion.swing.hands[i];
                             // Update 37: a trigger held for a gadget gesture keeps its grip
@@ -6786,7 +6826,8 @@ DWORD WINAPI run(void*) {
                             {
                                 const float squeeze = std::isfinite(hand.grip) ? hand.grip : 0.f;
                                 const bool down = squeeze > (grabButtonWas[i] ? .3f : .6f);
-                                const bool press = down && !grabButtonWas[i];
+                                const bool press = down && !grabButtonWas[i] &&
+                                    !(environmentGripFrame.claimed & (1u << i));
                                 grabButtonWas[i] = down;
                                 grabSqueeze[i] = down ? 1.f : 0.f;
                                 // Update 38.3: 0 ASSIST (the 12-degree cone on the ground), 1 EXACT (38.2's
@@ -6856,8 +6897,10 @@ DWORD WINAPI run(void*) {
                                     }
                                 }
                             }
-                            input.hands[i] = {hand.aim, hand.gripRelativeToHead, hand.tracked, hand.trigger,
-                                              u37.holdsGrip[i] || grabWebs[i].on ? 0.f : hand.grip};
+                            const bool envOwns = (environmentGripFrame.claimed & (1u << i)) != 0;
+                            input.hands[i] = {hand.aim, hand.gripRelativeToHead, hand.tracked,
+                                              envOwns ? 0.f : hand.trigger,
+                                              envOwns || u37.holdsGrip[i] || grabWebs[i].on ? 0.f : hand.grip};
                             // Version 0.0.73 (fix 5): DAREDEVIL's held grapple aims along the baton, from its tip.
                             if (ddAimHeld[i] && heroNow() == hero_modes::daredevil && finite(ddAimFrom[i]) && finite(ddAimDir[i]) &&
                                 validTrackedPose(frame.head) && validTrackedPose(motion.headPose)) {
@@ -12318,12 +12361,20 @@ DWORD WINAPI run(void*) {
                                 game_prompts::note(line);
                                 consoleLine(line);
                             }
+                            // A deliberate grip yank asks for the exact native
+                            // environmental throw that R3 already exposed.
+                            // It never writes an unported prop's transform.
+                            if (mapping == game_pad::Mapping::gameplay &&
+                                environmentGripFrame.nativeThrow && !storyAbility.sending())
+                                pad.buttons |= game_pad::leftShoulder | game_pad::rightShoulder;
                             // The throw's aim: while the game's LB + RB goes out (and 0.4 s after), the left stick
                             // points where the player looks or the right hand points, in the game camera's frame.
                             const bool throwing = mapping == game_pad::Mapping::gameplay && !storyAbility.sending() &&
                                                   (pad.buttons & (sb::pad::lb | sb::pad::rb)) == (sb::pad::lb | sb::pad::rb);
                             const Vec3 look = motion.headPose.orientation.rotate({0, 0, -1});
-                            const Vec3 point = motion.swing.hands[1].aim.orientation.rotate({0, 0, -1});
+                            const unsigned throwHand = environmentGripFrame.nativeThrow && environmentGripFrame.hand >= 0
+                                ? static_cast<unsigned>(environmentGripFrame.hand) : 1u;
+                            const Vec3 point = motion.swing.hands[throwHand].aim.orientation.rotate({0, 0, -1});
                             const uint32_t throwsBefore = storyAim.throws;
                             const auto aim = storyAim.update(frame.seconds, storyAimNow.load(), throwing, look, point,
                                                              Vec3{camera[8], 0, camera[10]}, frame.hands[0].stickX,

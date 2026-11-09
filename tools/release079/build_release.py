@@ -120,7 +120,11 @@ def build(previous, mod, exe, output, old_manifest):
                     z.write(path, arcname=(Path("HV079") / path.relative_to(stage)).as_posix())
 
     # The mod ZIP is constructed by tools/package.ps1 and checked separately.
-    shutil.copy2(mod, output / MOD_ZIP)
+    # The CI invokes this assembler with --mod dist/<name>.zip and --out dist,
+    # where source and destination are the same file. CopyFile2 rejects
+    # self-copies on Windows (WinError 32).
+    if mod.resolve() != (output / MOD_ZIP).resolve():
+        shutil.copy2(mod, output / MOD_ZIP)
     existing = json.loads(Path(old_manifest).read_text(encoding="utf-8-sig"))
     existing.update({
         "schema": 1,

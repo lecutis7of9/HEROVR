@@ -659,7 +659,8 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
                  normalized(forward + side * .2f), tuck);
         }
     }
-    // 6. Wall movement has TWO distinct sources:
+    // 6. Wall movement: native game wall-crawl, HEROVR slow cling/crawl,
+    // and HEROVR fast wall-running are three distinct animation sources.
     // - The game's own wall crawl: KEEP its animated knees/ankles. Never
     //   straighten an authentic Spider-Man crawl into a flat standing pose.
     // - A HEROVR-owned wall run: the game may give us a tucked AIR pose.
@@ -675,10 +676,25 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
                            std::isfinite(t.wallDistance) && t.wallDistance >= 0.f;
     const bool wallRun = c.dynamicLegs && t.wallStride && !t.kneel &&
                          std::isfinite(t.wallSpeed) && t.wallSpeed > 1.5f && wallFrame;
+    const bool wallCling = c.dynamicLegs && t.wallCling && !t.kneel && wallFrame;
     state.wallStrideWeight = c.dynamicLegs
                                  ? approach(state.wallStrideWeight, wallRun ? 1.f : 0.f,
                                             c.wallStrideBlendSpeed * dt)
                                  : 0.f;
+    state.wallClingWeight = c.dynamicLegs
+                                ? approach(state.wallClingWeight, wallCling ? 1.f : 0.f,
+                                           c.wallClingBlendSpeed * dt)
+                                : 0.f;
+    if (wallRun || wallCling) {
+        state.lastWallNormal = rawNormal;
+        state.lastWallTravel = travel;
+        state.lastWallDistance = t.wallDistance;
+    }
+    if (wallCling && t.wallSpeed > .12f) {
+        const float cycles = std::clamp(t.wallSpeed * .30f, .2f, 1.2f);
+        state.wallClingPhase = wrap(state.wallClingPhase + 2.f * pi * cycles * dt);
+    }
+    r.wallCling = state.wallClingWeight;
     if (wallRun) {
         state.lastWallNormal = rawNormal;
         state.lastWallTravel = travel;
@@ -719,13 +735,48 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
             pose.turn(rig.below[leg.foot], partial(orient, gait), pose.position(leg.foot));
         }
     }
+    // Slow HEROVR wall-crawl / stationary cling: splay the knees and feet,
+    // with the soles pressed to the wall, rather than hanging straight
+    // beneath the hips. Movement adds alternating crawl steps while stopped
+    // gives the spread climbing stance. Unlike the game-authored crawl below,
+    // this is a procedural fallback when the engine supplies an AIR pose.
+    if (state.wallClingWeight > 0.f && length(state.lastWallNormal) > .5f &&
+        length(state.lastWallTravel) > .5f) {
+        const Vec3 wallOut = state.lastWallNormal;
+        const Vec3 travel = state.lastWallTravel;
+        const Vec3 sideAxis = normalized(cross(wallOut, travel));
+        // Project the body's up into the wall plane; the normal is not a
+        // gravity axis and must never rotate the headset's world.
+        const Vec3 projectedUp = up - wallOut * dot(up, wallOut);
+        const Vec3 climbUp = length(projectedUp) > .1f ? normalized(projectedUp) : travel;
+        const float moving = t.wallCling && t.wallSpeed > .12f ? 1.f : 0.f;
+        for (int i = 0; i < 2; ++i) {
+            const auto& leg = legs[i];
+            const Vec3 hip = pose.position(leg.upper);
+            const float len = (rig.thigh[i] + rig.shin[i]) * s;
+            const float phase = state.wallClingPhase + (i ? pi : 0.f);
+            const float crawlStep = moving * std::cos(phase) * .13f * s;
+            const float peel = moving * std::max(0.f, std::sin(phase)) * .065f * s;
+            const float clearance = std::clamp(state.lastWallDistance - rig.ankleHeight[i] * s,
+                                               .12f * s, .65f * s);
+            const float spread = (i == 0 ? .23f : -.23f) * s;
+            const Vec3 foot = hip - climbUp * (len * .42f) - wallOut * clearance +
+                              sideAxis * spread + travel * crawlStep + wallOut * peel;
+            const Vec3 kneePole = normalized(wallOut * .75f + sideAxis * (i == 0 ? .35f : -.35f));
+            const float gait = w * state.wallClingWeight;
+            limb(pose, rig, leg.upper, leg.lower, leg.foot, foot, kneePole, gait);
+            const Quat orient = between(pose.direction(leg.foot, rig.footForward[i]),
+                                        pose.direction(leg.foot, rig.footUp[i]), climbUp, wallOut);
+            pose.turn(rig.below[leg.foot], partial(orient, gait), pose.position(leg.foot));
+        }
+    }
     // Grounded feet plant normally, except during an authentic game wall
     // crawl: preserving the original Spider-Man wall-crawl leg pose takes
     // precedence even if his feet momentarily pause.
     const bool gameWallCrawl = c.dynamicLegs && t.wallCrawl && t.plant && !t.kneel;
     const float legWeight = w * (1.f - state.legAnimationWeight) *
-                            (1.f - state.wallStrideWeight) * (1.f - state.flipTuckWeight) *
-                            (gameWallCrawl ? 0.f : 1.f);
+                            (1.f - state.wallStrideWeight) * (1.f - state.wallClingWeight) *
+                            (1.f - state.flipTuckWeight) * (gameWallCrawl ? 0.f : 1.f);
     if (r.grounded && t.plant && legWeight > 0.f) {
         // Planted: under each hip on the floor, the ankle at its rest height,
         // the foot flat and facing the body's way. The game's pose has nothing

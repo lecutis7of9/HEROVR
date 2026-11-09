@@ -13460,14 +13460,18 @@ DWORD WINAPI run(void*) {
                                                       : Vec3{};
                         const float strideSpeed = length(strideTravel);
                         const bool strideActive = strideWall && std::isfinite(strideSpeed) && strideSpeed > 1.5f;
+                        // A slow HEROVR wall cling/crawl must keep Spider-Man's
+                        // knees splayed and his feet on the wall even at rest.
+                        const bool clingActive = strideWall && !strideActive;
+                        const bool wallPose = strideActive || clingActive;
                         // The body's actual distance to the wall and its
                         // motion along the wall let the feet face/contact the
                         // surface. Do NOT rotate the HMD to the wall.
-                        const uint32_t wallCm = strideActive && std::isfinite(swingState.wallDistance)
+                        const uint32_t wallCm = wallPose && std::isfinite(swingState.wallDistance)
                                                      ? static_cast<uint32_t>(
                                                            std::clamp(swingState.wallDistance, 0.f, 3.f) * 100.f)
                                                      : 0u;
-                        const uint32_t speedCm = strideActive
+                        const uint32_t speedCm = wallPose
                                                      ? static_cast<uint32_t>(
                                                            std::clamp(strideSpeed, 0.f, 30.f) * 100.f)
                                                      : 0u;
@@ -13496,14 +13500,20 @@ DWORD WINAPI run(void*) {
                                      (motion.standing || crawlsFloor ? native_body::standing : 0u) |
                                      (kneels ? native_body::kneel : 0u) |
                                      (strideActive ? native_body::wallStride : 0u) |
+                                     (clingActive ? native_body::wallCling : 0u) |
                                      (ownGameCrawl ? native_body::wallCrawl : 0u) |
                                      (nativeFlip ? native_body::flipPose : 0u);
                         // The standing fields have no ground use while
                         // airborne. For a wall stride they carry the true
                         // world-space surface normal and tangent. The native
                         // solver interprets these only with wallStride set.
-                        pose.standUp = strideActive ? strideNormal : motion.standUp;
-                        pose.floor = strideActive ? normalized(strideTravel) : motion.floor;
+                        const Vec3 wallAlongUp = Vec3{0, 1, 0} -
+                                                 strideNormal * dot(Vec3{0, 1, 0}, strideNormal);
+                        const Vec3 wallTangent = strideSpeed > .12f
+                                                     ? normalized(strideTravel)
+                                                     : normalized(wallAlongUp);
+                        pose.standUp = wallPose ? strideNormal : motion.standUp;
+                        pose.floor = wallPose ? wallTangent : motion.floor;
                         pose.eyes = Vec3{(motion.eyes[0][12] + motion.eyes[1][12]) / 2,
                                          (motion.eyes[0][13] + motion.eyes[1][13]) / 2,
                                          (motion.eyes[0][14] + motion.eyes[1][14]) / 2} -

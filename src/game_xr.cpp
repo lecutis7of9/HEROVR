@@ -8257,7 +8257,24 @@ DWORD WINAPI run(void*) {
                                                 !layerOn && !fly076Flying &&
                                                 (origins.play() & buttonY) != 0 &&
                                                 !(named & game_pad::NamedPress::controlY);
-                        walk.interact = interactStep.pressed() || airWebZipY;
+                        // Spider-Man 2's NATIVE Web Line: L2 aim + Y
+                        // (DualSense Triangle). A left physical trigger
+                        // held while looking at the building from a perch
+                        // or ground is game aim, and Y is the game's Web
+                        // Line action. The game chooses whether its stealth
+                        // Web Line can attach here. Do NOT create a fake rope
+                        // or swallow native stealth takedown prompts.
+                        const bool nativeWebLineAim =
+                            steering && !calibrationInput && !layerOn &&
+                            heroNow() == hero_modes::spiderMan && !swingState.owned &&
+                            !inFlight && !fight && !fly076Flying &&
+                            frame.hands[0].valid &&
+                            std::isfinite(frame.hands[0].trigger) &&
+                            frame.hands[0].trigger >= .7f &&
+                            !(swingState.webs[0].attached || swingState.webs[1].attached);
+                        walk.interact = interactStep.pressed() || airWebZipY ||
+                            (nativeWebLineAim && (origins.play() & buttonY) &&
+                             !(named & game_pad::NamedPress::controlY));
                         yCardSentFrames += yCardNear && walk.interact;
                         { // CUT5 CINE PROMPT: each Y press near the scene's offer, and whether the game's Y went out.
                             const bool yDown = (origins.play() & buttonY) != 0;
@@ -8465,7 +8482,7 @@ DWORD WINAPI run(void*) {
                         const bool slow = gameTime.installed && gameTime.own < game_pad::ZipPress::slowBelow;
                         const auto zipKeys = zipPress.update(frame.seconds, zipUp, sticking, slow);
                         walk.zip = zipKeys.zip;
-                        walk.aim = zipKeys.aim;
+                        walk.aim = zipKeys.aim || nativeWebLineAim; // L2 also primes the game's own Web Line
                         if ((walk.heal && !healing) || (walk.zip && !zipping))
                             runtime.haptic(1, .2f);
                         if (walk.heal && !healing) {

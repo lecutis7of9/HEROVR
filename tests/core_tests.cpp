@@ -15449,7 +15449,7 @@ int main() {
                     hand.grip.position.y += .035f;
                 moved = flipFrame(rig, frame, false, true);
             }
-            frame.hands[0].stickY = 1;
+            frame.hands[1].stickY = 1;
             for (int i = 0; i < 30; ++i)
                 moved = flipFrame(rig, frame, false, true);
             return length(moved.flipTilt.rotate({0, 1, 0}) - Vec3{0, 1, 0});
@@ -15622,9 +15622,10 @@ int main() {
         }
         check(length(m.swing.move) > .5f, "a jump held into the air took the stick");
         flipFrame(rig, f, false, true);
+        f.hands[1].stickY = 1; // the RIGHT stick now owns airborne flips
         for (int i = 0; i < 6; ++i)
             m = flipFrame(rig, f, true, true);
-        check(!levelTilt(m.swing.tilt), "A held in the air with the stick did not turn the player");
+        check(!levelTilt(m.swing.tilt), "A held in the air with the right stick did not turn the player");
     });
     test("flip: held, the stick turns as fast as it is tilted and at rest holds the angle; let go, level", [] {
         constexpr float turn = 6.2831853f, full = turn / FlipMotion::holdTurnSeconds;
@@ -15931,7 +15932,7 @@ int main() {
             rig.reset();
             auto f = trackedFrame();
             flipFrame(rig, f, false);
-            f.hands[0].stickY = 1;
+            f.hands[1].stickY = 1;
             GameMotionFrame m;
             for (int i = 0; i < 40; ++i)
                 m = flipFrame(rig, f, false);
@@ -15944,7 +15945,7 @@ int main() {
         GameTrackingRig rig;
         rig.flips(true);
         auto f = trackedFrame();
-        f.hands[0].stickY = 1;
+        f.hands[1].stickY = 1;
         flipFrame(rig, f, false);
         auto m = flipFrame(rig, f, true);
         for (int i = 0; i < 75; ++i)
@@ -15977,7 +15978,8 @@ int main() {
             const auto m = flipFrame(rig, f, i < 30);
             check(levelTilt(m.swing.tilt) && length(m.swing.move) > .5f, "flips off, A in the air flipped");
         }
-        // On, A held with the stick turns the player; switched off, they are level at once.
+        // On, A held with the right stick turns the player; switched off, they are level at once.
+        f.hands[1].stickY = 1;
         rig.flips(true);
         auto m = flipFrame(rig, f, true);
         for (int i = 0; i < 20; ++i)
@@ -36802,7 +36804,7 @@ int main() {
                 auto f = trackedFrame();
                 flipFrame(rig, f, false, false);
                 flipFrame(rig, f, false, true);
-                f.hands[0].stickY = stick;
+                f.hands[1].stickY = stick;
                 GameMotionFrame m;
                 for (int i = 0; i < 30; ++i)
                     m = flipFrame(rig, f, false, true);

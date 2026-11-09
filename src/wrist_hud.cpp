@@ -697,6 +697,8 @@ const char* labelOf(Control c) {
         return "INVINCIBLE";
     case Control::doubleHealth:
         return "DOUBLE HEALTH";
+    case Control::bodyAnimations:
+        return "BODY ANIMATIONS";
     case Control::flyMode:
         return "FLY MODE";
     case Control::flyVignette:
@@ -961,7 +963,7 @@ constexpr SectionDef powersSections[] = {
 constexpr SectionDef vrSections[] = {
     {"BODY AND VIEW", C::none, C::none, "", "", "SETTINGS", -1,
      {C::combatCrawlCap, C::combatWallTilt, C::combatHandFlips, C::npcFade, C::playOnMonitor, C::combatSpiderClimbOnly,
-      C::combatGameBody, C::combatCalibLook, C::combatWeaponCollision}},
+      C::combatGameBody, C::bodyAnimations, C::combatCalibLook, C::combatWeaponCollision}},
     {"WEBS", C::webStyle, C::webColor, "", "", nullptr, -1,
      {C::thickness, C::speed, C::webStyle, C::webColor, C::reticles, C::combatWebRope}},
     {"HOLOGRAM", C::hudHeight, C::hudScale, "", "", nullptr, -1,
@@ -2576,6 +2578,7 @@ std::string buttonValue(const View& view, Control c) {
            : c == Control::bloodVisor   ? std::string(view.bloodVisor ? "ON" : "OFF")
            : c == Control::invincible   ? std::string(view.invincible ? "ON" : "OFF")
            : c == Control::doubleHealth ? std::string(view.doubleHealth ? "ON" : "OFF")
+           : c == Control::bodyAnimations ? std::string(view.bodyAnimations ? "DYNAMIC" : "CLASSIC")
            : c == Control::flyMode      ? std::string(extras385::fly::speedName(view.flyMode))
            : c == Control::flyVignette  ? std::string(view.flyVignette ? "ON" : "OFF")
            : c == Control::flyRoll      ? std::string(extras385::fly::rollName(view.flyRoll))
@@ -3470,6 +3473,8 @@ const char* helpText(Control c) {
         return extras385::invincible::help;
     case Control::doubleHealth:
         return extras385::double_health::help;
+    case Control::bodyAnimations:
+        return "CLASSIC: standard body IK. DYNAMIC: animated swing sway, wall-crawl legs, wall runs, and flip tucks. Head and controller hands stay tracked.";
     case Control::flyMode:
         return extras385::fly::help;
     case Control::flyVignette:
@@ -3850,6 +3855,8 @@ const char* shortName(Control c) {
         return "INVINCIBLE";
     case Control::doubleHealth:
         return "2X HEALTH";
+    case Control::bodyAnimations:
+        return "BODY ANIM";
     case Control::flyMode:
         return "FLY";
     case Control::flyVignette:
@@ -4142,6 +4149,7 @@ void pressHeroSetting(Control c, Menu::Result& r) {
     switch (c) {
     case Control::invincible: r.invincible = true; break;
     case Control::doubleHealth: r.doubleHealth = true; break;
+    case Control::bodyAnimations: r.bodyAnimations = true; break;
     case Control::flyMode: r.flyMode = true; break;
     case Control::flyVignette: r.flyVignette = true; break;
     case Control::flyRoll: r.flyRoll = true; break;
@@ -4563,6 +4571,9 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
                 break;
             case Control::doubleHealth:
                 r.doubleHealth = true;
+                break;
+            case Control::bodyAnimations:
+                r.bodyAnimations = true;
                 break;
             case Control::flyMode:
                 r.flyMode = true;

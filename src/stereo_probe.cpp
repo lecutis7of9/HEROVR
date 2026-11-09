@@ -31,6 +31,7 @@
 #include "spidy/shared_lod.hpp"
 #include "spidy/view_gates.hpp"
 #include "spidy/window_probe.hpp"
+#include "spidy/window_visibility.hpp" // isolated active-view lit-window experiment
 #include "spidy/recording_fov.hpp"
 #include <MinHook.h>
 #include <atomic>
@@ -574,12 +575,11 @@ std::atomic<uint32_t> farWindowsPercent{100};
 // 0.0.73 test 2 CULL MARGIN (recording_fov::cullMarginOf): the degrees the game's view reaches past the head's lens.
 std::atomic<uint32_t> cullMarginDegrees{recording_fov::cullMarginChoices[0]};
 bool farWindowsReady{};
-// Test build 11: write 2 (the CANDIDATE +88) is gated OFF. The Oct 28 build 9 log had it
-// writing every eye query (31497 writes, 145 m -> 290 m) and the window lights flickering;
-// the game reads +88 per view and region changes rewrite it, so the eyes' far models could
-// switch between impostor and full model from one picture to the next. FAR WINDOWS keeps
-// write 1 (LOD REACH, CONFIRMED) only.
-constexpr bool farWindowsCandidateWrite = false;
+// The earlier per-eye +88 candidate change wrote two competing answers
+// (31497 writes, 145 m -> 290 m), and the windows flickered. The new branch
+// only lifts the already-rendering primary view's query by at most 50%, with
+// byte checks and explicit FAR WINDOWS = game disable. This is still an
+// engine-layout CANDIDATE requiring a headset test.
 std::atomic<uint64_t> farWindowsCalls{}, farWindowsWrites{};
 std::atomic<float> farWindowsGame{}, farWindowsOurs{};
 // The HUD panel (native_hud.hpp): PlayerModelHudFollower's placement 73ab80,
@@ -2896,10 +2896,14 @@ void windowProbe(void* view, void* cull, void* result) {
     const auto at = reinterpret_cast<uintptr_t>(view);
     if (!at)
         return;
+    const auto primary = pointer(base + 0xc2ca220);
+    const int eye = eyeView(at);
+    const auto contextParent = eye < 0 && at && at != primary ? pointer(at + 0x1dc8) : 0;
+    const auto owner = spidy::window_visibility::owner(at, primary, contextParent, eye >= 0);
     int slot = -1;
-    if (const int eye = eyeView(at); eye >= 0)
+    if (eye >= 0)
         slot = 1 + eye;
-    else if (const auto primary = pointer(base + 0xc2ca220); primary && (at == primary || pointer(at + 0x1dc8) == primary))
+    else if (owner != spidy::window_visibility::other)
         slot = 0;
     if (slot < 0) {
         InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&data.other));
@@ -2942,7 +2946,14 @@ void windowProbe(void* view, void* cull, void* result) {
         sample.viewFlags = viewFlags;
     }
     sample.reach = std::isfinite(reach) ? reach : 0.f;
-    sample.flags = (result ? 1u : 0u) | (active ? 2u : 0u) | (held && (viewFlags & 2) ? 4u : 0u) | (held ? 8u : 0u);
+    // Keep the 376-byte sample ABI; spare bits distinguish direct main-view
+    // queries from main-view query contexts and whether the candidate fix can
+    // run. Existing report parsers continue reading bits 0-3 unchanged.
+    sample.flags = (result ? 1u : 0u) | (active ? 2u : 0u) | (held && (viewFlags & 2) ? 4u : 0u) |
+                   (held ? 8u : 0u) | (owner == spidy::window_visibility::direct ? 16u : 0u) |
+                   (owner == spidy::window_visibility::parent ? 32u : 0u) |
+                   (rested.load(std::memory_order_relaxed) ? 64u : 0u) |
+                   (farWindowsReady ? 128u : 0u);
     InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&data.sequence));
     if (data.started <= 0)
         data.started = now;
@@ -2963,17 +2974,26 @@ void* impostorQueries(void* view, void* cull) {
         eyeView(reinterpret_cast<uintptr_t>(view)) >= 0 &&
         read(reinterpret_cast<uintptr_t>(result) + 0x88, &reach, 4) && std::isfinite(reach) && reach > 0)
         writeFloat(reinterpret_cast<uintptr_t>(result) + 0x88, reach * impostorReach.load() / 100.f);
-    else if (const uint32_t farPercent = farWindowsPercent.load(std::memory_order_relaxed);
-             farWindowsCandidateWrite && result && farWindowsReady && enabled && farPercent > 100 && eyeView(reinterpret_cast<uintptr_t>(view)) >= 0) {
-        // Update 38.3 FAR WINDOWS (CANDIDATE, byte-checked above).
-        farWindowsCalls.fetch_add(1, std::memory_order_relaxed);
-        if (read(reinterpret_cast<uintptr_t>(result) + 0x88, &reach, 4) && std::isfinite(reach) && reach > 1.f &&
-            reach < 5000.f) {
-            const float ours = reach * static_cast<float>(farPercent) / 100.f;
-            if (writeFloat(reinterpret_cast<uintptr_t>(result) + 0x88, ours)) {
-                farWindowsWrites.fetch_add(1, std::memory_order_relaxed);
-                farWindowsGame.store(reach, std::memory_order_relaxed);
-                farWindowsOurs.store(ours, std::memory_order_relaxed);
+    else if (result) {
+        const auto at = reinterpret_cast<uintptr_t>(view);
+        const auto primary = pointer(base + 0xc2ca220);
+        const int eye = eyeView(at);
+        const auto contextParent = eye < 0 && at && at != primary ? pointer(at + 0x1dc8) : 0;
+        const auto owner = spidy::window_visibility::owner(at, primary, contextParent, eye >= 0);
+        const uint32_t percent = farWindowsPercent.load(std::memory_order_relaxed);
+        if (spidy::window_visibility::eligible(
+                owner, enabled, rested.load(std::memory_order_relaxed) != 0, farWindowsReady, percent)) {
+            // The game's own active/main query only; never both offscreen eyes.
+            // +88 and byte guards are known, but its semantic use is CANDIDATE.
+            // FAR WINDOWS = game (100) bypasses this write immediately.
+            farWindowsCalls.fetch_add(1, std::memory_order_relaxed);
+            if (read(reinterpret_cast<uintptr_t>(result) + 0x88, &reach, 4)) {
+                const float ours = spidy::window_visibility::reach(reach, percent);
+                if (ours > reach && writeFloat(reinterpret_cast<uintptr_t>(result) + 0x88, ours)) {
+                    farWindowsWrites.fetch_add(1, std::memory_order_relaxed);
+                    farWindowsGame.store(reach, std::memory_order_relaxed);
+                    farWindowsOurs.store(ours, std::memory_order_relaxed);
+                }
             }
         }
     }

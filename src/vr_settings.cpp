@@ -18,6 +18,7 @@ constexpr const char* screenChoices[] = {"SMALL", "MEDIUM", "LARGE"};
 // CALIBRATE BODY, a switch with names of its own: ON RESUME asks for the T-pose
 // as soon as play resumes.
 constexpr const char* calibrateChoices[] = {"NO", "ON RESUME"};
+constexpr const char* legAnimationChoices[] = {"CLASSIC", "DYNAMIC"};
 // WEB BUTTON, a switch named by the button that webs: TRIGGER swaps it with the grip.
 constexpr const char* webButtonChoices[] = {"GRIP", "TRIGGER"};
 // WEB STYLE, a switch named by how webs behave: ARCADE passes thin things by.
@@ -181,6 +182,8 @@ template <class V> auto switchOf(Item item, V& v) -> decltype(&v.aimMarkers) {
         return &v.airWebs;
     case Item::calibrate:
         return &v.calibrate;
+    case Item::legAnimations:
+        return &v.legAnimations;
     case Item::flips:
         return &v.flips;
     case Item::webButton:
@@ -238,9 +241,9 @@ Values sanitized(Values v) {
     v.automaticHandThreshold = std::clamp(v.automaticHandThreshold, 50, 300);
     return v;
 }
-const std::array<Row, 43>& rows() {
+const std::array<Row, 44>& rows() {
     // The help fits the game's description column beside the rows.
-    static const std::array<Row, 43> all{{
+    static const std::array<Row, 44> all{{
         {Item::none, "WEBS", nullptr, {}},
         {Item::webStyle, "WEB STYLE",
          "Arcade: webs pass lamp posts, signs and cars, and swings stay above the street.", webStyleChoices},
@@ -290,6 +293,9 @@ const std::array<Row, 43>& rows() {
         {Item::none, "BODY", nullptr, {}},
         {Item::calibrate, "CALIBRATE BODY", "Fit Spider-Man to you: pick ON RESUME, then hold both triggers in a T-pose.",
          calibrateChoices},
+        {Item::legAnimations, "LEG ANIMATIONS",
+         "Dynamic: use moving game leg poses in swings, wall runs and parkour; hands stay tracked.",
+         legAnimationChoices},
         {Item::none, "EXPERIMENTAL", nullptr, {}},
         {Item::flips, "FLIPS", "In the air the left stick turns you over; tap A for one flip, hold A to stay.", {}},
         {Item::flipSpeed, "FLIP SPEED", "How fast a flip turns you over, at full tilt of the left stick.",
@@ -429,6 +435,7 @@ struct TabOnly {
 constexpr TabOnly tabOnly[] = {
     {"near_clip_mm", nullptr, &Values::nearClipMm},
     {"hand_climb", &Values::handClimb, nullptr},
+    {"leg_animations", &Values::legAnimations, nullptr},
     {"wall_distance_cm", nullptr, &Values::wallDistance},
     {"realistic_flips", &Values::realisticFlips, nullptr},
     {"rotation_strength", nullptr, &Values::automaticStrength},

@@ -24,7 +24,7 @@ add_compile_definitions(SM2_PORT=1)
 option(SPIDY_BUILD_XR "Build the Windows OpenXR / D3D12 swing lab" ${WIN32})
 # 0.0.72: a test / experimental build shows the TEST BUILD NOTICE after calibration (test_notice.hpp).
 # Turn it OFF for a public release.
-option(HERO_TEST_BUILD "Test build: show the test-version notice after calibration" ON) # the public 0.0.75 release: OFF (test builds: ON)
+option(HERO_TEST_BUILD "Test build: show the test-version notice after calibration" OFF) # the public 0.0.75 release: OFF (test builds: ON)
 option(SPIDY_BUILD_OBSERVER "Build the opt-in camera diagnostic DLL" OFF)
 option(SPIDY_BUILD_LAUNCHER "Build the Spidy launcher window (Dear ImGui from tools/bootstrap.ps1)" ${SPIDY_BUILD_XR})
 

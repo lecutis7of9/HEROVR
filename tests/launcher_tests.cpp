@@ -639,6 +639,7 @@ int main() {
         t.handClimb = t.realisticFlips = true;
         t.uiStyle = 1;
         t.nearClipMm = 10;
+        t.legAnimations = true; // away from Classic; profile includes Dynamic Body
         t.wallDistance = 60;
         t.automaticStrength = 75;
         t.automaticSpeed = 360;
@@ -668,7 +669,7 @@ int main() {
                   "aim_markers=1\nair_webs=1\nswing_speed=32\nweight=100\nwall_run=1\nsnap_turn=30\n"
                   "smooth_turn=120\nhaptics=100\nbody_haptics=100\nbody_haptics_webs=1\nbody_haptics_wind=1\n"
                   "body_haptics_combat=1\nbody_haptics_movement=1\nscreen_size=1\nscreen_depth=2\nhud=2\n"
-                  "ui_style=0\nnear_clip_mm=20\nflips=0\nflip_speed=180\nhand_climb=0\nwall_distance_cm=40\n"
+                  "ui_style=0\nnear_clip_mm=20\nleg_animations=0\nflips=0\nflip_speed=180\nhand_climb=0\nwall_distance_cm=40\n"
                   "realistic_flips=0\nrotation_strength=50\nrotation_speed=240\nflight_speed_min=3\n"
                   "swing_momentum=1\nrotation_response_ms=500\nhand_momentum=100\nangular_drag_ms=3000\n"
                   "hand_speed_min_cm=100\nair_rotation_brake=1\n",

@@ -29,7 +29,7 @@ jobs:
       - name: Test Sandman read-only diagnostic scripts
         run: |
           $env:PYTHONPATH = 'tools'
-          python -B -m unittest -v test_compare_sandman_render
+          python -B -m unittest -v test_compare_sandman_render test_windows_fault
           if ($LASTEXITCODE) { throw 'Sandman diagnostic regressions failed' }
       - name: Fetch native build dependencies
         run: |

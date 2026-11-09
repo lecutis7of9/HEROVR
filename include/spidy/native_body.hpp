@@ -58,6 +58,9 @@ enum Flags : uint32_t {
     // 79.1: active user-driven FlipMotion rotation (not wall-body/flight
     // tilt), so the animated body may curl without moving tracked camera.
     flipPose = 256,
+    // Only the game's own wall-crawl state; preserve its authored leg pose
+    // instead of replacing it with flat planted feet in DYNAMIC.
+    wallCrawl = 512,
 };
 // 0.0.72 GAME BODY spec point 3: a command expires 250 ms after it came (a longer lease, up to the
 // 500 SpidyBodySubmit accepts from older probes, is cut to 250), so a stalled game thread never
@@ -67,8 +70,11 @@ constexpr uint32_t leaseOf(uint32_t ms) { return ms < maxLeaseMs ? ms : maxLease
 struct Command {
     uint32_t magic = 0x53424443, version = 4, bytes = sizeof(Command), flags{};
     uint64_t serial{};
-    // 79.1: reserved carries wall speed in cm/s only with wallStride.
-    // No Command version/size change, so the older probes remain compatible.
+    // 79.1: with wallStride, reserved packs wall-tangent speed in cm/s
+    // (low 16 bits) and game-measured body-centre wall clearance in cm
+    // (high 16 bits). standUp carries the wall's OUTWARD normal, floor its
+    // tangential travel direction, but ONLY if standing is false and
+    // wallStride is set. Command version/size and original uses unchanged.
     uint32_t leaseMs = 250, reserved{};
     Vec3 eyes{};   // between the eyes, relative to the feet
     Quat facing{}; // the headset, world axes (OpenXR: -z where it looks)

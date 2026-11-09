@@ -659,51 +659,73 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
                  normalized(forward + side * .2f), tuck);
         }
     }
-    // 6. Legs: a native HEROVR wall run can still be the game's AIR
-    // animation, so freeing the game's feet alone leaves a curled airborne
-    // pose. Only when the native wall mover is actually travelling, give
-    // each foot a grounded/swing half-cycle along the player's body-facing
-    // tangent, and alternately lift one foot off the wall. Stop smoothly.
-    // This is BELOW the headset solve and does not change either controller.
+    // 6. Wall movement has TWO distinct sources:
+    // - The game's own wall crawl: KEEP its animated knees/ankles. Never
+    //   straighten an authentic Spider-Man crawl into a flat standing pose.
+    // - A HEROVR-owned wall run: the game may give us a tucked AIR pose.
+    //   Use the wall's *outward normal* as the foot's sole-up axis and its
+    //   actual velocity tangent (horizontal or vertical) as the stride/toe
+    //   direction. The body stays world-upright under its fixed headset.
+    // A wall normal is not the head's up! Rotating the view with it is wrong.
+    const Vec3 rawNormal = normalized(t.wallNormal);
+    const Vec3 rawTravel = t.wallTravel - rawNormal * dot(t.wallTravel, rawNormal);
+    const Vec3 travel = normalized(rawTravel);
+    const bool wallFrame = finite(rawNormal) && length(rawNormal) > .5f &&
+                           finite(travel) && length(travel) > .5f &&
+                           std::isfinite(t.wallDistance) && t.wallDistance >= 0.f;
     const bool wallRun = c.dynamicLegs && t.wallStride && !t.kneel &&
-                         std::isfinite(t.wallSpeed) && t.wallSpeed > 1.5f;
+                         std::isfinite(t.wallSpeed) && t.wallSpeed > 1.5f && wallFrame;
     state.wallStrideWeight = c.dynamicLegs
                                  ? approach(state.wallStrideWeight, wallRun ? 1.f : 0.f,
                                             c.wallStrideBlendSpeed * dt)
                                  : 0.f;
     if (wallRun) {
-        // Both legs make one full cycle about every two steps. Use distance,
-        // not frame count, so the feet keep pace with the actual wall mover.
+        state.lastWallNormal = rawNormal;
+        state.lastWallTravel = travel;
+        state.lastWallDistance = t.wallDistance;
+        // Distance-driven stride. The same cadence works upward and sideways,
+        // but the foot targets follow the appropriate tangent.
         const float cycles = std::clamp(t.wallSpeed * .28f, .8f, 2.5f);
         state.wallStridePhase = wrap(state.wallStridePhase + 2.f * pi * cycles * dt);
     }
     r.wallStride = state.wallStrideWeight;
-    if (wallRun && state.wallStrideWeight > 0.f) {
+    if (state.wallStrideWeight > 0.f && length(state.lastWallNormal) > .5f &&
+        length(state.lastWallTravel) > .5f) {
         const float gait = w * state.wallStrideWeight;
+        const Vec3 wallOut = state.lastWallNormal;
+        const Vec3 alongWall = state.lastWallTravel;
         for (int i = 0; i < 2; ++i) {
             const auto& leg = legs[i];
             const Vec3 hip = pose.position(leg.upper);
-            // With a surface under the player's feet use its plane. If the
-            // game still calls the wall-run airborne, use leg length instead
-            // of trusting that absent game-floor target.
             const float legLength = (rig.thigh[i] + rig.shin[i]) * s;
-            const float depth = t.plant ? std::clamp(dot(hip - t.floor, up) - rig.ankleHeight[i] * s,
-                                                     legLength * .65f, legLength * .98f)
-                                        : legLength * .85f;
+            // From the game's measured centre-to-wall clearance, pull the
+            // foot's sole into the surface plane. A lifted step comes OUT of
+            // the wall, not vertically up from an imaginary ground.
+            const float clearance = std::clamp(state.lastWallDistance - rig.ankleHeight[i] * s,
+                                               .12f * s, .65f * s);
             const float phase = state.wallStridePhase + (i ? pi : 0.f);
-            const float along = std::cos(phase) * c.wallStrideReach * s;
-            const float lift = std::max(0.f, std::sin(phase)) * c.wallStrideLift * s;
-            const Vec3 foot = hip - up * depth + forward * along + up * lift;
-            limb(pose, rig, leg.upper, leg.lower, leg.foot, foot, forward, gait);
+            const float travelStep = std::cos(phase) * c.wallStrideReach * s;
+            const float peel = std::max(0.f, std::sin(phase)) * c.wallStrideLift * s;
+            const Vec3 foot = hip - up * (legLength * .66f) - wallOut * clearance +
+                              alongWall * travelStep + wallOut * peel;
+            // The knee points a little AWAY from the building, as a real
+            // running/climbing leg does when pushing off its vertical face.
+            const Vec3 kneePole = normalized(wallOut * .75f + alongWall * .30f);
+            limb(pose, rig, leg.upper, leg.lower, leg.foot, foot, kneePole, gait);
+            // Sole orientation is wall-normal; toes follow the run direction.
+            // Before this fix they both used the ground's up and facing.
             const Quat orient = between(pose.direction(leg.foot, rig.footForward[i]),
-                                        pose.direction(leg.foot, rig.footUp[i]), forward, up);
+                                        pose.direction(leg.foot, rig.footUp[i]), alongWall, wallOut);
             pose.turn(rig.below[leg.foot], partial(orient, gait), pose.position(leg.foot));
         }
     }
-    // Traditional planting remains under stationary feet. Wall gait gets
-    // precedence while it is moving, and fades back into Classic at rest.
+    // Grounded feet plant normally, except during an authentic game wall
+    // crawl: preserving the original Spider-Man wall-crawl leg pose takes
+    // precedence even if his feet momentarily pause.
+    const bool gameWallCrawl = c.dynamicLegs && t.wallCrawl && t.plant && !t.kneel;
     const float legWeight = w * (1.f - state.legAnimationWeight) *
-                            (1.f - state.wallStrideWeight) * (1.f - state.flipTuckWeight);
+                            (1.f - state.wallStrideWeight) * (1.f - state.flipTuckWeight) *
+                            (gameWallCrawl ? 0.f : 1.f);
     if (r.grounded && t.plant && legWeight > 0.f) {
         // Planted: under each hip on the floor, the ankle at its rest height,
         // the foot flat and facing the body's way. The game's pose has nothing

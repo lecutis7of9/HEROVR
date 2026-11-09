@@ -2984,13 +2984,16 @@ void* impostorQueries(void* view, void* cull) {
         const int eye = eyeView(at);
         const auto contextParent = eye < 0 && at && at != primary ? pointer(at + 0x1dc8) : 0;
         const auto owner = spidy::window_visibility::owner(at, primary, contextParent, eye >= 0);
-        const uint32_t percent = farWindowsPercent.load(std::memory_order_relaxed);
+        // This branch tests the primary view's model switching independently
+        // from FAR WINDOWS (which controls the separate, existing LOD reach).
+        // 150% is the bounded A/B test strength; window_visibility = 0 shuts
+        // only this experiment off live, even if FAR WINDOWS stays configured.
+        constexpr uint32_t percent = 150u;
         if (spidy::window_visibility::eligible(
                 owner, enabled && windowVisibilityEnabled.load(std::memory_order_relaxed) != 0,
                 rested.load(std::memory_order_relaxed) != 0, farWindowsReady, percent)) {
             // The game's own active/main query only; never both offscreen eyes.
             // +88 and byte guards are known, but its semantic use is CANDIDATE.
-            // FAR WINDOWS = game (100) bypasses this write immediately.
             farWindowsCalls.fetch_add(1, std::memory_order_relaxed);
             if (read(reinterpret_cast<uintptr_t>(result) + 0x88, &reach, 4)) {
                 const float ours = spidy::window_visibility::reach(reach, percent);

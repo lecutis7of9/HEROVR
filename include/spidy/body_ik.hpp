@@ -255,6 +255,13 @@ struct Config {
     // Kneeling (Targets::kneel), the knee's height over the floor at the
     // body's own size: where the kneecap rests on it.
     float kneeHeight = .07f;
+    // 0.0.79.1 DYNAMIC BODY: when the game visibly changes its lower-body
+    // pose, blend out foot planting so its own knee/ankle animation survives.
+    // Off by default: the classic planted wall stance is unchanged.
+    bool dynamicLegs = false;
+    float legMotionThreshold = .012f; // metres of knee/ankle motion between game poses
+    float legMotionHold = .15f;        // seconds before replanting after motion stops
+    float legBlendSpeed = 9.f;         // shares per second, prevents a pose snap
     // Shrinks the head to a millimetre, so the eyes are not inside it.
     bool hideHead = true;
     // The hands take the controllers' orientation; false keeps the game's.
@@ -274,6 +281,12 @@ struct State {
         Quat orientation{};
     };
     std::array<Held, 2> held{};
+    // Last GAME pose, relative to each hip (before VR adjusts the skeleton);
+    // first two entries are knees, last two are feet. Root motion alone must
+    // not count as a leg animation.
+    std::array<Vec3, 4> previousLegPose{};
+    bool previousLegPoseSet{};
+    float legMotionLeft{}, legAnimationWeight{};
 };
 // Turns the body's yaw by `radians` about the up, at once: the player snap
 // turned (body and all), or the model turned under the body (the hero's
@@ -282,6 +295,7 @@ void turnState(State&, float radians);
 struct Result {
     bool solved{}, grounded{};
     float weight{};
+    float legAnimation{}; // 0 classic planted legs, 1 the game's animation
     // Distance left between each wrist and its target, and between the head
     // joint and its target, model units (-1: not placed).
     std::array<float, 2> handError{-1, -1};

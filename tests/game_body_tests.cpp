@@ -331,7 +331,11 @@ int main() {
             body::State state;
             std::vector<float> out;
             body::Result result;
-            for (int frame = 0; frame < 40; ++frame) {
+            // Inspect the body near peak follow-through, not frame 39:
+            // the 0.1 rad/frame sine reverses near frame 31 and the
+            // filtered sway crosses neutral again around frame 39.
+            // A moving body's instantaneous zero-crossing is NOT no sway.
+            for (int frame = 0; frame < 26; ++frame) {
                 out = rest;
                 body::Pose game(out.data(), 237);
                 const float gameLean = moving ? .18f * std::sin(frame * .10f) : .17f;

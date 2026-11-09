@@ -580,6 +580,9 @@ bool farWindowsReady{};
 // only lifts the already-rendering primary view's query by at most 50%, with
 // byte checks and explicit FAR WINDOWS = game disable. This is still an
 // engine-layout CANDIDATE requiring a headset test.
+// Live A/B switch for this experimental main-view +0x88 write only. The
+// existing FAR WINDOWS / SHARED LOD preferences remain untouched when OFF.
+std::atomic<uint32_t> windowVisibilityEnabled{1};
 std::atomic<uint64_t> farWindowsCalls{}, farWindowsWrites{};
 std::atomic<float> farWindowsGame{}, farWindowsOurs{};
 // The HUD panel (native_hud.hpp): PlayerModelHudFollower's placement 73ab80,
@@ -2953,7 +2956,8 @@ void windowProbe(void* view, void* cull, void* result) {
                    (held ? 8u : 0u) | (owner == spidy::window_visibility::direct ? 16u : 0u) |
                    (owner == spidy::window_visibility::parent ? 32u : 0u) |
                    (rested.load(std::memory_order_relaxed) ? 64u : 0u) |
-                   (farWindowsReady ? 128u : 0u);
+                   (farWindowsReady ? 128u : 0u) |
+                   (windowVisibilityEnabled.load(std::memory_order_relaxed) ? 256u : 0u);
     InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&data.sequence));
     if (data.started <= 0)
         data.started = now;
@@ -2982,7 +2986,8 @@ void* impostorQueries(void* view, void* cull) {
         const auto owner = spidy::window_visibility::owner(at, primary, contextParent, eye >= 0);
         const uint32_t percent = farWindowsPercent.load(std::memory_order_relaxed);
         if (spidy::window_visibility::eligible(
-                owner, enabled, rested.load(std::memory_order_relaxed) != 0, farWindowsReady, percent)) {
+                owner, enabled && windowVisibilityEnabled.load(std::memory_order_relaxed) != 0,
+                rested.load(std::memory_order_relaxed) != 0, farWindowsReady, percent)) {
             // The game's own active/main query only; never both offscreen eyes.
             // +88 and byte guards are known, but its semantic use is CANDIDATE.
             // FAR WINDOWS = game (100) bypasses this write immediately.
@@ -4540,6 +4545,16 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFarWindows(void* percent) {
     if (value < 100 || value > 300)
         return 4402;
     farWindowsPercent = static_cast<uint32_t>(value);
+    return 0;
+}
+// Revamped window lighting experiment: immediate A/B against exactly the
+// previous renderer's impostor query (0 off, 1 on). No other FAR WINDOWS,
+// LOD or texture options are changed by this switch.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWindowVisibility(void* value) {
+    const auto v = reinterpret_cast<uintptr_t>(value);
+    if (v > 1)
+        return 4408;
+    windowVisibilityEnabled = static_cast<uint32_t>(v);
     return 0;
 }
 // 0.0.73 LIGHT CHECKS (eye_queries.hpp): 0 off, 1 on (the default); 4470 otherwise. Read when the eyes are made.

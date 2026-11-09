@@ -1,0 +1,61 @@
+# Private 0.0.79.1 preview; never creates or edits a public release.
+name: HERO VR 79.1 Dynamic Body preview
+on:
+  push:
+    branches:
+      - feature/0791-dynamic-leg-animation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dynamic-body:
+    if: github.repository == 'lecutis7of9/HEROVR'
+    runs-on: windows-2022
+    timeout-minutes: 100
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out the experimental branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch native build dependencies
+        run: |
+          ./tools/bootstrap.ps1 -Observer
+          if ($LASTEXITCODE) { throw "Bootstrap failed ($LASTEXITCODE)" }
+      - name: Compile all native modules and run C++ tests
+        env:
+          SPIDY_BHAPTICS_APP_ID: ${{ secrets.SPIDY_BHAPTICS_APP_ID }}
+          SPIDY_BHAPTICS_API_KEY: ${{ secrets.SPIDY_BHAPTICS_API_KEY }}
+        run: |
+          Remove-Item Env:SM2VR_LAUNCHER -ErrorAction SilentlyContinue
+          ./tools/build.ps1 -Observer -FromSource
+          if ($LASTEXITCODE) { throw "Build/tests failed ($LASTEXITCODE)" }
+      - name: Package isolated test mod (never uploads to Releases)
+        run: |
+          $name = 'HERO-VR-0.0.79.1-DYNAMIC-BODY-TEST-mod'
+          ./tools/package.ps1 -Name $name
+          if ($LASTEXITCODE) { throw "Packaging failed ($LASTEXITCODE)" }
+          $zip = "dist/$name-win64.zip"
+          if (-not (Test-Path -LiteralPath $zip)) { throw "No mod test ZIP: $zip" }
+          python -B tools/check_bundled_python.py $zip --run
+          if ($LASTEXITCODE) { throw 'Bundled Python check failed' }
+          "$((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant())  $name-win64.zip" |
+            Set-Content "$zip.sha256" -NoNewline -Encoding ascii
+          "Preview package: $zip" >> $env:GITHUB_STEP_SUMMARY
+      - name: Attach test ZIP to this run (not a public release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: hero-0791-dynamic-body-preview
+          path: |
+            dist/HERO-VR-0.0.79.1-DYNAMIC-BODY-TEST-mod-win64.zip
+            dist/HERO-VR-0.0.79.1-DYNAMIC-BODY-TEST-mod-win64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14

@@ -2300,13 +2300,6 @@ def wait_for_renderer(game, process, render_data, timeout=180, problems=None, te
     # SM2 port: the render memory module's frame count is only a hint. Should it count no frames (its
     # hooks not reached in this build), look for the queue anyway after `frame_patience` seconds.
     frame_patience = time.monotonic()+30
-    # Experimental 0.0.79.1 startup isolation: avoid running the native
-    # render-discovery probe (which creates its own D3D12 device and swapchain)
-    # during the game's first moments of graphics initialization. The
-    # 0xC0000409 report does not establish this as the cause; keep this bounded
-    # and reversible instead of changing the working renderer DLL.
-    probe_ready_at = None
-    probe_settle_seconds = 8.0
     while alive(game) and time.monotonic() < deadline:
         if tick:
             try:
@@ -2315,14 +2308,6 @@ def wait_for_renderer(game, process, render_data, timeout=180, problems=None, te
                 pass
         memory = render_memory_snapshot(game, render_data) if render_data else None
         if render_data and (not memory or memory['frames'] < 30) and time.monotonic() < frame_patience:
-            time.sleep(.25)
-            continue
-        # Start the settle period once the existing 30-frame guard passes, or
-        # after its 30-second fallback for unsupported frame telemetry.
-        # While waiting, keep checking for process exit and startup errors.
-        if probe_ready_at is None:
-            probe_ready_at = time.monotonic() + probe_settle_seconds
-        if time.monotonic() < probe_ready_at:
             time.sleep(.25)
             continue
         try:

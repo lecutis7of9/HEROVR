@@ -13377,6 +13377,26 @@ DWORD WINAPI run(void*) {
                         const bool mirrorShows = c38(combat38::mirrorView) &&
                                                  mirrorStats.test.phase == mirror_view::running &&
                                                  mirrorStats.gpuCopies > 0 && !mirrorStats.gpuFault;
+                        // 79.1 wall gait: HEROVR can drive the hero along a wall
+                        // while the game stays in AIR and animates bent, tucked
+                        // legs. The original run animation cannot be recovered
+                        // from that static airborne pose. Pass the tangential
+                        // movement speed as an optional pose hint instead;
+                        // Dynamic Body decides whether to use a run stride.
+                        // Only HEROVR's own wall (not the game's authentic wall
+                        // running), never a floor, ceiling rest or flip.
+                        const Vec3 strideNormal = normalized(swingState.wallNormal);
+                        const bool strideWall = swingState.wall == static_cast<uint32_t>(game_swing::Surface::wall) &&
+                                                finite(strideNormal) && std::abs(strideNormal.y) < .7f &&
+                                                finite(swingState.velocity) && !kneels;
+                        const Vec3 strideTravel = strideWall
+                                                      ? swingState.velocity - strideNormal * dot(swingState.velocity, strideNormal)
+                                                      : Vec3{};
+                        const float strideSpeed = length(strideTravel);
+                        const bool strideActive = strideWall && std::isfinite(strideSpeed) && strideSpeed > 1.5f;
+                        pose.reserved = strideActive
+                                            ? static_cast<uint32_t>(std::clamp(strideSpeed, 0.f, 30.f) * 100.f)
+                                            : 0u;
                         // Test build 10 ONE BODY: a worn suit shown in first person replaces the game's body (its arms too).
                         pose.flags = (flatScreen || (strictBody && !strictVerified) ||
                                               !suit_wear::gameBodyDrawn(values.body || strictBody, hero_modes::gameBodyShown(heroNow()),
@@ -13388,7 +13408,8 @@ DWORD WINAPI run(void*) {
                                      (swingState.owned && !motion.standing ? native_body::airborne : 0u) |
                                      (calibratedEye > 0 ? native_body::calibrated : 0u) |
                                      (motion.standing || crawlsFloor ? native_body::standing : 0u) |
-                                     (kneels ? native_body::kneel : 0u);
+                                     (kneels ? native_body::kneel : 0u) |
+                                     (strideActive ? native_body::wallStride : 0u);
                         pose.standUp = motion.standUp;
                         pose.floor = motion.floor;
                         pose.eyes = Vec3{(motion.eyes[0][12] + motion.eyes[1][12]) / 2,

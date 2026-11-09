@@ -7,6 +7,7 @@
 #include "spidy/game_body.hpp"
 #include "spidy/body_ik.hpp"
 #include "spidy/body_calibration.hpp"
+#include "spidy/arm_sprint.hpp"
 #include "spidy/glove_overlay.hpp"
 #include "spidy/native_body.hpp"
 #include "spidy/vr_settings.hpp"
@@ -388,6 +389,37 @@ int main() {
         check(length(stillHipUp -
                      normalized(classicStillPose.direction(rig.pelvis, rig.pelvisUp))) < .015f,
               "stationary pose should return to classic pelvis orientation");
+    });
+    test("79.1 grounded sprint requires real alternating arm strokes and forward stick", [&] {
+        arm_sprint::Detector detector;
+        arm_sprint::Input in;
+        in.enabled = true;
+        in.seconds = 1.f / 90.f;
+        in.forwardStick = 1.f;
+        in.head = {0, 1.7f, 0};
+        in.headForward = {0, 0, -1};
+        in.tracked[0] = in.tracked[1] = true;
+        bool activated = false;
+        for (int i = 0; i < 180; ++i) {
+            const float stride = .20f * std::sin(i * .15f);
+            in.hands[0] = {-.3f, 1.2f, stride};
+            in.hands[1] = { .3f, 1.2f,-stride};
+            activated = detector.update(in) || activated;
+        }
+        check(activated, "alternating opposite arm pumping failed to activate sprint");
+        in.forwardStick = 0.f;
+        check(!detector.update(in), "releasing forward stick must immediately end sprint");
+        in.forwardStick = 1.f;
+        bool sameHands = false;
+        for (int i = 0; i < 180; ++i) {
+            const float stride = .20f * std::sin(i * .15f);
+            in.hands[0] = {-.3f, 1.2f, stride};
+            in.hands[1] = { .3f, 1.2f, stride};
+            sameHands = detector.update(in) || sameHands;
+        }
+        check(!sameHands, "moving both hands together must not trigger sprint");
+        in.tracked[1] = false;
+        check(!detector.update(in), "losing a hand must release sprint");
     });
     test("79.1 moving on a VR-owned wall runs both legs instead of leaving the game AIR crouch", [&] {
         gb::Table table;

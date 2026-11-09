@@ -363,6 +363,11 @@ SETTINGS = {
     'look_lock': ((0, 1), 'SpidyLookLock', 'LOOK LOCK {} (0 quick: the lock moves to the enemy you look straight at for 0.15 s; 1 steady: 38.2\'s)'),
     'strike_steer': ((0, 1), 'SpidyStrikeSteer', 'STRIKE STEER {} (0 to lock: the zip strike and jump go to your locked enemy; 1 off: 38.2\'s)'),
     'far_windows': ((0, 3), 'SpidyFarWindowsOption', 'FAR WINDOWS {} (0 2x, 1 3x, 2 1.5x the eyes\' building detail reach so night windows light sooner; 3 game; costs GPU)'),
+    # Revamped 0.0.78 primary-view window visibility test. Default ON in experimental DLL.
+    # 0 immediately restores the previous primary-window query; it does not
+    # alter the other FAR WINDOWS/LOD settings or temporal upscaler.
+    'window_visibility': ((0, 1), 'SpidyWindowVisibility',
+                          'WINDOW VISIBILITY {} (0 old game-window query, 1 bounded main-view experiment; LIVE)'),
     'gadget_hint': ((0, 1), 'SpidyGadgetHint', 'GADGET HINT {} (0 on: the gadget\'s name at your wrist as it fires and a Sonic aim tip after a miss; 1 off)'),
     # ---- Version 0.0.2 (combat38.hpp's aimStrength, ballHit, codes 5329-5330), for BALL LOOK OURS ----
     'aim_strength': ((0, 4), 'SpidyAimStrength', 'AIM STRENGTH {} (0 strong: a 45 degree cone (70 near), the lock to 90, homing and lead (Version 0.0.4; was 28); 1 max: 65 degrees, homes hardest; 2 off: straight; 3 low; 4 normal)'),

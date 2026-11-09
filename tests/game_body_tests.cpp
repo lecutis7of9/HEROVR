@@ -401,6 +401,9 @@ int main() {
         target.airborne = true; // the game's actual movement state on HEROVR's wall
         target.wallStride = true;
         target.wallSpeed = 6.f;
+        target.wallNormal = {0, 0, 1}; // a building face, normal toward the player
+        target.wallTravel = {1, 0, 0}; // lateral run
+        target.wallDistance = .35f;
         target.eyes = {0, 1.7f, .08f};
         target.facing = Quat::yaw(3.14159265f);
         target.hands[0] = {true, {.32f, 1.2f, .3f}, gripFacing({.2f, 0, 1}), 0, 0};
@@ -409,7 +412,7 @@ int main() {
             std::vector<float> final, earlier;
             body::Result result;
         };
-        auto run = [&](bool dynamic, bool moving) {
+        auto run = [&](bool dynamic, bool moving, Vec3 runDirection = {1, 0, 0}) {
             body::Config config;
             config.dynamicLegs = dynamic;
             body::State state;
@@ -418,6 +421,7 @@ int main() {
                 auto gameFrame = rest;
                 body::Pose framePose(gameFrame.data(), 237);
                 body::Targets t = target;
+                t.wallTravel = runDirection;
                 if (!moving)
                     t.wallStride = false;
                 sample.result = body::solve(framePose, rig, t, config, state, true, 1.f / 90.f);
@@ -430,11 +434,27 @@ int main() {
         };
         const Sample classic = run(false, true);
         const Sample dynamic = run(true, true);
+        const Sample dynamicUp = run(true, true, {0, 1, 0});
         const Sample idle = run(true, false);
         check(classic.result.solved && dynamic.result.solved, "body solve failed");
         check(classic.result.wallStride == 0 && dynamic.result.wallStride > .99f,
               "wall stride must be opt-in and active during moving wall contact");
         check(idle.result.wallStride == 0, "stationary wall must not walk the legs");
+        check(dynamicUp.result.wallStride > .99f, "vertical wall sprint must use the same stride engine");
+        body::Pose sidePose(const_cast<float*>(dynamic.final.data()), 237);
+        body::Pose upPose(const_cast<float*>(dynamicUp.final.data()), 237);
+        for (int i = 0; i < 2; ++i) {
+            const auto& leg = rig.legs[i];
+            const Vec3 sideSole = normalized(sidePose.direction(leg.foot, rig.footUp[i]));
+            const Vec3 upSole = normalized(upPose.direction(leg.foot, rig.footUp[i]));
+            check(dot(sideSole, target.wallNormal) > .65f &&
+                  dot(upSole, target.wallNormal) > .65f,
+                  "the wall-running foot sole must face the wall, never the ordinary ground");
+            const Vec3 sideToe = normalized(sidePose.direction(leg.foot, rig.footForward[i]));
+            const Vec3 upToe = normalized(upPose.direction(leg.foot, rig.footForward[i]));
+            check(dot(sideToe, target.wallTravel) > .6f && dot(upToe, Vec3{0, 1, 0}) > .6f,
+                  "running sideways and running straight up require different toe/stride directions");
+        }
         for (const auto& leg : rig.legs) {
             check(length(at(dynamic.final, leg.foot) - at(classic.final, leg.foot)) > .07f,
                   "the leg was still folded in the airborne game pose");
@@ -449,6 +469,54 @@ int main() {
         for (const auto& leg : rig.legs)
             check(length(at(idle.final, leg.foot) - at(classic.final, leg.foot)) < .001f,
                   "stationary or non-wall body must leave the game's pose alone");
+    });
+    test("79.1 original Spider-Man wall-crawl knees remain animated, not forcibly ground-planted", [&] {
+        gb::Table table;
+        check(gb::parseJoints(bytes.joints, 237, table), "parse");
+        std::vector<float> rest;
+        check(gb::restToModel(bytes.rest, table, rest), "rest");
+        body::Rig rig;
+        check(gb::identify(table, rig) && body::prepare(rig, rest), "rig");
+        body::Targets target;
+        target.head = target.plant = target.wallCrawl = true;
+        target.up = {0, 0, 1};
+        target.floor = {};
+        target.eyes = {0, 1.7f, .08f};
+        target.facing = Quat::yaw(3.14159265f);
+        target.hands[0] = {true, {.32f, 1.2f, .3f}, gripFacing({.2f, 0, 1}), 0, 0};
+        target.hands[1] = {true, {-.32f, 1.2f, .3f}, gripFacing({-.2f, 0, 1}), 0, 0};
+        auto simulate = [&](bool dynamic, bool crawl) {
+            body::Config config;
+            config.dynamicLegs = dynamic;
+            body::State state;
+            std::vector<float> poseData;
+            for (int frame = 0; frame < 45; ++frame) {
+                poseData = rest;
+                body::Pose p(poseData.data(), 237);
+                // Reproduce an authored game climb leg position that stays
+                // splayed even when the frame's clip holds briefly still.
+                for (const auto& leg : rig.legs)
+                    p.turn(rig.below[leg.upper], body::axisAngle({1, 0, 0}, .45f), p.position(leg.upper));
+                auto frameTarget = target;
+                frameTarget.wallCrawl = crawl;
+                body::solve(p, rig, frameTarget, config, state, true, 1.f / 90.f);
+            }
+            return poseData;
+        };
+        const auto classic = simulate(false, true);
+        const auto natural = simulate(true, true);
+        const auto notCrawl = simulate(true, false);
+        for (const auto& leg : rig.legs) {
+            check(length(at(natural, leg.foot) - at(classic, leg.foot)) > .04f,
+                  "real wall-crawl leg pose was overwritten with standing feet");
+            check(length(at(notCrawl, leg.foot) - at(classic, leg.foot)) < .015f,
+                  "non-crawl wall stance should remain classic");
+        }
+        check(length(at(natural, rig.head) - at(classic, rig.head)) < .001f,
+              "preserving wall-crawl legs changed the headset anchor");
+        for (const auto& arm : rig.arms)
+            check(length(at(natural, arm.hand) - at(classic, arm.hand)) < .002f,
+                  "wall-crawl animation detached a tracked VR hand");
     });
     test("79.1 Dynamic Body tucks legs and spine mid-flip while keeping VR head and hands fixed", [&] {
         gb::Table t;

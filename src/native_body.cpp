@@ -367,6 +367,8 @@ void solveHero(float* out, uintptr_t job, uintptr_t instance) {
             t.plant = standing;
             t.floor = standing ? toModel.rotate(wanted.floor) : Vec3{};
             t.kneel = standing && (wanted.flags & native_body::kneel);
+            t.wallStride = (wanted.flags & native_body::wallStride) != 0 && !t.kneel;
+            t.wallSpeed = t.wallStride ? std::min(wanted.reserved * .01f, 30.f) : 0.f;
             t.eyes = toModel.rotate(wanted.eyes);
             t.facing = toModel * wanted.facing;
             if (const Quat tilt = wanted.tilt; tilt.x != 0 || tilt.y != 0 || tilt.z != 0)

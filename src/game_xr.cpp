@@ -4818,6 +4818,25 @@ DWORD WINAPI run(void*) {
                                     invincibleOn = !invincibleOn.load();
                                 if (result.doubleHealth) // 0.0.76 DOUBLE HEALTH
                                     doubleHealthOn = !doubleHealthOn.load();
+                                // HEROVR 0.0.79.1: the user's BODY ANIMATIONS setting
+                                // is on the wrist hologram, not the SM1 game menu.
+                                // Switch the native skeleton solver immediately and
+                                // retain the setting in the existing tab-only INI.
+                                if (result.bodyAnimations) {
+                                    values.legAnimations = !values.legAnimations;
+                                    native_body::dynamicLegs(values.legAnimations);
+                                    game_menu::publish(values);
+                                    auto text = vr_settings::tabOnlyText(values);
+                                    if (text != tabOnlySaved) {
+                                        if (!writeTabOnly(text))
+                                            message(3, 0, "HEROVR: Dynamic Body preference could not be saved");
+                                        else
+                                            tabOnlySaved = std::move(text);
+                                    }
+                                    message(3, 0, values.legAnimations
+                                                       ? "HEROVR BODY ANIMATIONS: DYNAMIC"
+                                                       : "HEROVR BODY ANIMATIONS: CLASSIC");
+                                }
                                 if (result.flyMode)
                                     flyModeNow = (flyModeNow.load() + 1) % 4;
                                 if (result.flyVignette)
@@ -17317,6 +17336,7 @@ DWORD WINAPI run(void*) {
                                             hud.invincible = invincibleOn.load(); // Update 38.5 EXTRAS
                                             hud.invincibleNa = invincibleNa.load() != 0;
                                             hud.doubleHealth = doubleHealthOn.load(); // 0.0.76 DOUBLE HEALTH
+                                            hud.bodyAnimations = values.legAnimations; // 0.0.79.1 wrist toggle
                                             hud.flyMode = flyModeNow.load();
                                             hud.flyVignette = flyVignetteOn.load();
                                             hud.flyRoll = flyRollNow.load();

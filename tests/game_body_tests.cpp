@@ -347,8 +347,14 @@ int main() {
         const auto [animated, dynamic] = run(true, true);
         check(original.solved && dynamic.solved && dynamic.bodySway > .9f,
               "animation-driven body sway did not activate during swing");
-        check(length(at(animated, rig.pelvis) - at(classic, rig.pelvis)) > .015f,
-              "hip follows no part of the original game's lean");
+        // A joint rotates ABOUT its own pivot. Its location need not
+        // change for substantial, visible pelvis sway; check its basis.
+        body::Pose classicPose(const_cast<float*>(classic.data()), 237);
+        body::Pose dynamicPose(const_cast<float*>(animated.data()), 237);
+        const Vec3 classicHipUp = normalized(classicPose.direction(rig.pelvis, rig.pelvisUp));
+        const Vec3 dynamicHipUp = normalized(dynamicPose.direction(rig.pelvis, rig.pelvisUp));
+        check(length(dynamicHipUp - classicHipUp) > .025f,
+              "animated pelvis did not rotate relative to classic upright body");
         check(length(at(animated, rig.head) - at(classic, rig.head)) < .001f,
               "sway moved the HMD's anchored head");
         for (const auto& arm : rig.arms)
@@ -356,8 +362,28 @@ int main() {
                   "sway detached a controller-driven wrist");
         const auto [still, held] = run(true, false);
         check(held.bodySway < .01f, "static game pose should not trigger continuous sway");
-        check(length(at(still, rig.pelvis) - at(classic, rig.pelvis)) < .03f,
-              "a static animation should return to classic hip alignment");
+        body::Pose stillPose(const_cast<float*>(still.data()), 237);
+        const Vec3 stillHipUp = normalized(stillPose.direction(rig.pelvis, rig.pelvisUp));
+        // A still 0.17-radian lean should be overridden by classic alignment.
+        body::State classicState;
+        body::Config classicConfig;
+        auto classicStill = rest;
+        body::Pose classicStillPose(classicStill.data(), 237);
+        classicStillPose.turn(rig.below[rig.pelvis], body::axisAngle({0, 0, 1}, .17f),
+                              classicStillPose.position(rig.pelvis));
+        for (int i = 0; i < 40; ++i) {
+            if (i != 0) {
+                classicStill = rest;
+                body::Pose again(classicStill.data(), 237);
+                again.turn(rig.below[rig.pelvis], body::axisAngle({0, 0, 1}, .17f),
+                           again.position(rig.pelvis));
+            }
+            body::Pose framePose(classicStill.data(), 237);
+            body::solve(framePose, rig, tg, classicConfig, classicState, true, 1.f / 90);
+        }
+        check(length(stillHipUp -
+                     normalized(classicStillPose.direction(rig.pelvis, rig.pelvisUp))) < .015f,
+              "stationary pose should return to classic pelvis orientation");
     });
     test("the head shrinks at once and the body blends at 4/s", [&] {
         gb::Table t;

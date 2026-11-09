@@ -550,6 +550,60 @@ int main() {
             check(length(at(natural, arm.hand) - at(classic, arm.hand)) < .002f,
                   "wall-crawl animation detached a tracked VR hand");
     });
+    test("79.1 slow HEROVR wall cling holds feet in spider stance and crawls when moving", [&] {
+        gb::Table table;
+        check(gb::parseJoints(bytes.joints, 237, table), "parse");
+        std::vector<float> rest;
+        check(gb::restToModel(bytes.rest, table, rest), "rest");
+        body::Rig rig;
+        check(gb::identify(table, rig) && body::prepare(rig, rest), "rig");
+        body::Targets t;
+        t.head = true;
+        t.airborne = true; // HEROVR owns a wall, but game animation is AIR.
+        t.wallCling = true;
+        t.wallSpeed = 0;
+        t.wallNormal = {0, 0, 1};
+        t.wallTravel = {0, 1, 0};
+        t.wallDistance = .35f;
+        t.eyes = {0, 1.7f, .08f};
+        t.facing = Quat::yaw(3.14159265f);
+        t.hands[0] = {true, {.32f, 1.2f, .3f}, gripFacing({.2f, 0, 1}), 0, 0};
+        t.hands[1] = {true, {-.32f, 1.2f, .3f}, gripFacing({-.2f, 0, 1}), 0, 0};
+        struct Sample { std::vector<float> atRest, later; body::Result result; };
+        auto run = [&](bool dynamic, bool moving) {
+            body::Config config;
+            config.dynamicLegs = dynamic;
+            body::State state;
+            Sample sample;
+            for (int i = 0; i < 62; ++i) {
+                auto poseData = rest;
+                body::Pose p(poseData.data(), 237);
+                auto tg = t;
+                if (moving) tg.wallSpeed = 1.1f; // below wall-run threshold
+                sample.result = body::solve(p, rig, tg, config, state, true, 1.f/90.f);
+                if (i == 26) sample.atRest = poseData;
+                if (i == 61) sample.later = std::move(poseData);
+            }
+            return sample;
+        };
+        auto classic = run(false, false);
+        auto cling = run(true, false);
+        auto crawl = run(true, true);
+        check(classic.result.wallCling == 0 && cling.result.wallCling > .9f &&
+                  crawl.result.wallCling > .9f,
+              "only Dynamic can pose an owned-wall crouch/crawl");
+        for (const auto& leg : rig.legs) {
+            check(length(at(cling.later, leg.foot) - at(classic.later, leg.foot)) > .04f,
+                  "clinging on a wall still uses an airborne straight leg");
+            check(length(at(crawl.later, leg.foot) - at(crawl.atRest, leg.foot)) > .035f,
+                  "slow wall crawl did not animate the climbing foot");
+        }
+        check(length(at(cling.later, rig.head) - at(classic.later, rig.head)) < .001f,
+              "wall cling changed the headset anchor");
+        for (const auto& arm : rig.arms)
+            check(length(at(cling.later, arm.hand) - at(classic.later, arm.hand)) < .002f,
+                  "wall cling detached a controller hand");
+    });
     test("79.1 Dynamic Body tucks legs and spine mid-flip while keeping VR head and hands fixed", [&] {
         gb::Table t;
         check(gb::parseJoints(bytes.joints, 237, t), "parse");

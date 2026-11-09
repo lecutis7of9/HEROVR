@@ -120,7 +120,10 @@ namespace Sm2VrLauncher
         }
         void LayoutButtons()
         {
-            int h = Math.Max(24, Height - 14), y = (Height - h) / 2;
+            // Reserve a thin, readable caption directly below the two choices.
+            // The caption updates immediately when Original/Revamped changes
+            // and remains visible on the first opening screen of either design.
+            int h = Math.Max(24, Height - 24), y = 4;
             int first = Math.Max(94, (int)(Width * .28));
             int gap = 5, bw = Math.Max(70, (Width - first - 16 - gap) / 2);
             originalButton = new Rectangle(first, y, bw, h);
@@ -140,6 +143,16 @@ namespace Sm2VrLauncher
                 g.DrawString("PRIVATE TEST\nRENDER", Theme.UiBold(9f), label, new RectangleF(11, 0, originalButton.Left - 14, Height), format);
             DrawChoice(g, originalButton, "ORIGINAL", selected == RendererModes.Original, hoverOriginal);
             DrawChoice(g, revampedButton, "REVAMPED", selected == RendererModes.Revamped, hoverRevamped);
+            string difference = selected == RendererModes.Revamped
+                ? "Revamped: 70% temporal upscale, smoother image and higher FPS."
+                : "Original: standard HERO VR 0.0.78 rendering and image detail.";
+            using (var caption = new SolidBrush(Color.FromArgb(224, Theme.Sub)))
+            using (var format = new StringFormat {
+                Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center,
+                Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap
+            })
+                g.DrawString(difference, Theme.Ui(9f), caption,
+                    new RectangleF(11f, Height - 21f, Width - 20f, 18f), format);
         }
         void DrawChoice(Graphics g, Rectangle rect, string text, bool current, bool hover)
         {

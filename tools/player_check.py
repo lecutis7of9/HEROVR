@@ -27,8 +27,20 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 STEAM_APP_ID = '2651280'
 GAME_EXE = 'Spider-Man2.exe'
 GAME_FOLDER = "Marvel's Spider-Man 2"
-# The longest path Spidy itself makes inside its folder: reports\stereo-modules\<sha-256>\spidy_stereo_probe.dll.
-DEEPEST = len(r'\reports\stereo-modules\\') + 64 + len(r'\spidy_stereo_probe.dll')
+# The deepest module path is render-memory (not stereo); the directory
+# includes a full 64-character content hash. A package extracted through
+# GitHub's artifact folder and the inner ZIP can exceed Windows MAX_PATH,
+# even though the shorter stereo path still fits.
+STAGED_MODULES = (
+    ('render-memory-modules', 'spidy_render_memory.dll'),
+    ('render-modules', 'spidy_render_probe.dll'),
+    ('bridge-modules', 'spidy_bridge.dll'),
+    ('ray-modules', 'spidy_ray_bridge.dll'),
+    ('motion-modules', 'spidy_movement_bridge.dll'),
+    ('stereo-modules', 'spidy_stereo_probe.dll'),
+)
+DEEPEST = max(len('\\reports\\' + folder + '\\') + 64 + len('\\' + dll)
+              for folder, dll in STAGED_MODULES)
 LONG_PATH = 259  # MAX_PATH less the terminator: older Windows parts and the game's loader stop there
 # Microsoft's Visual C++ Redistributable (not the Universal CRT, part of Windows 10 and 11).
 VC_REDIST = re.compile(r'^(vcruntime140|msvcp140|concrt140|vcomp140)[^\\/]*\.dll$', re.I)  # as pe_imports.hpp

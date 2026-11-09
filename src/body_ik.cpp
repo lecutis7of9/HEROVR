@@ -469,6 +469,39 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
     // or on the player's own floor, planted, whichever way the hero is turned.
     const float lowest = std::min(dot(feet[0], up), dot(feet[1], up));
     r.grounded = !t.airborne && (t.plant || (up.y > .9f && lowest > -.2f && lowest < c.groundedFoot * s));
+    // 79.1 Dynamic Body: inspect the ORIGINAL game's knee/foot movement,
+    // relative to the hips, before aligning the body to the HMD. Merely
+    // moving the hero through the world must not trigger a run animation.
+    // If the game supplies a frozen idle/crawl pose, retain the safe planted
+    // stance. The live motion gate also avoids restoring a static, splayed
+    // wall-crawl pose just because the player is attached to a wall.
+    const bool watchLegs = c.dynamicLegs && r.grounded && !t.kneel;
+    if (watchLegs) {
+        const std::array<Vec3, 4> gameLegs{{
+            pose.position(legs[0].lower) - pose.position(legs[0].upper),
+            pose.position(legs[1].lower) - pose.position(legs[1].upper),
+            pose.position(legs[0].foot) - pose.position(legs[0].upper),
+            pose.position(legs[1].foot) - pose.position(legs[1].upper),
+        }};
+        float motion = 0.f;
+        if (state.previousLegPoseSet)
+            for (size_t i = 0; i < gameLegs.size(); ++i)
+                motion = std::max(motion, length(gameLegs[i] - state.previousLegPose[i]));
+        state.previousLegPose = gameLegs;
+        state.previousLegPoseSet = true;
+        if (motion > c.legMotionThreshold)
+            state.legMotionLeft = c.legMotionHold;
+        else
+            state.legMotionLeft = std::max(0.f, state.legMotionLeft - dt);
+    } else {
+        state.previousLegPoseSet = false;
+        state.legMotionLeft = 0.f;
+    }
+    const float legTarget = watchLegs && state.legMotionLeft > 0.f ? 1.f : 0.f;
+    state.legAnimationWeight = c.dynamicLegs
+                                   ? approach(state.legAnimationWeight, legTarget, c.legBlendSpeed * dt)
+                                   : 0.f;
+    r.legAnimation = state.legAnimationWeight;
     // The body is everything under its root; the rig's other roots (effects,
     // IK targets, camera targets) keep the game's pose.
     const auto& bodyJoints = rig.below[static_cast<size_t>(rig.pelvis)];
@@ -527,7 +560,10 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
     r.headError = length(pose.position(rig.head) - headTarget);
     // 5. Feet the game stands on stay on the ground, turned with the body,
     // and follow the hips once they wander off; the knees bend forward.
-    if (r.grounded && t.plant) {
+    // Dynamic Body reduces only leg IK while game animation is actually
+    // changing. The entire head/torso/arm solution above and below is intact.
+    const float legWeight = w * (1.f - state.legAnimationWeight);
+    if (r.grounded && t.plant && legWeight > 0.f) {
         // Planted: under each hip on the floor, the ankle at its rest height,
         // the foot flat and facing the body's way. The game's pose has nothing
         // to say about these legs.
@@ -549,15 +585,15 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
                                              : run(thigh, height - knee) + run(shin, knee - ankle);
             }
             const Vec3 foot = hip - up * (height - ankle) - forward * back;
-            limb(pose, rig, leg.upper, leg.lower, leg.foot, foot, forward, w);
+            limb(pose, rig, leg.upper, leg.lower, leg.foot, foot, forward, legWeight);
             // A kneeling foot goes where the shin takes it, behind him.
             if (back > .05f * s)
                 continue;
             const Quat flat = between(pose.direction(leg.foot, rig.footForward[i]),
                                       pose.direction(leg.foot, rig.footUp[i]), forward, up);
-            pose.turn(rig.below[leg.foot], partial(flat, w), pose.position(leg.foot));
+            pose.turn(rig.below[leg.foot], partial(flat, legWeight), pose.position(leg.foot));
         }
-    } else if (r.grounded) {
+    } else if (r.grounded && legWeight > 0.f) {
         float yawTurn = 0;
         if (length(hipsForward) > .2f)
             yawTurn = wrap(state.yaw - yawOf(hipsForward)) * w;
@@ -570,10 +606,10 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
             // Turned about the up through the hips and carried across it, a
             // foot keeps its height.
             const Vec3 foot = hips + turn.rotate(feet[i] - hips) + carried;
-            limb(pose, rig, leg.upper, leg.lower, leg.foot, foot, forward, w);
+            limb(pose, rig, leg.upper, leg.lower, leg.foot, foot, forward, legWeight);
             const Quat back = between(pose.direction(leg.foot, {1, 0, 0}), pose.direction(leg.foot, {0, 1, 0}),
                                       turn.rotate(footAxes[i][0]), turn.rotate(footAxes[i][1]));
-            pose.turn(rig.below[leg.foot], partial(back, w), pose.position(leg.foot));
+            pose.turn(rig.below[leg.foot], partial(back, legWeight), pose.position(leg.foot));
         }
     }
     // 6. Arms to the controllers: the shoulder lifts toward a far reach, the

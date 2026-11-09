@@ -208,6 +208,7 @@ struct Targets {
     Vec3 wallTravel{}; // tangent motion direction; handles lateral AND upward runs
     float wallDistance{}; // actor centre to wall surface in metres
     bool wallCrawl{}; // native game wall-crawl pose, preserve animated legs
+    bool wallCling{}; // HEROVR own wall, slow climb or stationary spider stance
     // TRUE only for the player's actual FlipMotion rotation. A wall-body
     // tilt, flight lean or game cutscene tilt must never trigger a knee tuck.
     bool flipPose{};
@@ -284,6 +285,7 @@ struct Config {
     float wallStrideBlendSpeed = 9.f;  // transition between planted and running legs
     float wallStrideReach = .24f;      // forward/back foot travel in metres
     float wallStrideLift = .14f;       // foot lift away from the wall in metres
+    float wallClingBlendSpeed = 8.f;   // fluid slow-crawl/stop transition
     float flipTuckSpeed = 11.f;        // blend into/out of flip tuck per second
     float flipSpineBend = .30f;        // total spine curl in radians
     float flipFootHeight = .46f;       // share of straight leg length below hip
@@ -320,6 +322,7 @@ struct State {
     float wallStridePhase{}, wallStrideWeight{};
     Vec3 lastWallNormal{}, lastWallTravel{};
     float lastWallDistance{};
+    float wallClingPhase{}, wallClingWeight{};
     float flipTuckWeight{};
 };
 // Turns the body's yaw by `radians` about the up, at once: the player snap
@@ -332,6 +335,7 @@ struct Result {
     float legAnimation{}; // 0 classic planted legs, 1 the game's animation
     float bodySway{};     // 0 classic upright body, 1 full safe pose-derived sway
     float wallStride{};   // 0 no procedural wall run, 1 full run gait
+    float wallCling{};    // 0 no owned wall crawl, 1 crouched climbing stance
     float flipTuck{};     // 0 fully extended, 1 mid-flip body curl
     // Distance left between each wrist and its target, and between the head
     // joint and its target, model units (-1: not placed).

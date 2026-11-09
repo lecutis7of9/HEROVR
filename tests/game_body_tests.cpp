@@ -450,6 +450,65 @@ int main() {
             check(length(at(idle.final, leg.foot) - at(classic.final, leg.foot)) < .001f,
                   "stationary or non-wall body must leave the game's pose alone");
     });
+    test("79.1 Dynamic Body tucks legs and spine mid-flip while keeping VR head and hands fixed", [&] {
+        gb::Table t;
+        check(gb::parseJoints(bytes.joints, 237, t), "parse");
+        std::vector<float> rest;
+        check(gb::restToModel(bytes.rest, t, rest), "rest");
+        body::Rig rig;
+        check(gb::identify(t, rig) && body::prepare(rig, rest), "rig");
+        body::Targets target;
+        target.head = true;
+        target.airborne = true;
+        target.flipPose = true;
+        target.eyes = {0, 1.7f, .08f};
+        target.facing = Quat::yaw(3.14159265f);
+        target.hands[0] = {true, {.32f, 1.2f, .3f}, gripFacing({.2f, 0, 1}), 0, 0};
+        target.hands[1] = {true, {-.32f, 1.2f, .3f}, gripFacing({-.2f, 0, 1}), 0, 0};
+        auto run = [&](bool dynamic, bool flipMarker, float angle) {
+            body::Config config;
+            config.dynamicLegs = dynamic;
+            body::State state;
+            std::vector<float> out;
+            body::Result result;
+            for (int frame = 0; frame < 40; ++frame) {
+                out = rest;
+                body::Pose p(out.data(), 237);
+                auto tg = target;
+                tg.flipPose = flipMarker;
+                tg.tilt = body::axisAngle({1, 0, 0}, angle);
+                result = body::solve(p, rig, tg, config, state, true, 1.f / 90.f);
+            }
+            return std::pair{out, result};
+        };
+        const auto [classic, baseline] = run(false, true, 1.5707963f);
+        const auto [tucked, dynamic] = run(true, true, 1.5707963f);
+        check(baseline.solved && dynamic.solved && baseline.flipTuck == 0.f &&
+                  dynamic.flipTuck > .65f,
+              "the in-air active flip must curl only in Dynamic mode");
+        check(length(at(tucked, rig.head) - at(classic, rig.head)) < .001f,
+              "flip curl must never alter the headset's head anchor");
+        for (const auto& arm : rig.arms)
+            check(length(at(tucked, arm.hand) - at(classic, arm.hand)) < .003f,
+                  "flip curl pulled the tracked VR wrist");
+        for (const auto& leg : rig.legs) {
+            const float oldReach = length(at(classic, leg.foot) - at(classic, leg.upper));
+            const float tuckedReach = length(at(tucked, leg.foot) - at(tucked, leg.upper));
+            check(tuckedReach < oldReach - .06f, "flip knees did not draw up");
+        }
+        const Vec3 classicSpine = normalized(at(classic, rig.head) - at(classic, rig.pelvis));
+        const Vec3 dynamicSpine = normalized(at(tucked, rig.head) - at(tucked, rig.pelvis));
+        check(length(classicSpine - dynamicSpine) > .025f, "the torso did not bend into the flip");
+        const auto [ordinaryLean, normal] = run(true, false, 1.5707963f);
+        check(normal.flipTuck == 0.f, "a non-flip body tilt must not force a knee tuck");
+        for (const auto& leg : rig.legs)
+            check(length(at(ordinaryLean, leg.foot) - at(classic, leg.foot)) < .001f,
+                  "flight lean or wall-body tilt should retain Classic leg pose");
+        const auto [flat, extended] = run(true, false, 0.f);
+        check(extended.flipTuck == 0.f, "a level body must return to full extension");
+        check(extended.solved && length(at(flat, rig.head) - at(classic, rig.head)) < .001f,
+              "extension must keep the same HMD head position");
+    });
     test("the head shrinks at once and the body blends at 4/s", [&] {
         gb::Table t;
         gb::parseJoints(bytes.joints, 237, t);

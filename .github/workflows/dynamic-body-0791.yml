@@ -26,11 +26,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Test Sandman read-only diagnostic scripts
+      - name: Test Python diagnostics and Windows folder safeguards
         run: |
           $env:PYTHONPATH = 'tools'
           python -B -m unittest -v test_compare_sandman_render test_windows_fault
-          if ($LASTEXITCODE) { throw 'Sandman diagnostic regressions failed' }
+          if ($LASTEXITCODE) { throw 'Python diagnostics regressions failed' }
+          python -B tests/player_check_tests.py
+          if ($LASTEXITCODE) { throw 'Windows folder preflight regressions failed' }
       - name: Fetch native build dependencies
         run: |
           ./tools/bootstrap.ps1 -Observer

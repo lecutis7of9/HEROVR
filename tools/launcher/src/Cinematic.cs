@@ -76,7 +76,8 @@ namespace Sm2VrLauncher
         /// <summary>0.0.77.2: the small "SPECIAL THANKS TO:" block under the subtitle (heading in spaced caps, the names
         /// in their own casing), quiet like the subtitle. The first name is split in the source only for the word checks.</summary>
         public string ThanksHeading = "SPECIAL THANKS TO:";
-        public string[] Thanks = { "Jim" + "jam094 for immersive cutscenes", "Grundy_Chumbo for voice acting and testing" };
+        public string[] Thanks = { "Jim" + "jam094 for immersive cutscenes", "Grundy_Chumbo for voice acting and testing",
+            "Venom Cash, Gogeta and Tim The KoolAid Lover for testing" };
         public float WordSize = 100;
 
         static GraphicsPath Word(string s, FontFamily fam, FontStyle style, float px)

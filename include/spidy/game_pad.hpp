@@ -47,16 +47,18 @@ static_assert(prompt_buttons::padDpadUp == dpadUp && prompt_buttons::padDpadDown
               prompt_buttons::padRightShoulder == rightShoulder &&
               prompt_buttons::padA == a && prompt_buttons::padB == b && prompt_buttons::padX == x &&
               prompt_buttons::padY == y);
-// During Peter's combat, a simultaneous short L3+R3 click belongs to the
-// game's Symbiote Surge. Outside combat the exact same VR chord retains its
-// existing Pad Layer toggle (and a long chord still pauses).
-// Do not attempt to infer the symbiote meter: the game itself determines
-// whether Surge is unlocked and charged.
-inline bool symbioteSurgeChord(bool gameplay, bool peter, bool combat,
-                              bool padLayer, bool calibration, bool screenBusy,
-                              bool leftClick, bool rightClick) {
-    return gameplay && peter && combat && !padLayer && !calibration &&
-           !screenBusy && leftClick && rightClick;
+// Peter's native L3+R3 remains his game's own Surge input (the game
+// decides unlock/charge). The deliberately different chord for VR PAD MODE is
+// BOTH physical triggers held and BOTH thumbsticks clicked; no L3+R3 alone
+// can switch the VR pad, and PAD MODE cannot trigger Surge.
+inline bool dualTriggerPadChord(float lt, float rt, bool leftClick, bool rightClick) {
+    return std::isfinite(lt) && std::isfinite(rt) && lt >= .70f && rt >= .70f &&
+           leftClick && rightClick;
+}
+inline bool symbioteSurgeChord(bool gameplay, bool peter, bool padLayer, bool calibration,
+                              bool screenBusy, bool leftClick, bool rightClick, bool withTriggers) {
+    return gameplay && peter && !padLayer && !calibration && !screenBusy &&
+           leftClick && rightClick && !withTriggers;
 }
 enum class Mapping {
     none,
@@ -744,24 +746,15 @@ class PressOrigins {
 // the game's X, its L3, each bumper and each trigger on its own and three
 // ways of its D-pad could not be sent at all.
 //
-// Both thumbsticks held in this long are the game's Start (PausePress); let
-// go sooner, a click of both is the pad layer's (PadLayer) or, with the game
-// played on its screen, the game's L3 + R3 (ScreenControls).
+// Held L3+R3 is a game's native ability, not the VR pad toggle. To enter
+// VR PAD MODE hold BOTH physical triggers plus BOTH thumbstick clicks. The
+// caller passes the click pair only when both triggers are held. That pair
+// switches the pad after chordSeconds; keeping it held won't switch it again.
+// The existing PausePress still applies outside VR gameplay.
 constexpr float pauseHoldSeconds = .7f;
-// Clicking both thumbsticks together latches this layer, and every control of
-// the pad can be sent while it is on. The chord is free: neither stick's own
-// press has been half of clicking both since October 12 (PullPress,
-// slow_motion's StickPress both drop a chord), and a tap leaves the thumbs
-// free for the face buttons, which holding the chord would not. It never
-// latches while a web carries the player, and it lets go by itself after
-// idleSeconds of nothing pressed, so a player cannot be left in it.
-//
-// The click toggles it as it is let go, once held chordSeconds: held on to
-// pauseHoldSeconds it is the pause instead (PausePress), and toggles nothing.
-// Until October 18 it toggled at chordSeconds, under the thumbs.
 class PadLayer {
   public:
-    static constexpr float chordSeconds = .12f, idleSeconds = 20;
+    static constexpr float chordSeconds = .35f, idleSeconds = 20;
     // seconds: since the previous update. allowed: VR play with the player
     // free of a web. left, right: each thumbstick's click. busy: a control of
     // the layer is in use now (a button, a trigger, a grip, the right stick),
@@ -777,21 +770,20 @@ class PadLayer {
             return false;
         }
         if (!chord) {
-            if (!spent_ && held_ >= chordSeconds) {
+            held_ = 0;
+            spent_ = false;
+        } else if (!spent_) {
+            held_ += dt;
+            if (held_ >= chordSeconds) {
                 latched_ = !latched_;
                 idle_ = 0;
                 if (latched_)
                     ++entries_;
                 else if (byPrompt_)
-                    declined_ = true; // left by hand during a prompt: not again for that prompt
+                    declined_ = true; // manually dismissed prompt-owned pad
                 byPrompt_ = false;
+                spent_ = true; // once per deliberate held chord, never repeat
             }
-            held_ = 0;
-            spent_ = false;
-        } else if (!spent_) {
-            held_ += dt;
-            // Held into the pause: it is PausePress's.
-            spent_ = held_ >= pauseHoldSeconds;
         }
         if (latched_) {
             idle_ = busy || byPrompt_ ? 0.f : idle_ + dt;

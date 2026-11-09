@@ -50,7 +50,7 @@ namespace Sm2VrLauncher
         TextLabel stateTitle, stateSub, optionsSummary;
         StatusRow step1, step2, step3;
         AccentButton btnPlay, btnFlat, btnStop, btnChangeOptions;
-        RendererModePicker rendererPicker; // Private Revamped preview: visible on startup in both launcher designs
+        RendererModePicker rendererPicker; // Public v0.0.79: visible on startup in both launcher designs
         StatusRow rowGame, rowGameVer, rowVr, rowBuild;
         LogBox sessionLog;
         AccentButton btnSendStats;
@@ -122,8 +122,8 @@ namespace Sm2VrLauncher
                 ShowPage(tabs.Selected);
                 BuildGamePicker();
             }
-            // Outside classicChrome: the mode switch must be visible from the
-            // FIRST launcher screen in either design, not buried in Options.
+            // The mode switch is visible from the FIRST launcher screen in
+            // either design, not buried in Options.
             BuildRendererModePicker();
             poll.Tick += (s, e) => { if (!preview) RefreshLive(); };
             sessionLog.FilePath = LogFile("session");
@@ -297,8 +297,8 @@ namespace Sm2VrLauncher
                         " selected. The DLL changes safely before the next PLAY VR.", Theme.Info);
             };
             tip.SetToolTip(rendererPicker,
-                "ORIGINAL: public HERO VR 0.0.78 rendering. REVAMPED: tested 70% temporal reconstruction (~59 FPS walking, ~52 FPS swinging on the developer system). " +
-                "Changes apply when the next VR session begins. Private preview; no public release is installed.");
+                "ORIGINAL: the standard v0.0.78 render path. REVAMPED: the new 70% temporal upscaler for better performance and stable images. " +
+                "Select either mode before PLAY VR; changing modes requires restarting the game.");
         }
 
         void PositionRendererModePicker()

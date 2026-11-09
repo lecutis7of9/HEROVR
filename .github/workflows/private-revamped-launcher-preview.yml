@@ -1,0 +1,128 @@
+name: PRIVATE HERO VR Original vs Revamped launcher preview (NO RELEASE)
+
+on:
+  push:
+    branches:
+      - experiment/078-private-launcher-original-revamped
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  private-launcher:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - name: Check out private launcher branch (never publish)
+        uses: actions/checkout@v4
+
+      - name: Compile actual Windows launcher from source
+        shell: pwsh
+        run: |
+          & .\tools\launcher\build.ps1 -Out 'out\SM2VRLauncher.exe'
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path 'tools\launcher\out\SM2VRLauncher.exe')) {
+              throw 'Private C# launcher compile failed'
+          }
+
+      - name: Fetch official 0.0.78 Original renderer and headset-tested Revamped Clarity v2
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $orig = Join-Path $env:RUNNER_TEMP 'hero-original'
+          $rev = Join-Path $env:RUNNER_TEMP 'hero-revamped'
+          New-Item -ItemType Directory -Path $orig, $rev -Force | Out-Null
+          gh release download v0.0.78 --repo $env:GITHUB_REPOSITORY --pattern 'HERO-VR-0.0.78-mod-win64.zip' --pattern 'HERO-VR-0.0.78-mod-win64.zip.sha256' --dir $orig --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download pinned v0.0.78 original release' }
+          $zip = Join-Path $orig 'HERO-VR-0.0.78-mod-win64.zip'
+          $sum = Join-Path $orig 'HERO-VR-0.0.78-mod-win64.zip.sha256'
+          $want = [regex]::Match([IO.File]::ReadAllText($sum), '(?i)[a-f0-9]{64}').Value
+          if ($want.Length -ne 64 -or (Get-FileHash $zip -Algorithm SHA256).Hash -ne $want) {
+              throw 'Official HERO VR 0.0.78 SHA256 mismatch'
+          }
+          Expand-Archive $zip -DestinationPath (Join-Path $orig 'unpacked') -Force
+          $originalDll = Get-ChildItem (Join-Path $orig 'unpacked') -Recurse -Filter 'spidy_stereo_probe.dll' -File | Select-Object -First 1
+          if (!$originalDll) { throw 'Original release archive has no stereo renderer DLL' }
+
+          # Pinned successful Revamped Clarity v2 source/run. Never use a
+          # candidate window-lighting build or the earlier lower-clarity pass.
+          gh run download 42546989316 --repo $env:GITHUB_REPOSITORY --name 'herovr-078-own-taa-70-experimental-windows' --dir $rev
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified Revamped Clarity v2 build' }
+          $revampedDll = Get-ChildItem $rev -Recurse -Filter 'spidy_stereo_probe.dll' -File | Select-Object -First 1
+          if (!$revampedDll) { throw 'Revamped artifact has no stereo renderer DLL' }
+
+          New-Item -ItemType Directory -Path private-preview\payload\original, private-preview\payload\revamped -Force | Out-Null
+          Copy-Item tools\launcher\out\SM2VRLauncher.exe private-preview\payload\SM2VRLauncher.exe
+          Copy-Item $originalDll.FullName private-preview\payload\original\spidy_stereo_probe.dll
+          Copy-Item $revampedDll.FullName private-preview\payload\revamped\spidy_stereo_probe.dll
+          Copy-Item tools\private-renderer-preview\*.ps1 private-preview\
+          Copy-Item tools\private-renderer-preview\*.cmd private-preview\
+          Copy-Item tools\private-renderer-preview\*.txt private-preview\
+          $toHash = @(
+              'payload/SM2VRLauncher.exe',
+              'payload/original/spidy_stereo_probe.dll',
+              'payload/revamped/spidy_stereo_probe.dll'
+          )
+          $lines = foreach ($rel in $toHash) {
+              $path = Join-Path 'private-preview' $rel
+              "$((Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant())  $rel"
+          }
+          [IO.File]::WriteAllLines((Join-Path (Get-Location) 'private-preview\sha256.txt'), $lines)
+          Write-Host 'ORIGINAL + REVAMPED + PRIVATE LAUNCHER VERIFIED'
+          $lines | ForEach-Object { Write-Host $_ }
+
+      - name: Installer and rollback smoke test (isolated test folder)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $test = Join-Path $env:RUNNER_TEMP 'private-launcher-smoke-HV078'
+          New-Item -ItemType Directory -Path (Join-Path $test 'tools\launcher'), (Join-Path $test 'build\windows-ninja') -Force | Out-Null
+          [IO.File]::WriteAllText((Join-Path $test 'tools\launch-game-vr.ps1'), '# CI smoke marker')
+          [IO.File]::WriteAllBytes((Join-Path $test 'build\windows-ninja\spidy_stereo_probe.dll'), [byte[]]@(1,2,3,4,5,6))
+          $originalHash = (Get-FileHash (Join-Path $test 'build\windows-ninja\spidy_stereo_probe.dll') -Algorithm SHA256).Hash
+          & .\private-preview\Install-Private-Launcher.ps1 -Root $test -NoLaunch
+          if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Preview install failed' }
+          foreach ($file in @('tools\launcher\SM2VRLauncher.exe', 'reports\renderer-modes\original\spidy_stereo_probe.dll',
+                              'reports\renderer-modes\revamped\spidy_stereo_probe.dll')) {
+              if (!(Test-Path (Join-Path $test $file))) { throw "Missing installed preview file $file" }
+          }
+          & .\private-preview\Restore-Private-Launcher.ps1 -Root $test
+          if ((Get-FileHash (Join-Path $test 'build\windows-ninja\spidy_stereo_probe.dll') -Algorithm SHA256).Hash -ne $originalHash) {
+              throw 'Private preview rollback did not restore the renderer DLL'
+          }
+          Write-Host 'PRIVATE INSTALLER / RESTORE SMOKE TEST PASSED'
+
+      - name: Capture first-opening launcher screenshots (no game required)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          # Actual app screenshots; these are NOT mockups. Preview mode
+          # bypasses Steam/game checks and auto-closes after screenshot.
+          $env:SM2VR_LAUNCHER_PREVIEW = '1'
+          $env:SM2VR_LAUNCHER_HERO_T = '6'
+          $exe = (Resolve-Path 'tools\launcher\out\SM2VRLauncher.exe').Path
+          $shots = (Resolve-Path 'private-preview').Path
+          $config = Join-Path (Split-Path -Parent $exe) 'launcher.ini'
+          Set-Content $config -Value @('Portable=1', 'opt.migrated073classic=1', 'LauncherDesign=classic', 'RendererMode=revamped') -Encoding ASCII
+          $env:SM2VR_LAUNCHER_SCREENSHOT = Join-Path $shots 'Launcher-Opening-Classic.png'
+          & $exe --classic
+          Remove-Item $config -Force
+          $userSettings = Join-Path (Split-Path -Parent $exe) 'launcher-data\settings.ini'
+          if (Test-Path $userSettings) { Remove-Item $userSettings -Force }
+          Set-Content $config -Value @('Portable=1', 'opt.migrated073classic=1', 'LauncherDesign=hero', 'RendererMode=revamped') -Encoding ASCII
+          $env:SM2VR_LAUNCHER_SCREENSHOT = Join-Path $shots 'Launcher-Opening-Hero.png'
+          & $exe
+          if (!(Test-Path (Join-Path $shots 'Launcher-Opening-Classic.png'))) {
+              Write-Warning 'Classic preview PNG unavailable on runner; compiled launcher still shipped.'
+          }
+
+      - name: Upload private launcher preview (not a GitHub Release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: HERO-VR-PRIVATE-Original-vs-Revamped-Launcher-Test
+          path: private-preview/
+          if-no-files-found: error
+          retention-days: 7

@@ -8764,7 +8764,8 @@ DWORD WINAPI run(void*) {
                         auto pad = game_pad::fromControllers(buttons, mapping, walk);
                         // HEROVR: ground sprint by forward left-stick intent
                         // AND repeated counter-phase arm swings. Send the
-                        // game's native L3 sprint input only when both hands
+                        // game's native RT Sprint/Parkour input (never L3: Dive)
+                        // only when both hands
                         // are tracked, unoccupied, and the hero is grounded.
                         // Neither hand/head pose is moved or animated here.
                         arm_sprint::Input sprintSample;
@@ -8786,7 +8787,7 @@ DWORD WINAPI run(void*) {
                             sprintSample.hands[i] = hand.grip.position;
                         }
                         if (armSprint.update(sprintSample))
-                            pad.buttons = static_cast<uint16_t>(pad.buttons | game_pad::leftThumb);
+                            pad.rightTrigger = std::max<uint8_t>(pad.rightTrigger, 255u);
                         {
                             // HERO VR 0.0.77 HEAL ANYWHERE: on the game screen (the game's Focus Bar card, its
                             // menus) the right stick held down is the game's D-pad down while the hero is hurt.

@@ -444,6 +444,13 @@ int main() {
         const auto ordinary = pad::fromControllers(f, pad::Mapping::gameplay);
         check(ordinary.leftTrigger == 0 && ordinary.rightTrigger == 0,
               "ordinary web-slinging must not send accidental analog game triggers");
+        pad::Walk webline;
+        webline.aim = true;
+        webline.interact = true;
+        const auto nativeLine = pad::fromControllers(XrFrame{}, pad::Mapping::gameplay, webline);
+        check(nativeLine.leftTrigger == 255 && (nativeLine.buttons & pad::y) != 0 &&
+                  nativeLine.rightTrigger == 0,
+              "Web Line must pass native L2 + Triangle, not a fake VR rope or R2 zip");
     });
     test("79.1 contextual grip yank claims only offered throwable interaction", [] {
         using namespace environment_yank;

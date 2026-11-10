@@ -26,10 +26,14 @@ interactions, targets, completion flags, animations, and quest logic.
   hanging from a web: it is the first native-action input adaptation.
 - **Photo Ops Camera Gadget:** touchpad swipe up to equip, L2 to aim, R1
   shutter, swipe down to put away. **Not** Photo Mode. XInput cannot send
-  PlayStation touchpad swipes. The game supports binding *Toggle Camera
-  Gadget* to a D-pad shortcut in its own Accessibility > Shortcuts; the
-  HEROVR PAD MODE already sends D-pad, LT and RB. No verified default
-  no-configuration camera shortcut yet: do not report mission camera fixed.
+  PlayStation touchpad swipes. **Native fallback:** pause the game and choose
+  **Open Camera Gadget** from the pause menu; this requires no shortcut
+  configuration and should be accessible through HEROVR's existing menu
+  navigation. Alternatively bind **Toggle Camera Gadget** to left/right D-pad
+  in the game's **Settings > Shortcuts** and send that direction with HEROVR
+  PAD MODE. Do not confuse **Launch Photo Mode** with the mission gadget.
+  The menu route is documented for the game, but its full photo-mission flow
+  is still unverified in the headset. Preserve native focus/quest flags.
 - **Prowler stash:** hold L2 to scan, then balance independent L2 and R2
   analog pressures in the yellow ranges, then native L1 + R1 to open the
   panel. The PAD MODE forwards genuine independent analog XInput trigger
@@ -66,7 +70,8 @@ the cinematic player to use the mod's vehicle controls. Goals:
 3. Normal grip-swing continues when no L1+R1 environmental prompt; when
    prompted, aiming, gripping and yanking an arm uses native throwable and
    doesn't fire a second swing web.
-4. Photo Op: native camera gadget opens, subject focus indicator advances,
+4. Photo Op: pause > Open Camera Gadget (no shortcut required), then also test
+   D-pad Toggle Camera Gadget where user-configured; focus indicator advances,
    R1 shutter completes quest. Photo Mode does not count.
 5. Miles Prowler: L2 scan -> two independent analog trigger holds -> native
    L1+R1 door -> stash completion.
@@ -80,6 +85,8 @@ the cinematic player to use the mod's vehicle controls. Goals:
 - Web Line tutorial: https://dotesports.com/spider-man/news/how-to-use-the-web-line-in-spider-man-2
 - Controller moves: https://www.shacknews.com/article/137455/controls-moves-spider-man-2
 - Camera Gadget: https://dotesports.com/spider-man/news/how-to-equip-the-camera-in-spider-man-2
+- Pause-menu Camera Gadget route: https://www.gamerevolution.com/guides/951573-spiderman-2-photos-how-to-take-pictures
+- Native D-pad camera shortcut: https://blog.playstation.com/2023/10/19/marvels-spider-man-2-photo-mode-features-detailed-tips-to-get-started/
 - Game accessibility shortcuts: https://support.insomniac.games/hc/en-us/articles/46730041467027-What-Accessibility-options-does-Marvel-s-Spider-Man-2-feature
 - Prowler stash analog triggers: https://www.digitaltrends.com/gaming/open-prowler-stash-spider-man-2/
 - School story: https://www.pushsquare.com/guides/marvels-spider-man-2-roll-like-we-used-to

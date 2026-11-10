@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - experiment/078-window-visibility-consistency
+      - experiment/079-window-lights-rest-gate
       - experiment/078-revamped-clarity
 
 jobs:

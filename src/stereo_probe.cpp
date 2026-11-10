@@ -2958,6 +2958,14 @@ void windowProbe(void* view, void* cull, void* result) {
                    (rested.load(std::memory_order_relaxed) ? 64u : 0u) |
                    (farWindowsReady ? 128u : 0u) |
                    (windowVisibilityEnabled.load(std::memory_order_relaxed) ? 256u : 0u);
+    // Read-only proof of whether the primary-window reach candidate was
+    // eligible on this sampled query. Keep the 376-byte probe ABI unchanged.
+    // This is NOT evidence that the result +0x88 was written or that a
+    // lit-window instance actually appeared; those require separate checks.
+    if (result && spidy::window_visibility::eligible(
+            owner, enabled && windowVisibilityEnabled.load(std::memory_order_relaxed) != 0,
+            rested.load(std::memory_order_relaxed) != 0, farWindowsReady, 150u))
+        sample.flags |= 512u;
     InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&data.sequence));
     if (data.started <= 0)
         data.started = now;

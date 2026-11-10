@@ -2990,11 +2990,8 @@ void* impostorQueries(void* view, void* cull) {
         // only this experiment off live, even if FAR WINDOWS stays configured.
         constexpr uint32_t percent = 150u;
         if (spidy::window_visibility::eligible(
-                // eligible() rejects a *resting* primary game view. The old
-                // caller passed `rested != 0`, inadvertently disabling this
-                // candidate for the active primary view on every frame.
                 owner, enabled && windowVisibilityEnabled.load(std::memory_order_relaxed) != 0,
-                rested.load(std::memory_order_relaxed) == 0, farWindowsReady, percent)) {
+                rested.load(std::memory_order_relaxed) != 0, farWindowsReady, percent)) {
             // The game's own active/main query only; never both offscreen eyes.
             // +88 and byte guards are known, but its semantic use is CANDIDATE.
             farWindowsCalls.fetch_add(1, std::memory_order_relaxed);

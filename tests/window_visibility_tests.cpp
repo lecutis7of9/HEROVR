@@ -23,6 +23,14 @@ int main() {
     check(!eligible(other, true, false, true, 200), "unrelated never writes");
     check(!eligible(direct, false, false, true, 200), "VR off never writes");
     check(!eligible(direct, true, true, true, 200), "resting primary never writes");
+    // Regression: the live hook must pass `rested == 0` as the third arg.
+    // Before the Nov 10 fix it passed `rested != 0`, so an active primary
+    // view could never be eligible, despite the standalone gate passing.
+    const auto liveEligible = [&](bool rested) {
+        return eligible(direct, true, rested == false, true, 150);
+    };
+    check(liveEligible(false), "active primary query must be eligible");
+    check(!liveEligible(true), "resting primary query must stay excluded");
     check(!eligible(direct, true, false, false, 200), "unknown bytes never writes");
     check(!eligible(direct, true, false, true, 100), "game-distance rollback switch");
     check(reach(145.f, 200) == 217.5f, "normal 2x request capped at 1.5x");

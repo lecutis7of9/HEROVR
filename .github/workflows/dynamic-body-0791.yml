@@ -1,5 +1,7 @@
-# Private 0.0.79.1 preview; never creates or edits a public release.
-name: HERO VR 79.1 Dynamic Body preview
+# Combined private 0.0.79.1 gameplay preview; never creates or edits a public release.
+# Mission-specific completion is NOT a prerequisite for packaging this test artifact.
+# See docs/0791-COMBINED-TEST-AND-RELEASE-GATES.md.
+name: HERO VR 79.1 combined gameplay preview
 on:
   push:
     branches:
@@ -10,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  dynamic-body:
+  combined-gameplay:
     if: github.repository == 'lecutis7of9/HEROVR'
     runs-on: windows-2022
     timeout-minutes: 100
@@ -94,7 +96,7 @@ jobs:
       - name: Attach test ZIP to this run (not a public release)
         uses: actions/upload-artifact@v4
         with:
-          name: herovr-79-1-test
+          name: herovr-79-1-combined-gameplay-test
           path: |
             dist/HERO-VR-79.1-TEST-win64.zip
             dist/HERO-VR-79.1-TEST-win64.zip.sha256

@@ -9,7 +9,7 @@
 #include <cstdint>
 namespace spidy::webline_gesture {
 struct Input {
-    bool enabled{}, grip{}, occupied{}, grounded{};
+    bool enabled{}, grip{}, occupied{};
     spidy::Vec3 hand{}, aim{};
     const spidy::WorldQueries* world{};
 };
@@ -26,7 +26,7 @@ public:
         const bool rising=in.grip&&!previous_;
         const bool falling=!in.grip&&previous_;
         previous_=in.grip;
-        if (!in.enabled || in.occupied || !in.grounded || !in.world) {
+        if (!in.enabled || in.occupied || !in.world) {
             if(active_) { out.cancelled=true; resetActive(); }
             return out;
         }

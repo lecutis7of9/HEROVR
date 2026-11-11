@@ -2642,9 +2642,17 @@ std::array<float, 2> eyeJitter() {
     // (2, 3), both eyes, no scale, no mode, no guard), before anything of ours.
     if (sm1Steps()) {
         const auto render = eyeRenderSize();
-        const auto j = spidy::sm1style::eyeJitterFor(eyeJitterOff.load(std::memory_order_relaxed) != 0,
-                                                     spidy::sm1style::jitter(frameIndex, config.width, render[0],
-                                                                             render[1]));
+        // 0.0.79.1 t2165 FAR SHAKE (legacy vr_aa = game route only): the lens 0x2c75560 stores TWICE the jitter it
+        // is given (+0x428 = 2x, +0x42c = -2y; JITTER FIX). The game's own camera passes half a pixel over its size
+        // (e5d2746 report: head view stored 0.000488 NDC at 1280 wide = 0.31 px), but sm1style::jitter is already
+        // 2 * (h - 0.5) / size, so the eyes stored 4 * (h - 0.5) / size: a walk of up to +-1 eye pixel (report:
+        // passed -0.000326, stored -0.000651 NDC at 2688 = -0.875 px), twice the game TAA's own sub-pixel walk.
+        // Halved here, so each eye's game TAA gets the game's own +-0.5 px convention. vr_jitter = off still
+        // holds one fixed offset instead (live, no restart).
+        auto walk = spidy::sm1style::jitter(frameIndex, config.width, render[0], render[1]);
+        walk[0] *= .5f;
+        walk[1] *= .5f;
+        const auto j = spidy::sm1style::eyeJitterFor(eyeJitterOff.load(std::memory_order_relaxed) != 0, walk);
         eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
         eyeJitterSent[1].store(j[1], std::memory_order_relaxed);
         return j;

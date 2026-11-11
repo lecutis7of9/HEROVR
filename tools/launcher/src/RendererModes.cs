@@ -87,12 +87,13 @@ namespace Sm2VrLauncher
                 }
                 // The new 70% path is selected only with VR AA = ours and this
                 // staged marker. Retain every other user's visual preference.
-                // t2161: BOTH modes use VR AA = ours, v0.0.78's default (no
-                // live.txt line = ours). 7991b24 wrote "game" for Original,
-                // which is the legacy SM1STYLE route (the game's TAA in each
-                // eye with its Halton jitter): distant buildings shook. The
-                // two modes differ only by the staged own-TAA-70 marker above.
-                const string aa = "ours";
+                // Switching modes also switches the engine-AA selection:
+                // Original keeps the faster legacy route (the game's TAA in
+                // each eye, SM1STYLE; the user's choice in t2165: "the FPS was
+                // better lets keep it just fix the shaking" - the shake fix is
+                // the eyes' jitter size in stereo_probe.cpp eyeJitter).
+                // Revamped enables the own 70%-to-100% temporal reconstruction.
+                string aa = mode == Revamped ? "ours" : "game";
                 if (!LiveFile.Set(root, "vr_aa", aa) ||
                     !LiveFile.Set(root, "vr_render", "native") ||
                     !LiveFile.Set(root, "sm1style", "on"))

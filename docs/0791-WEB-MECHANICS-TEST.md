@@ -109,13 +109,15 @@ addresses (resolved with the CI run's `herovr-79-1-gameplay-dll-symbols` artifac
 and a count of invalid parameters. After a failed start the launcher console also says whether Spider-Man2.exe is still
 running and whether Steam still marks the game as running (nothing is closed automatically).
 
-## t2161: picture and models
+## t2161/t2165: picture and models
 
-- ORIGINAL now uses v0.0.78's picture exactly: VR AA = ours (SpidyVR's own per-eye TAA). Since 7991b24 the launcher's
-  renderer picker (tools/launcher/src/RendererModes.cs, Apply) wrote `vr_aa = game` into live.txt on every ORIGINAL
-  launch: the legacy SM1STYLE route, the game's TAA in each eye with its Halton jitter, which made distant buildings
-  shake. Both modes now write `vr_aa = ours`; the only difference left is PERFORMANCE's 70% marker. The next PLAY VR
-  rewrites the line in your live.txt.
+- ORIGINAL keeps the faster legacy picture (live.txt `vr_aa = game`: the game's TAA in each eye, SM1STYLE), as asked.
+- FAR SHAKE fix (CANDIDATE, not headset-verified): the eyes' TAA jitter was twice the game's own size. The native lens
+  stores twice the jitter it is given; the game's camera gives half a pixel (e5d2746 report: head view 0.31 px), the
+  eyes were given a full pixel (stored -0.000651 NDC at 2688 wide = -0.875 px), so each eye's game TAA walked its
+  samples up to +-1 pixel. Halved in stereo_probe.cpp eyeJitter (legacy route only; Performance / vr_aa = ours never
+  uses that path). If far buildings still shake: live.txt `vr_jitter = off` (live, no restart) holds one fixed offset
+  and the game's TAA keeps running (same frame rate). If that does not stop it either, say so: then it is not the jitter.
 - The ZIP now carries `Models\` (123 files, the same ones v0.0.78's launcher ZIP ships under HV078\Models), and the
   DLL finds the mod folder from `HERO VR Launcher.cmd` (it only looked for `Launch Spidy VR.cmd` /
   `Spidy Launcher.exe`, so it searched beside the staged DLL in reports\stereo-modules\<sha>).

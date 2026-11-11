@@ -104,6 +104,33 @@ jobs:
           }
           "Gameplay DLL SHA256 (original = revamped = build): $((Get-FileHash -LiteralPath $compiled -Algorithm SHA256).Hash)" >> $env:GITHUB_STEP_SUMMARY
           "Both modes: same current gameplay DLL; launcher selects Original game AA or Revamped own 70% temporal AA through live.txt and staged marker." >> $env:GITHUB_STEP_SUMMARY
+      - name: Build bisect fallback gameplay DLL from the 0791 base (0e94193)
+        env:
+          SPIDY_BHAPTICS_APP_ID: ${{ secrets.SPIDY_BHAPTICS_APP_ID }}
+          SPIDY_BHAPTICS_API_KEY: ${{ secrets.SPIDY_BHAPTICS_API_KEY }}
+        run: |
+          # t2155: one ZIP answers "is the start-up crash on the branch base or newer": the base commit's own
+          # gameplay DLL, picked with tools\BISECT-toggle-base-DLL.cmd. bootstrap.ps1 / CMakeLists.txt are
+          # unchanged since 0e94193, so its build uses this checkout's third_party.
+          $ErrorActionPreference = 'Stop'
+          $repo = $env:GITHUB_WORKSPACE
+          $base = 'C:\b0791'
+          git worktree add --detach $base 0e94193
+          if ($LASTEXITCODE) { throw 'git worktree for 0e94193 failed' }
+          New-Item -ItemType Junction -Path (Join-Path $base 'third_party') -Target (Join-Path $repo 'third_party') | Out-Null
+          Remove-Item Env:SM2VR_LAUNCHER -ErrorAction SilentlyContinue
+          Push-Location $base
+          try {
+            & (Join-Path $base 'tools/build.ps1') -Observer -FromSource
+            if (-not $?) { throw 'Base 0e94193 build failed' }
+          } finally { Pop-Location }
+          Set-Location -LiteralPath $repo
+          $dll = Join-Path $base 'build/windows-ninja/spidy_stereo_probe.dll'
+          if (-not (Test-Path -LiteralPath $dll)) { throw "Base gameplay DLL missing: $dll" }
+          $dest = Join-Path $repo 'build/windows-ninja/bisect-base-0e94193'
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item -LiteralPath $dll -Destination (Join-Path $dest 'spidy_stereo_probe.dll') -Force
+          "Bisect base 0e94193 gameplay DLL SHA256: $((Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash)" >> $env:GITHUB_STEP_SUMMARY
       - name: Package isolated test mod (never uploads to Releases)
         run: |
           $name = 'HERO-VR-79.1-DUAL-TEST'
@@ -125,9 +152,14 @@ jobs:
           try {
             $entries = @($archive.Entries | ForEach-Object { $_.FullName })
             if (-not ($entries -contains "$name/VERSION")) { throw 'VERSION missing from the test ZIP' }
+            # t2155: Reports > Collect reports, and the bisect fallback with its switch.
+            foreach ($entry in @('tools/collect-reports.ps1', 'tools/BISECT-toggle-base-DLL.cmd',
+                                 'build/windows-ninja/bisect-base-0e94193/spidy_stereo_probe.dll')) {
+              if (-not ($entries -contains "$name/$entry")) { throw "$entry missing from the test ZIP" }
+            }
             $script = $archive.GetEntry("$name/tools/launch-game-vr.ps1")
             $reader = New-Object IO.StreamReader($script.Open()); $text = $reader.ReadToEnd(); $reader.Close()
-            foreach ($needed in @('Local\HEROVR-launch-game-vr', 'HEROVR_RENDERER_MODE', 'no 70% enable marker')) {
+            foreach ($needed in @('Local\HEROVR-launch-game-vr', 'HEROVR_RENDERER_MODE', 'no 70% enable marker', 'USE-BASE-DLL.txt')) {
               if (-not $text.Contains($needed)) { throw "launch-game-vr.ps1 in the ZIP lacks: $needed" }
             }
           } finally { $archive.Dispose() }

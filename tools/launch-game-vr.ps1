@@ -229,6 +229,26 @@ $modeRoot = Join-Path $projectRoot 'build\windows-ninja\renderer-modes'
 $activeStereo = Join-Path $projectRoot 'build\windows-ninja\spidy_stereo_probe.dll'
 $revampedStereo = Join-Path $modeRoot 'revamped\spidy_stereo_probe.dll'
 $originalStereo = Join-Path $modeRoot 'original\spidy_stereo_probe.dll'
+# HERO VR 0.0.79.1 BISECT (t2155): the test ZIP also carries the gameplay DLL built from the 0791 base commit
+# 0e94193. USE-BASE-DLL.txt in the mod's top folder (tools\BISECT-toggle-base-DLL.cmd makes / deletes it) puts that
+# DLL in place for this launch; without it the 79.1 test DLL is put back. The base DLL always runs ORIGINAL.
+$bisectDll = Join-Path $projectRoot 'build\windows-ninja\bisect-base-0e94193\spidy_stereo_probe.dll'
+$bisectSwitch = Join-Path $projectRoot 'USE-BASE-DLL.txt'
+if ((Test-Path -LiteralPath $bisectDll) -and (Test-Path -LiteralPath $activeStereo)) {
+    $testDll = if (Test-Path -LiteralPath $revampedStereo) { $revampedStereo } else { $originalStereo }
+    $useBase = Test-Path -LiteralPath $bisectSwitch
+    $wantDll = if ($useBase) { $bisectDll } else { $testDll }
+    if ((Test-Path -LiteralPath $wantDll) -and
+        (Get-FileHash -LiteralPath $wantDll -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $activeStereo -Algorithm SHA256).Hash) {
+        Copy-Item -LiteralPath $wantDll -Destination $activeStereo -Force
+    }
+    $wantHash = (Get-FileHash -LiteralPath $activeStereo -Algorithm SHA256).Hash.Substring(0, 12)
+    if ($useBase) {
+        Write-Host "BISECT: gameplay DLL = 0791 BASE 0e94193 ($wantHash...), renderer ORIGINAL. Run tools\BISECT-toggle-base-DLL.cmd again (or delete USE-BASE-DLL.txt) for the 79.1 test DLL." -ForegroundColor Yellow
+    } else {
+        Write-Host "Gameplay DLL: 79.1 web-mechanics test ($wantHash...). Bisect fallback: tools\BISECT-toggle-base-DLL.cmd" -ForegroundColor Green
+    }
+}
 if ((Test-Path -LiteralPath $revampedStereo) -and (Test-Path -LiteralPath $activeStereo)) {
     # t2150: the 79.1 test packages ship ONE gameplay DLL for both modes, so
     # "active DLL == revamped DLL" was always true and an ORIGINAL launch got

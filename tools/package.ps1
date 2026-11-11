@@ -119,7 +119,8 @@ if ($shipSm1) {
 } else { Write-Host 'SM1 paused: the Spider-Man 1 add-on (herovr_sm1_*) is not in this zip.' }
 
 foreach ($tool in (@($manifest.tools) + @($probeManifest.tools) | Sort-Object -Unique)) { Copy-Item -LiteralPath (Join-Path $root "tools\$tool.py") -Destination (Join-Path $stage 'tools') }
-foreach ($script in @('launch-game-vr.ps1', 'package_manifest.py')) {
+# t2155: collect-reports.ps1 too (the launcher's Reports > Collect reports runs it).
+foreach ($script in @('launch-game-vr.ps1', 'package_manifest.py', 'collect-reports.ps1')) {
     Copy-Item -LiteralPath (Join-Path $root "tools\$script") -Destination (Join-Path $stage 'tools')
 }
 # The starter, with Windows line endings whatever this checkout has (cmd.exe misreads some others). Update 24:
@@ -131,6 +132,14 @@ foreach ($starter in @('HERO VR Launcher.cmd')) {
 foreach ($starter in $probeStarters) {
     $text = [IO.File]::ReadAllText((Join-Path $root "tools\$starter")) -replace "`r?`n", "`r`n"
     [IO.File]::WriteAllText((Join-Path $stage "tools\$starter"), $text, (New-Object Text.ASCIIEncoding))
+}
+# t2155 BISECT: the 0791 base gameplay DLL (CI stages it) and its one switch, tools\BISECT-toggle-base-DLL.cmd.
+$bisectSource = Join-Path $root 'build\windows-ninja\bisect-base-0e94193\spidy_stereo_probe.dll'
+if (Test-Path -LiteralPath $bisectSource) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $stage 'build\windows-ninja\bisect-base-0e94193') | Out-Null
+    Copy-Item -LiteralPath $bisectSource -Destination (Join-Path $stage 'build\windows-ninja\bisect-base-0e94193\spidy_stereo_probe.dll')
+    $text = [IO.File]::ReadAllText((Join-Path $root 'tools\BISECT-toggle-base-DLL.cmd')) -replace "`r?`n", "`r`n"
+    [IO.File]::WriteAllText((Join-Path $stage 'tools\BISECT-toggle-base-DLL.cmd'), $text, (New-Object Text.ASCIIEncoding))
 }
 Copy-Item -LiteralPath $versionFile -Destination $stage
 # t2150: the public version (VERSION, e.g. 0.0.79) too, or a session says "unknown (VERSION missing)".

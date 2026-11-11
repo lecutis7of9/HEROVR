@@ -42,6 +42,8 @@ process_id = bind('GetProcessId', w.DWORD, w.HANDLE)
 # HERO VR 0.0.79.1 (t2153): remote address -> export name, filled by bridge_game.prepare, so a failed
 # remote call says WHICH export it was.
 EXPORT_NAMES = {}
+# t2155: the last remote call started (export, parameter, time), for a report written after the game died.
+LAST_CALL = {}
 
 
 def process_state(process):
@@ -55,6 +57,8 @@ def process_state(process):
 def remote_call_error(step, process, address, error):
     """OSError for a failed remote call that names the call, pid, export, access and the game's state."""
     name = EXPORT_NAMES.get(address, 'unknown export')
+    if address in GUARD_ADDRESSES and LAST_CALL.get('export'):
+        name = f"{name} for {LAST_CALL['export']}"
     state = process_state(process)
     note = ('; the game process is gone, so this is the game closing or crashing, not a permissions problem'
             if state.startswith('EXITED') else '')
@@ -93,7 +97,25 @@ def remote_system_export(pid, name):
     return matching[0]['base'] + local - owner.value
 
 
+# t2155 GUARDED CALL: export address -> its DLL's SpidyGuardedCall (bridge_game.prepare fills it when the DLL has
+# one). Such an export is run by SpidyGuardedCall, which writes the crash breadcrumb and catches C++ exceptions.
+GUARDS = {}
+GUARD_ADDRESSES = set()
+GUARD_MAGIC = 0x31434753  # 'SGC1'
+
+
 def call_remote(process, address, parameter=0):
+    if address not in GUARD_ADDRESSES:
+        LAST_CALL.clear()
+        LAST_CALL.update(export=EXPORT_NAMES.get(address, f'0x{address or 0:X}'),
+                         parameter=parameter if isinstance(parameter, int) else str(parameter),
+                         started=datetime.now(timezone.utc).astimezone().isoformat(timespec='milliseconds'))
+        guard = GUARDS.get(address)
+        if guard:
+            name = EXPORT_NAMES.get(address, '?').split('!')[-1].encode('ascii', 'replace')[:63]
+            payload = struct.pack('<IIQQ64s', GUARD_MAGIC, 1, address, int(parameter or 0) & 0xFFFFFFFFFFFFFFFF, name)
+            LAST_CALL['guarded'] = True
+            return call_with_payload(process, guard, payload)
     handle = create_thread(process, None, 0, address, parameter, 0, None)
     if not handle: raise remote_call_error('CreateRemoteThread', process, address, c.get_last_error())
     try:

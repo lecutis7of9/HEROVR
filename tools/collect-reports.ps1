@@ -60,6 +60,29 @@ foreach ($c in $recent) {
 }
 if ($recent) { Write-Host ('Session logs: ' + $recent.Count + ' session(s) in the last 12 hours') }
 $files += Get-ChildItem -LiteralPath $reports -Filter 'address-finder-latest*' -File | ForEach-Object { $_.FullName }
+# HERO VR 0.0.79.1 (t2155): the VR module's crash breadcrumb (last export entered, VR worker phase, CRT note), the
+# game's own log as it is now, and the last 200 lines of the newest session console (console-tail.txt).
+$crumb = Join-Path $reports 'xr-breadcrumb.txt'
+if (Test-Path -LiteralPath $crumb) { $files += $crumb; Write-Host 'XR breadcrumb: xr-breadcrumb.txt' }
+try {
+    $gameLog = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "Marvel's Spider-Man 2\Marvel's Spider-Man 2.log"
+    if (Test-Path -LiteralPath $gameLog) { $files += $gameLog; Write-Host "Game log: Marvel's Spider-Man 2.log" }
+} catch { Write-Host ('Game log not added: ' + $_.Exception.Message) }
+$tailFile = $null
+try {
+    $newestConsole = Get-ChildItem -LiteralPath $reports -Filter 'game-vr-*-console.log' -File |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($newestConsole) {
+        $tailFile = Join-Path ([IO.Path]::GetTempPath()) ('console-tail-' + [Guid]::NewGuid().ToString('N') + '.txt')
+        $in = [IO.File]::Open($newestConsole.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete)
+        try { $reader = New-Object IO.StreamReader($in); $all = $reader.ReadToEnd() } finally { $in.Dispose() }
+        $lines = $all -split "`r?`n"
+        $tail = $lines | Select-Object -Last 200
+        Set-Content -LiteralPath $tailFile -Value (@("Last 200 lines of $($newestConsole.Name)") + $tail) -Encoding utf8
+        $files += $tailFile
+        Write-Host ('Console tail: last 200 lines of ' + $newestConsole.Name)
+    }
+} catch { Write-Host ('Console tail not added: ' + $_.Exception.Message) }
 # Update 37: the newest WORLD LOG journal (NPC talk, spawns, missions; read-only notes).
 $files += Get-ChildItem -LiteralPath $reports -Filter 'world-trace-*.jsonl' -File |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1 | ForEach-Object { $_.FullName }
@@ -147,6 +170,7 @@ try {
     $copies = @()
     foreach ($f in ($files | Select-Object -Unique)) {
         $name = Split-Path -Leaf $f
+        if ($tailFile -and $f -eq $tailFile) { $name = 'console-tail.txt' }
         $dest = Join-Path $stage $name
         if (Test-Path -LiteralPath $dest) { $dest = Join-Path $stage ([IO.Path]::GetFileNameWithoutExtension($name) + '-' + $copies.Count + [IO.Path]::GetExtension($name)) }
         try {
@@ -161,5 +185,8 @@ try {
     }
     if (-not $copies) { throw "Nothing could be read to collect." }
     Compress-Archive -LiteralPath $copies -DestinationPath $zip -CompressionLevel Optimal
-} finally { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }
+} finally {
+    Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+    if ($tailFile) { Remove-Item -LiteralPath $tailFile -Force -ErrorAction SilentlyContinue }
+}
 Write-Host $zip

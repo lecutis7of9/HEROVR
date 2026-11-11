@@ -37,7 +37,7 @@ import mod_check  # 0.0.74 test 3
 import gpu_check
 import start_errors
 from session_comfort import comfort_advice, game_settings, play_rate
-from observe_game import call_remote, call_with_payload, modules, process_state
+from observe_game import call_remote, call_with_payload, modules, process_state, LAST_CALL
 from probe_stereo_gpu import MAX_EYE_SIZE, discover_queue, snapshot as gpu_snapshot, save_eye_images
 from sm1style_record import sm1style_snapshot, sm1style_line  # 0.0.76 EYE HISTORY CHECK
 import pose_check_record  # 0.0.76 POSE CHECK
@@ -699,9 +699,26 @@ def refused_detail(process, code):
     state = process_state(process)
     if state.startswith('EXITED'):
         raise RuntimeError(f'The game closed while VR was starting (game process {state}; the last start-up '
-                           f'setting call returned 0x{code:08X}). VR had started (SpidyXrStart returned 0); '
+                           f'setting call, {LAST_CALL.get("export", "?")}({LAST_CALL.get("parameter", "?")}), '
+                           f'returned 0x{code:08X}). VR had started (SpidyXrStart returned 0); '
                            'this is the game or the VR module crashing, not a permissions problem.')
     return f' (returned {code} = 0x{code:08X})'
+
+
+def xr_breadcrumb(since=None):
+    """t2155: reports/xr-breadcrumb.txt, the VR module's own last marks (export entered, VR worker phase, CRT
+    note), written through a file mapping so it survives a fail-fast; None without one from this session."""
+    path = ROOT/'reports'/'xr-breadcrumb.txt'
+    try:
+        if since is not None and path.stat().st_mtime < since:
+            return None
+        return [line.rstrip() for line in path.read_text(encoding='ascii', errors='replace').splitlines()
+                if line.strip()]
+    except OSError:
+        return None
+
+
+SESSION_STARTED = time.time()
 
 
 class Startup:
@@ -732,6 +749,13 @@ class Startup:
                             pid=self.fields['game_pid'])
                     except Exception as fault_error:
                         report['windows_application_faults'] = f'not read: {fault_error}'
+            if LAST_CALL:  # t2155
+                report['last_remote_call'] = dict(LAST_CALL)
+            crumbs = xr_breadcrumb(SESSION_STARTED - 5)
+            if crumbs:
+                report['xr_breadcrumb'] = crumbs
+                for line in crumbs:
+                    print('XR BREADCRUMB: ' + line, flush=True)
             self.output.parent.mkdir(parents=True, exist_ok=True)
             self.output.write_text(json.dumps(report, indent=2, default=str)+'\n')
             self.reported = True
@@ -3612,6 +3636,7 @@ def session(a, startup, session_off=()):
                 # Texture and video memory pressure and the game's own frame rate, minute by minute.
                 copy, memory = keep_game_log(a.output)
                 result.update(game_log=str(copy) if copy else None, game_memory=memory)
+                result.update(xr_breadcrumb=xr_breadcrumb(SESSION_STARTED - 5))  # t2155
                 try:
                     log = copy.read_text(encoding='utf-8', errors='replace') if copy else ''
                 except OSError:

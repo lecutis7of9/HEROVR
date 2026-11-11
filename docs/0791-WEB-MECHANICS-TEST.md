@@ -63,3 +63,22 @@ The webline gesture never takes a grip with enemies within 30 m.
 
 Console diagnostics: "HERO VR 79.1 WEB TEST" lines at swing start and
 "79.1 WEBLINE" notes on each start / commit / cancel.
+
+## Start-up crash bisect (t2155)
+
+This ZIP carries two gameplay DLLs:
+
+- the 79.1 web-mechanics TEST DLL (default), and
+- the DLL built from the 0791 base commit 0e94193 (`build\windows-ninja\bisect-base-0e94193\`).
+
+ONE switch: double-click `tools\BISECT-toggle-base-DLL.cmd` (with Spider-Man 2 closed), then press PLAY VR as usual.
+The launcher console says `BISECT: gameplay DLL = 0791 BASE 0e94193` in yellow. Double-click it again to go back to
+the test DLL (`Gameplay DLL: 79.1 web-mechanics test` in green). The switch is the file `USE-BASE-DLL.txt` in the
+mod's top folder; deleting it does the same. The base DLL always runs the ORIGINAL renderer.
+
+- Base DLL starts fine, test DLL crashes: the crash is in the 79.1 web-mechanics commits (2ff26ac..).
+- Both crash: it is on the branch base (the 150 commits between v0.0.78 and 0e94193), or in this machine's setup.
+
+After a failed start: Reports > Collect reports. `send-me.zip` now holds `xr-breadcrumb.txt` (the VR module's last
+export entered, the VR worker's frame phase and any C++ runtime note, written so it survives a crash),
+`console-tail.txt` (the last 200 session console lines) and the game's own log.

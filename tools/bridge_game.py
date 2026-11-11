@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timezone
 
 from capture_game_state import Game, find_game, open_process, close
-from observe_game import (EXPORT_NAMES, modules, call_remote, call_with_payload, remote_system_export,
+from observe_game import (EXPORT_NAMES, GUARDS, GUARD_ADDRESSES, modules, call_remote, call_with_payload, remote_system_export,
                           load_library, free_library, get_export)
 from inspect_game import PE
 
@@ -109,6 +109,12 @@ def prepare(pid, process, dll=DLL, staging=STAGING,
             address = get_export(local,name.encode())
             if address: result[name] = loaded['base'] + address - local
         EXPORT_NAMES.update({v: f'{dll.name}!{k}' for k, v in result.items()})  # t2153 diagnostics
+        guard = get_export(local, b'SpidyGuardedCall')  # t2155: absent in older DLLs (the bisect base)
+        if guard:
+            guard = loaded['base'] + guard - local
+            EXPORT_NAMES[guard] = f'{dll.name}!SpidyGuardedCall'
+            GUARD_ADDRESSES.add(guard)
+            GUARDS.update({v: guard for v in result.values() if v != guard})
         return result, digest
     finally: free_library(local)
 

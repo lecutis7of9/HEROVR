@@ -221,6 +221,7 @@
 #include <shlobj.h>
 #include <thread>
 #include <wincodec.h> // Version 0.0.72 REAL MODELS: the models' PNG / JPEG textures
+#include "spidy/export_guard.hpp" // 0.0.79.1 t2155: guarded remote calls and the crash breadcrumb
 using namespace spidy;
 // HERO VR 0.0.77 CUTSCENES: the immersive eyes stereo_probe.cpp put on the game's camera (the same DLL).
 namespace spidy::cutscene077 {
@@ -2161,7 +2162,29 @@ RealisticFlipSettings realisticFlips(const vr_settings::Values& v) {
 }
 // Version 0.0.2 hotfix: the VR thread's stack reserve (see SpidyXrStart).
 constexpr SIZE_T xrThreadStackReserve = 8u << 20;
+DWORD runBody();
+// HERO VR 0.0.79.1 (t2155): the VR worker's thread entry. An exception that leaves runBody would otherwise be
+// std::terminate -> abort -> 0xC0000409 for the whole game (the start-up crash of 2026-11-10); it now ends VR
+// only, says so on the console and in reports\xr-breadcrumb.txt, and the game keeps running.
 DWORD WINAPI run(void*) {
+    spidy::export_guard::worker("started");
+    try {
+        const DWORD r = runBody();
+        spidy::export_guard::worker("ended normally");
+        return r;
+    } catch (const std::exception& e) {
+        char text[200];
+        std::snprintf(text, sizeof text, "VR stopped: internal error in the VR worker (%s); the game keeps running",
+                      e.what());
+        spidy::export_guard::worker(text);
+        message(5, 0xE0790001u, text);
+    } catch (...) {
+        spidy::export_guard::worker("VR stopped: unknown exception in the VR worker; the game keeps running");
+        message(5, 0xE0790001u, "VR stopped: internal error in the VR worker (unknown exception); the game keeps running");
+    }
+    return 0xE0790001u;
+}
+DWORD runBody() {
     // 0.0.74 test 3 CAVE QUIET: a duck a crash left is put back now; whatever way run ends, the game's sound is back.
     spidy::gameDuckRecover();
     struct CaveQuietEnd {
@@ -3924,6 +3947,7 @@ DWORD WINAPI run(void*) {
         unsigned recoveriesSeen{};
         uint64_t stallToldFor = ~0ull;
         while (!stopRequested && (!nativeDeadline || GetTickCount64() < nativeDeadline)) {
+            spidy::export_guard::phase("loop top (before steam/pad installs)"); // t2155 breadcrumb
             // 0.0.76 LAUNCHER WATCH: a late keep-alive alone (the launcher's remote calls held up
             // while the game loads, 2026-11-03 at the menu) no longer ends VR; only a closed launcher
             // (or, from an older launcher with no process id, a minute with no keep-alive) does.
@@ -3987,8 +4011,10 @@ DWORD WINAPI run(void*) {
                 stallToldFor = lastNewImageMs;
                 message(3, 0, "The game's eye images paused: VR goes on and shows them when they come back");
             }
+            spidy::export_guard::phase("frameStereo (OpenXR wait/begin)");
             const bool active = runtime.frameStereo(
                 [&](const XrFrame& trackedFrame) {
+                    spidy::export_guard::phase("frame callback start");
                     perfSections.begin(); // Update 37 (perf37.hpp): every way out ends it
                     perf37::Guard perfGuard{perfSections,
                                             std::chrono::duration<double>(std::chrono::steady_clock::now() - perfStart).count()};
@@ -6939,6 +6965,7 @@ DWORD WINAPI run(void*) {
                                 // every grip for swinging, GRAB WEB and the enemy grips (t2145).
                                 spidy::ball_sure::outOfCombat(grabEnemyCount, world_trace::nearestEnemyMetres()) &&
                                 !enemyGripFrame.claimed;
+                            spidy::export_guard::phase("79.1 webline gesture update");
                             weblineClaimed = 0;
                             bool lineActive = false, lineCommit = false, lineCancel = false;
                             for (unsigned h = 0; h < 2; ++h) {
@@ -8678,6 +8705,7 @@ DWORD WINAPI run(void*) {
                         walk.aim = zipKeys.aim || nativeWebLineAim || // L2 also primes the game's own Web Line
                                    (weblinePad.aim && steering && !layerOn); // 79.1 WEBLINE GESTURE (held, then + Y)
                         weblinePad = {}; // used once: a frame that skips the gesture's update sends nothing stale
+                        spidy::export_guard::phase("pad keys built (after webline/zip)");
                         if ((walk.heal && !healing) || (walk.zip && !zipping))
                             runtime.haptic(1, .2f);
                         if (walk.heal && !healing) {
@@ -18531,6 +18559,42 @@ DWORD WINAPI run(void*) {
 // 0.0.74 test 10: 0x1000000, SM1STYLE (sm1style.hpp startOption).
 // 0.0.76 SPIDY TAA: 0x2000000 SMAA, 0x4000000 legacy (vr_aa.hpp).
 constexpr uint32_t knownOptions = 0x7ffffff;
+// HERO VR 0.0.79.1 (t2155) GUARDED CALL: the launcher calls every other export of this DLL through this one, so
+// the breadcrumb names the export that ran last and a C++ exception from it is caught here (returned as
+// 0xE0790002) instead of ending the game. Input: GuardedCall in this process (the launcher's allocation).
+struct GuardedCall {
+    uint32_t magic, version;
+    uint64_t target, parameter;
+    char name[64];
+};
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGuardedCall(void* input) {
+    GuardedCall call{};
+    if (!input)
+        return 0xE0790003u;
+    std::memcpy(&call, input, sizeof call);
+    call.name[sizeof call.name - 1] = 0;
+    HMODULE self{}, owner{};
+    if (call.magic != 0x31434753u || call.version != 1 || !call.target ||
+        !GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            reinterpret_cast<LPCWSTR>(&SpidyGuardedCall), &self) ||
+        !GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            reinterpret_cast<LPCWSTR>(call.target), &owner) ||
+        owner != self)
+        return 0xE0790003u; // only this DLL's own entry points
+    spidy::export_guard::enter(call.name);
+    try {
+        const DWORD r = reinterpret_cast<LPTHREAD_START_ROUTINE>(call.target)(reinterpret_cast<void*>(call.parameter));
+        spidy::export_guard::left(call.name, r);
+        return r;
+    } catch (const std::exception& e) {
+        char text[spidy::export_guard::lineBytes];
+        std::snprintf(text, sizeof text, "export THREW %s (caught, returned 0xE0790002): %s", call.name, e.what());
+        spidy::export_guard::put(spidy::export_guard::noteLine, text);
+        return spidy::export_guard::exportThrew;
+    } catch (...) {
+        return spidy::export_guard::failed(call.name);
+    }
+}
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     std::lock_guard life(lifecycle);
     if (worker)

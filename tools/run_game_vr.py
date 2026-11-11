@@ -37,7 +37,7 @@ import mod_check  # 0.0.74 test 3
 import gpu_check
 import start_errors
 from session_comfort import comfort_advice, game_settings, play_rate
-from observe_game import call_remote, call_with_payload, modules
+from observe_game import call_remote, call_with_payload, modules, process_state
 from probe_stereo_gpu import MAX_EYE_SIZE, discover_queue, snapshot as gpu_snapshot, save_eye_images
 from sm1style_record import sm1style_snapshot, sm1style_line  # 0.0.76 EYE HISTORY CHECK
 import pose_check_record  # 0.0.76 POSE CHECK
@@ -693,6 +693,17 @@ class PromptsLog:
             self.broken = True
 
 
+def refused_detail(process, code):
+    """HERO VR 0.0.79.1 (t2153): a start-up setting's nonzero return, in hex; if the game process has exited,
+    stop here with that instead of failing on the next remote call with a bare [WinError 5]."""
+    state = process_state(process)
+    if state.startswith('EXITED'):
+        raise RuntimeError(f'The game closed while VR was starting (game process {state}; the last start-up '
+                           f'setting call returned 0x{code:08X}). VR had started (SpidyXrStart returned 0); '
+                           'this is the game or the VR module crashing, not a permissions problem.')
+    return f' (returned {code} = 0x{code:08X})'
+
+
 class Startup:
     """How far a session got before VR started. A session that ends there writes this as its report, with the
     game's log and the modules in the game's process (overlays and capture tools among them)."""
@@ -714,12 +725,30 @@ class Startup:
                     report['game_modules'] = sorted({m['name'] for m in modules_of(self.fields['game_pid'])})
                 except (OSError, RuntimeError, ValueError):
                     report['game_modules'] = None  # the game has closed
+                    report['game_process'] = game_process_state(self.fields['game_pid'])  # t2153
+                    try:  # t2153: Windows' own crash record, as the queue-search path already collects
+                        import windows_fault
+                        report['windows_application_faults'] = windows_fault.recent_game_faults(
+                            pid=self.fields['game_pid'])
+                    except Exception as fault_error:
+                        report['windows_application_faults'] = f'not read: {fault_error}'
             self.output.parent.mkdir(parents=True, exist_ok=True)
             self.output.write_text(json.dumps(report, indent=2, default=str)+'\n')
             self.reported = True
             print(f"VR did not start ({self.stage}). Report: {self.output.resolve()}", flush=True)
         except (OSError, ValueError):
             pass
+
+
+def game_process_state(pid):
+    """t2153: 'running' / 'EXITED with code 0x...' for the game's pid (QUERY_LIMITED_INFORMATION only)."""
+    process = open_process(0x1000, False, pid)
+    if not process:
+        return f'not openable (error {c.get_last_error()}; the process is gone)'
+    try:
+        return process_state(process)
+    finally:
+        close(process)
 
 
 def runtime_path(manifest):
@@ -3195,6 +3224,7 @@ def session(a, startup, session_off=()):
                 f'Game XR start: {code}' + (' (the VR module refused the launcher\'s settings: the DLL and the '
                                             'launcher are from different builds; run build.ps1)' if code == 1001 else ''))
         xr_active = True
+        startup.stage = 'applying the start-up settings (VR started)'  # t2153: was still 'starting VR'
         print(name_launcher(process, xr, os.getpid()), flush=True)
         # The far buildings' full models, while the left eye chooses them for the game's resting view.
         if call_remote(process, xr['SpidyImpostorReach'], a.building_reach):
@@ -3358,8 +3388,10 @@ def session(a, startup, session_off=()):
             if name in kept:
                 continue
             _, export, text = live_settings.SETTINGS[name]
-            if call_remote(process, xr[export], live_settings.export_value(name, value)):
-                print(f'Update 37 default: {text.format(value)} refused; the old default stays.', flush=True)
+            code = call_remote(process, xr[export], live_settings.export_value(name, value))
+            if code:
+                print(f'Update 37 default: {text.format(value)} refused{refused_detail(process, code)}; '
+                      'the old default stays.', flush=True)
             else:
                 live_file.applied(name, value)
         print('Update 37 defaults (unless live.txt keeps others): ' + ', '.join(
@@ -3373,8 +3405,10 @@ def session(a, startup, session_off=()):
                 print(f'Update 38 default: {text.format(value)} not in this DLL; the built-in default stays.',
                       flush=True)
                 continue
-            if call_remote(process, xr[export], live_settings.export_value(name, value)):
-                print(f'Update 38 default: {text.format(value)} refused; the built-in default stays.', flush=True)
+            code = call_remote(process, xr[export], live_settings.export_value(name, value))
+            if code:
+                print(f'Update 38 default: {text.format(value)} refused{refused_detail(process, code)}; '
+                      'the built-in default stays.', flush=True)
             else:
                 live_file.applied(name, value)
         print('Update 38 COMBAT defaults (all live, no restart): ' + ', '.join(

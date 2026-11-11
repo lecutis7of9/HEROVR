@@ -37,6 +37,31 @@ get_export = bind('GetProcAddress', c.c_void_p, w.HMODULE, c.c_char_p)
 get_module = bind('GetModuleHandleW', w.HMODULE, w.LPCWSTR)
 module_from_address = bind('GetModuleHandleExW', w.BOOL, w.DWORD, c.c_void_p, c.POINTER(w.HMODULE))
 module_filename = bind('GetModuleFileNameW', w.DWORD, w.HMODULE, w.LPWSTR, w.DWORD)
+process_exit_code = bind('GetExitCodeProcess', w.BOOL, w.HANDLE, c.POINTER(w.DWORD))
+process_id = bind('GetProcessId', w.DWORD, w.HANDLE)
+# HERO VR 0.0.79.1 (t2153): remote address -> export name, filled by bridge_game.prepare, so a failed
+# remote call says WHICH export it was.
+EXPORT_NAMES = {}
+
+
+def process_state(process):
+    """'running', 'EXITED with code 0x...' or 'unknown (...)' for a process handle (needs QUERY rights)."""
+    code = w.DWORD()
+    if not process_exit_code(process, c.byref(code)):
+        return f'unknown (GetExitCodeProcess error {c.get_last_error()})'
+    return 'running' if code.value == 259 else f'EXITED with code 0x{code.value:08X}'
+
+
+def remote_call_error(step, process, address, error):
+    """OSError for a failed remote call that names the call, pid, export, access and the game's state."""
+    name = EXPORT_NAMES.get(address, 'unknown export')
+    state = process_state(process)
+    note = ('; the game process is gone, so this is the game closing or crashing, not a permissions problem'
+            if state.startswith('EXITED') else '')
+    return c.WinError(error, f'{step} failed: {c.FormatError(error).strip()} '
+                             f'(pid {process_id(process)}, export {name} at 0x{address or 0:X}, handle access '
+                             f'0x043A = CREATE_THREAD|VM_OPERATION|VM_WRITE|QUERY_INFORMATION|VM_READ; '
+                             f'game process {state}{note})')
 
 
 def modules(pid):
@@ -70,14 +95,15 @@ def remote_system_export(pid, name):
 
 def call_remote(process, address, parameter=0):
     handle = create_thread(process, None, 0, address, parameter, 0, None)
-    if not handle: raise c.WinError(c.get_last_error())
+    if not handle: raise remote_call_error('CreateRemoteThread', process, address, c.get_last_error())
     try:
         status = wait(handle, 15000)
         if status == 258:
             raise TimeoutError('Remote call timed out; its argument allocation was retained. Do not retry blindly.')
-        if status != 0: raise c.WinError(c.get_last_error())
+        if status != 0: raise remote_call_error('WaitForSingleObject', process, address, c.get_last_error())
         code = w.DWORD()
-        if not exit_code(handle, c.byref(code)): raise c.WinError(c.get_last_error())
+        if not exit_code(handle, c.byref(code)):
+            raise remote_call_error('GetExitCodeThread', process, address, c.get_last_error())
         return code.value
     finally:
         close(handle)
@@ -85,12 +111,12 @@ def call_remote(process, address, parameter=0):
 
 def call_with_payload(process, address, payload):
     remote = allocate(process, None, len(payload), 0x3000, 4)
-    if not remote: raise c.WinError(c.get_last_error())
+    if not remote: raise remote_call_error('VirtualAllocEx', process, address, c.get_last_error())
     safe_to_release = True
     try:
         count = c.c_size_t()
         if not write(process, remote, payload, len(payload), c.byref(count)) or count.value != len(payload):
-            raise c.WinError(c.get_last_error())
+            raise remote_call_error('WriteProcessMemory', process, address, c.get_last_error())
         try:
             return call_remote(process, address, remote)
         except TimeoutError:

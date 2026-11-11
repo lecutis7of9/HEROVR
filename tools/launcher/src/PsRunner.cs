@@ -280,8 +280,11 @@ namespace Sm2VrLauncher
             {
                 string v = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value;
                 v = Unescape(System.Net.WebUtility.HtmlDecode(v));
+                // 0.0.79.1 (t2153): a Write-Host record carries its text twice (the message and its ToString),
+                // which showed every replayed line doubled after a failed start: keep one of each pair.
                 foreach (var l in v.Replace("\r\n", "\n").Split(new[] { '\n' }))
-                    if (l.Trim().Length > 0) lines.Add(l.TrimEnd(Ws));
+                    if (l.Trim().Length > 0 && (lines.Count == 0 || lines[lines.Count - 1] != l.TrimEnd(Ws)))
+                        lines.Add(l.TrimEnd(Ws));
             }
             if (lines.Count == 0 && body.IndexOf("<Obj", StringComparison.Ordinal) >= 0) return Plain(body);
             return lines;

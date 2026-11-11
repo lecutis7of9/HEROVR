@@ -1,0 +1,25 @@
+name: HEROVR combat test source inspection
+on:
+  push:
+    branches: [test/combat-webzip-pull-webline]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate combat grip and zip integration
+        shell: python
+        run: |
+          import pathlib,re
+          p=pathlib.Path("src/game_xr.cpp")
+          lines=p.read_text(encoding="utf-8",errors="replace").splitlines()
+          terms=re.compile(r"web.?grab|web.?pull|web.?zip|web.?line|grip|buttonY",re.I)
+          matches=[i for i,line in enumerate(lines) if terms.search(line)]
+          print("TOTAL_LINES",len(lines),"MATCHES",len(matches))
+          for i in matches[:180]:
+              lo=max(0,i-2);hi=min(len(lines),i+3)
+              print("MATCH",i+1)
+              for j in range(lo,hi):print(f"{j+1}: {lines[j][:220]}")

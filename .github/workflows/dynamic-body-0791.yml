@@ -36,6 +36,18 @@ jobs:
           if ($LASTEXITCODE) { throw 'Python diagnostics regressions failed' }
           python -B tests/player_check_tests.py
           if ($LASTEXITCODE) { throw 'Windows folder preflight regressions failed' }
+      - name: Inspect native webline integration points
+        shell: pwsh
+        run: |
+          $source = Get-Content 'src/game_xr.cpp'
+          $patterns = 'webline|web.line|stealth|grip|raycast|game_offers'
+          $matches = Select-String -Path 'src/game_xr.cpp' -Pattern $patterns | Select-Object -First 90
+          foreach ($match in $matches) {
+            $start = [Math]::Max(0, $match.LineNumber - 3)
+            $end = [Math]::Min($source.Length - 1, $match.LineNumber + 3)
+            Write-Output ("=== src/game_xr.cpp:" + $match.LineNumber + " ===")
+            for ($i = $start; $i -le $end; $i++) { Write-Output (("{0}: {1}" -f ($i + 1), $source[$i])) }
+          }
       - name: Compile and run webline gesture regression
         run: |
           $compiler = (Get-Command clang++ -ErrorAction SilentlyContinue)

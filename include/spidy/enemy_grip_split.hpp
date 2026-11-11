@@ -75,7 +75,12 @@ public:
             if(in.grips[hand_]) {
                 out.claimed=1u<<hand_;out.target=target_;out.hand=hand_;
                 out.zip=zipLeft_>0.f;zipLeft_=std::max(0.f,zipLeft_-dt);
-            } else phase_=Phase::blocked;
+            } else {
+                // A completed one-hand zip must rearm on release. Otherwise the
+                // next unrelated grip is swallowed by the blocked phase.
+                if (!in.grips[0] && !in.grips[1]) clear();
+                else phase_=Phase::blocked;
+            }
             return out;
         }
         if(!in.grips[0]&&!in.grips[1])clear();

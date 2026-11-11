@@ -131,10 +131,40 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           Copy-Item -LiteralPath $dll -Destination (Join-Path $dest 'spidy_stereo_probe.dll') -Force
           "Bisect base 0e94193 gameplay DLL SHA256: $((Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash)" >> $env:GITHUB_STEP_SUMMARY
+      - name: Fetch v0.0.78's Models (read-only download of the public v0.0.78 launcher ZIP)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # t2161: the test ZIP had no Models folder ("REAL MODELS ...: MISSING"). The models are not in git;
+          # v0.0.78 shipped them in HERO-VR-Launcher-0.0.78.zip under HV078/Models. Same files, pinned by hash.
+          $dl = Join-Path $env:RUNNER_TEMP 'v078'
+          New-Item -ItemType Directory -Force -Path $dl | Out-Null
+          gh release download v0.0.78 --repo $env:GITHUB_REPOSITORY --pattern 'HERO-VR-Launcher-0.0.78.zip' --dir $dl
+          if ($LASTEXITCODE) { throw 'Could not download HERO-VR-Launcher-0.0.78.zip from v0.0.78' }
+          $zip078 = Join-Path $dl 'HERO-VR-Launcher-0.0.78.zip'
+          $want = '0f8c9cca2363beb320132b54f3444bcec244bca3b74a375300014961faab8fda'
+          $got = (Get-FileHash -LiteralPath $zip078 -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($got -ne $want) { throw "HERO-VR-Launcher-0.0.78.zip SHA256 $got, expected $want" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $out = Join-Path $env:GITHUB_WORKSPACE 'build/models-078'
+          if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force }
+          $archive = [IO.Compression.ZipFile]::OpenRead($zip078)
+          $n = 0
+          try {
+            foreach ($e in $archive.Entries) {
+              if (-not $e.FullName.StartsWith('HV078/Models/') -or $e.FullName.EndsWith('/')) { continue }
+              $dest = Join-Path $out ($e.FullName.Substring('HV078/'.Length))
+              New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+              [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true)
+              $n++
+            }
+          } finally { $archive.Dispose() }
+          if ($n -ne 123) { throw "Expected 123 files under HV078/Models, got $n" }
+          "Models from v0.0.78 launcher ZIP: $n files" >> $env:GITHUB_STEP_SUMMARY
       - name: Package isolated test mod (never uploads to Releases)
         run: |
           $name = 'HERO-VR-79.1-DUAL-TEST'
-          ./tools/package.ps1 -Name $name -TestNotes 'docs/0791-WEB-MECHANICS-TEST.md'
+          ./tools/package.ps1 -Name $name -TestNotes 'docs/0791-WEB-MECHANICS-TEST.md' -ModelsFrom 'build/models-078/Models'
           if ($LASTEXITCODE) { throw "Packaging failed ($LASTEXITCODE)" }
           $zip = "dist/$name-win64.zip"
           if (-not (Test-Path -LiteralPath $zip)) { throw "No mod test ZIP: $zip" }
@@ -157,6 +187,13 @@ jobs:
                                  'build/windows-ninja/bisect-base-0e94193/spidy_stereo_probe.dll')) {
               if (-not ($entries -contains "$name/$entry")) { throw "$entry missing from the test ZIP" }
             }
+            # t2161: v0.0.78's Models, all 123 files, and the two the session log reported missing.
+            $models = @($entries | Where-Object { $_.StartsWith("$name/Models/") -and -not $_.EndsWith('/') })
+            if ($models.Count -ne 123) { throw "Models in the test ZIP: $($models.Count) files, expected 123" }
+            foreach ($entry in @('Models/Punisher078/Pistol', 'Models/Batarang', 'Models/Suits')) {
+              if (-not @($entries | Where-Object { $_.StartsWith("$name/$entry/") }).Count) { throw "$entry missing from the test ZIP" }
+            }
+            "Models in the test ZIP: $($models.Count) files" >> $env:GITHUB_STEP_SUMMARY
             $script = $archive.GetEntry("$name/tools/launch-game-vr.ps1")
             $reader = New-Object IO.StreamReader($script.Open()); $text = $reader.ReadToEnd(); $reader.Close()
             foreach ($needed in @('Local\HEROVR-launch-game-vr', 'HEROVR_RENDERER_MODE', 'no 70% enable marker', 'USE-BASE-DLL.txt')) {

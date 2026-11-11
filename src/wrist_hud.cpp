@@ -699,6 +699,8 @@ const char* labelOf(Control c) {
         return "DOUBLE HEALTH";
     case Control::bodyAnimations:
         return "BODY ANIMATIONS";
+    case Control::vrJitter:
+        return "EYE JITTER";
     case Control::flyMode:
         return "FLY MODE";
     case Control::flyVignette:
@@ -982,7 +984,7 @@ constexpr SectionDef vrSections[] = {
     // address_finder; WEB BALL TEST and FOVEATED FPS (test presses); FOVEATED DEBUG fovea_debug.
     {"GRAPHICS", C::farShadows, C::none, "SHADOWS ", "", nullptr, -1,
      {C::farShadows, C::reach, C::combatFarWindows, C::combatCullMargin, C::combatShadowMatch, C::combatLightHold,
-      C::combatLightChecks, C::eyeBloom, C::monitor}},
+      C::combatLightChecks, C::eyeBloom, C::monitor, C::vrJitter}}, // 79.2b: + EYE JITTER (vr_jitter)
     {"PERFORMANCE", C::combatAutoPerf, C::none, "AUTO ", "", nullptr, -1,
      {C::combatAutoPerf, C::combatPerfTarget, C::combatPerfFloor, C::combatPerfStatus, C::foveated, C::foveaInner}},
 };
@@ -2579,6 +2581,7 @@ std::string buttonValue(const View& view, Control c) {
            : c == Control::invincible   ? std::string(view.invincible ? "ON" : "OFF")
            : c == Control::doubleHealth ? std::string(view.doubleHealth ? "ON" : "OFF")
            : c == Control::bodyAnimations ? std::string(view.bodyAnimations ? "DYNAMIC" : "CLASSIC")
+           : c == Control::vrJitter     ? std::string(view.vrJitterOff ? "OFF" : "ON")
            : c == Control::flyMode      ? std::string(extras385::fly::speedName(view.flyMode))
            : c == Control::flyVignette  ? std::string(view.flyVignette ? "ON" : "OFF")
            : c == Control::flyRoll      ? std::string(extras385::fly::rollName(view.flyRoll))
@@ -3475,6 +3478,8 @@ const char* helpText(Control c) {
         return extras385::double_health::help;
     case Control::bodyAnimations:
         return "DYNAMIC adds wall, swing and flip poses; CLASSIC does not.";
+    case Control::vrJitter:
+        return "OFF holds the eyes' TAA still (try it if far buildings shake); ON the TAA sample walk (sharper edges).";
     case Control::flyMode:
         return extras385::fly::help;
     case Control::flyVignette:
@@ -3857,6 +3862,8 @@ const char* shortName(Control c) {
         return "2X HEALTH";
     case Control::bodyAnimations:
         return "BODY ANIM";
+    case Control::vrJitter:
+        return "JITTER";
     case Control::flyMode:
         return "FLY";
     case Control::flyVignette:
@@ -4574,6 +4581,9 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
                 break;
             case Control::bodyAnimations:
                 r.bodyAnimations = true;
+                break;
+            case Control::vrJitter:
+                r.vrJitter = true;
                 break;
             case Control::flyMode:
                 r.flyMode = true;

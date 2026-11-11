@@ -223,9 +223,11 @@ struct Item {
     bool placed{};
     double movedLogAt = -100;
     std::array<uint64_t, snapWords> words{};
-    bool snapped{};
+    bool snapped{}, unreadable{};
 };
-std::atomic<bool> on{true}, bad{};
+// 79.2b (t2168 lag): off until game_xr turns it on, and game_xr does so only in VR gameplay with prop_probe = on
+// (default off). 2429458 had it on from the dll's load, so the registry walk below ran through the boot and splash.
+std::atomic<bool> on{false}, bad{};
 std::mutex mtx;
 std::vector<Item> items;                                    // this scan's prop-side components (under lock)
 std::unordered_map<uintptr_t, unsigned> knownBefore;        // component -> kind, the scan before
@@ -377,6 +379,8 @@ void propTick(float clockSeconds) {
     if (!propWanted())
         return;
     std::lock_guard<std::mutex> g(mtx);
+    if (items.empty())
+        return;
     const double dt = clockSeconds - clockNow;
     clockNow = clockSeconds;
     char t[240];
@@ -394,8 +398,10 @@ void propTick(float clockSeconds) {
     for (size_t i : order) {
         auto& it = items[i];
         Vec3 at{};
-        if (!position(it.record, at) || !finite(at))
+        if (!position(it.record, at) || !finite(at)) {
+            it.placed = false; // 79.2b: never re-read a failed address until the next scan
             continue;
+        }
         const float moved = length(at - it.at);
         if (dt > .02 && dt < .5 && moved > .25f && clockSeconds - it.movedLogAt > .5) {
             it.movedLogAt = clockSeconds;
@@ -409,14 +415,16 @@ void propTick(float clockSeconds) {
     // Motion / shot / injector components: their first 0x330 bytes, changed words logged (up to 8 a line).
     unsigned watchedNow = 0;
     for (auto& it : items) {
-        if (it.kind == interactable || it.kind == manager || watchedNow >= 16)
+        if (it.kind == interactable || it.kind == manager || it.unreadable || watchedNow >= 16)
             continue;
         if (heroOk && it.placed && length(it.at - hero) > 60)
             continue;
         ++watchedNow;
         std::array<uint64_t, snapWords> w{};
-        if (!read(it.component, w.data(), sizeof(w)))
+        if (!read(it.component, w.data(), sizeof(w))) {
+            it.unreadable = true; // 79.2b: stop snapshotting it until the next scan
             continue;
+        }
         if (it.snapped && w != it.words) {
             std::string s;
             char head[120];
@@ -1015,10 +1023,14 @@ void run() {
             uintptr_t hero{};
             std::vector<prop79::Item> propNow; // 79.2 PROP PROBE
             const bool propScan = propWanted();
+            // 79.2b: a scan only the probe asked for walks gently: a 1 ms sleep every 1024 entries, 2 s apart.
+            const bool propOnly = propScan && !any && !enemiesWanted() && !promptsOn;
             std::vector<std::pair<uintptr_t, uintptr_t>> spawnerOf; // record -> spawner vtable
             for (uint32_t i = 0; i < static_cast<uint32_t>(count) && running.load(); ++i) {
                 if (i && i % sliceEntries == 0)
                     Sleep(0);
+                if (propOnly && i && i % 1024 == 0)
+                    Sleep(1);
                 struct Entry16 {
                     uintptr_t address;
                     uint32_t generation, pad;
@@ -1583,7 +1595,8 @@ void run() {
             // Version 0.0.62 ENEMY TRACKING LIVE: 30 a second while an enemy is near (the same
             // guarded reads of the same records, 3x as often, on this thread - not the game's or the
             // frame's); 10 a second with none near and on 0.0.6.
-            for (float slept = 0; slept < interval && running.load();) {
+            const float rest = propOnly ? std::max(interval, 2.f) : interval; // 79.2b: probe-only scans 2 s apart
+            for (float slept = 0; slept < rest && running.load();) {
                 const bool fast = fastRefresh.load(std::memory_order_relaxed) && enemyNear.load(std::memory_order_relaxed);
                 Sleep(fast ? 33 : 100);
                 slept += fast ? .033f : .1f;

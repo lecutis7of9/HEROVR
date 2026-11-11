@@ -176,7 +176,8 @@ class MirrorPersist(unittest.TestCase):
         self.assertEqual(L.parse(text)[0]['mirror_view'], 'test')
 
     def test_decode_is_compatible(self):
-        self.assertEqual(L.decode_hud_settings(10, MARKER | 2), {'lens_flares': 'game', 'mirror_view': 'test'})
+        self.assertEqual(L.decode_hud_settings(10, MARKER | 2), {'lens_flares': 'game', 'mirror_view': 'test',
+                                                                'vr_jitter': 'on'})  # 79.2b: + EYE JITTER (bit 2)
         self.assertEqual(L.decode_hud_settings(3, MARKER | 1 << 21), {'mirror_view': True})
         self.assertEqual(L.SELECTOR['mirror_view'], 10)
         self.assertIn('mirror_view', L.PERSISTED)

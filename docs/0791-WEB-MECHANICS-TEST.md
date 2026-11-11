@@ -122,11 +122,13 @@ running and whether Steam still marks the game as running (nothing is closed aut
   DLL finds the mod folder from `HERO VR Launcher.cmd` (it only looked for `Launch Spidy VR.cmd` /
   `Spidy Launcher.exe`, so it searched beside the staged DLL in reports\stereo-modules\<sha>).
 
-## 79.2 PROP PROBE (t2166): read-only, default on
+## 79.2 PROP PROBE (t2166): read-only, default OFF since 79.2b
 
 Nothing about props changes in this build: throwing bins and boxes is still the game's own L1+R1. This build only
 WATCHES the game's throwables so the next build can hand them to your hands. It writes nothing to the game, adds no
-hook and sends no event. Turn it off with `prop_probe = off` in live.txt (live, no restart).
+hook and sends no event. 79.2b: it is OFF by default and, when on, runs only in VR gameplay (2429458 had it on from
+the moment the game loaded, which lagged the splash). Turn it on with `prop_probe = on` in live.txt once you stand in a
+street (live, no restart); `prop_probe = off` stops it.
 
 What it does (a background thread, every read SEH-guarded): it looks in the game's component registry for these
 classes, each by its exact vtable AND its RTTI name read live (a mismatch turns the probe off and says so):
@@ -140,8 +142,23 @@ second and 4000 a session:
 - `... words:` changed words inside a yank / shot component (the flight target, for the next build).
 
 Test (about 3 minutes):
-1. Start the game as usual. In the console look for `79.2 PROP PROBE: on`.
+1. Start the game as usual and get into a street. Put `prop_probe = on` in live.txt and save; the console says
+   `79.2 PROP PROBE: on`.
 2. Walk to a street with trash cans, bins or boxes. Stand still 15 s (a `scan` line shows the counts).
 3. Point your LEFT hand at a bin for 5 s, then your RIGHT hand at it for 5 s, then at a different prop.
 4. Do ONE normal environmental throw with the game's own L1+R1 on a bin. Wait 5 s.
 5. Collect reports and send them.
+
+## 79.2b (t2168/t2169): splash lag, far shake, EYE JITTER on the wrist
+
+- Lag from the PLAYSTATION STUDIOS splash (2429458): the prop probe started switched on inside the dll, so the
+  world-log thread walked the game's whole component registry from boot, through loading, where it had been idle
+  before (a0ef2c4). Now: off by default, only in VR gameplay when on, a scan only it asked for walks with a 1 ms rest
+  every 1024 entries and 2 s apart, and a pointer that failed to read is not read again until the next scan.
+- Far buildings shaking: t2165 halved the eyes' TAA jitter walk; it still shook. This build holds the eyes' jitter
+  still by default (vr_jitter = off: one fixed tiny offset, the game's TAA still runs, same FPS route vr_aa = game).
+- EYE JITTER on the hologram: VR SETTINGS > GRAPHICS > EYE JITTER (last row). ON / OFF, live, kept in live.txt
+  (vr_jitter) and applied at the next start.
+
+Test: boot, check the splash is smooth. In a street turn your head slowly looking at far buildings. Then flip
+VR SETTINGS > GRAPHICS > EYE JITTER to ON and look again, then back to OFF. Say which one shakes. Collect reports.

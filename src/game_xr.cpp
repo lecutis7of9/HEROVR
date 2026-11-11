@@ -707,6 +707,8 @@ uint32_t SpidyShadowCameraNow();        // Update 31: SHADOW CAMERA mode | rever
 uint32_t SpidyEngineTaaNow();           // Update 34: engine_taa::pack(state, reason)
 DWORD WINAPI SpidyEngineTaaJitter(void* mode); // Update 34.2: engine_taa::JitterMode, 4 the next
 uint32_t SpidyEngineTaaJitterNow();     // Update 34.2
+DWORD WINAPI SpidyVrJitter(void* off);  // 0.0.76 FAR SHAKE: vr_jitter, 0 on, 1 off (stereo_probe.cpp)
+uint32_t SpidyVrJitterNow();            // bit 0 vr_jitter off, bit 1 vr_game_jitter off
 DWORD WINAPI SpidyShadowCamera(void* mode); // Update 31
 DWORD WINAPI SpidyFarShadows(void* mode); // Update 35: far_shadows::Mode, 3 the next, 4 off (slow)
 uint32_t SpidyFarShadowsNow();            // Update 35: far_shadows::pack(mode, reason)
@@ -1487,9 +1489,10 @@ std::atomic<uint32_t> weblineGestureNow{spidy::webline_native::modeOn};
 // in the air is the game's web strike), 1 on (enemy_grip_split.hpp: aimed grip = native web strike on the press frame,
 // a second grip within 0.24 s upgrades it to the two-hand grab/pull).
 std::atomic<uint32_t> enemyGripSplitNow{0};
-// HERO VR 79.2 PROP PROBE (t2166, READ-ONLY; world_trace.cpp prop79): live.txt prop_probe - 0 on (the default), 1 off.
+// HERO VR 79.2 PROP PROBE (t2166, READ-ONLY; world_trace.cpp prop79): live.txt prop_probe - 0 on, 1 off (the default
+// since 79.2b, t2168: 2429458's probe, on from boot, lagged the splash). Even on it runs only in VR gameplay.
 // It finds the game's throwables and its own yank / throw components and logs them; it writes nothing to the game.
-std::atomic<uint32_t> propProbeNow{0};
+std::atomic<uint32_t> propProbeNow{1};
 uint32_t propProbeWas = 99;
 bool promptLayerFrame{};
 cut16::BossGate bossGate16;
@@ -4876,6 +4879,14 @@ DWORD runBody() {
                                     SpidyFarShadows(reinterpret_cast<void*>(uintptr_t{far_shadows::nextMode})) == 0 &&
                                     far_shadows::modeOf(SpidyFarShadowsNow()) != far_shadows::off)
                                     farShadowsArm = true;
+                                if (result.vrJitter) { // 79.2b (t2169): EYE JITTER, live; the launcher keeps it in live.txt
+                                    const uintptr_t off = (SpidyVrJitterNow() & 1u) ? 0u : 1u;
+                                    if (SpidyVrJitter(reinterpret_cast<void*>(off)) == 0) {
+                                        wristChanged |= 1u << 22; // SpidyHudSettings 3 bit 22, 10 bit 2
+                                        message(3, 0, off ? "HEROVR EYE JITTER: OFF (eyes' TAA held still)"
+                                                          : "HEROVR EYE JITTER: ON (TAA sample walk)");
+                                    }
+                                }
                                 if (result.eyeBloom) // Update 36: EYE BLOOM, the next mode (it reverts on its own)
                                     SpidyEyeBloom(reinterpret_cast<void*>(uintptr_t{eye_bloom::nextMode}));
                                 if (result.mirror) { // Update 37: MIRROR, show (placed in front) or dismiss
@@ -9364,12 +9375,12 @@ DWORD runBody() {
                             }
                             { // 79.2 PROP PROBE (read-only): on/off, the hands' game-world aim rays, its lines.
                                 const uint32_t probe = propProbeNow.load();
-                                world_trace::setPropProbe(probe == 0);
+                                world_trace::setPropProbe(probe == 0 && vrGameplay); // 79.2b: never at boot or menus
                                 if (probe != propProbeWas) {
                                     propProbeWas = probe;
                                     const char* said = probe == 0
-                                        ? "79.2 PROP PROBE: on (read-only: finds throwables and the game's own yank, writes nothing; live.txt prop_probe = off to stop)"
-                                        : "79.2 PROP PROBE: off (live.txt prop_probe = off)";
+                                        ? "79.2 PROP PROBE: on (read-only, VR gameplay only: finds throwables and the game's own yank, writes nothing; live.txt prop_probe = off to stop)"
+                                        : "79.2 PROP PROBE: off (the default; live.txt prop_probe = on to watch props, in a street)";
                                     consoleLine(said);
                                     game_prompts::note(said);
                                 }
@@ -17857,6 +17868,7 @@ DWORD runBody() {
                                             hud.invincibleNa = invincibleNa.load() != 0;
                                             hud.doubleHealth = doubleHealthOn.load(); // 0.0.76 DOUBLE HEALTH
                                             hud.bodyAnimations = values.legAnimations; // 0.0.79.1 wrist toggle
+                                            hud.vrJitterOff = (SpidyVrJitterNow() & 1u) != 0; // 79.2b EYE JITTER
                                             hud.flyMode = flyModeNow.load();
                                             hud.flyVignette = flyVignetteOn.load();
                                             hud.flyRoll = flyRollNow.load();
@@ -19805,7 +19817,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
     case 3:
         // The 20 settings' bits, and Update 19's song (20), music volume (27) and visualizer (28).
         // Version 0.0.62: LENS FLARES (29), kept for the next start. 0.0.7: MIRROR VIEW (21), the same.
-        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29));
+        // 79.2b: EYE JITTER (22), kept in live.txt as vr_jitter.
+        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29 | 1u << 22));
     case 4: // Update 21: sharpening 0-200 in bits 0-7, the reticles shown in bit 8 (Update 16: 0-6 and 7)
         return marker | std::min<DWORD>(native_gpu::eyeSharpen(), 255) | (reticlesShown.load() ? 1u : 0u) << 8;
     case 5: // Update 17: the hologram's height, size, text size, theme and text colour
@@ -19827,7 +19840,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
         return marker | std::min<DWORD>(sessionFpsHigh.load(), 2047) | std::min<DWORD>(sessionFpsLow.load(), 2047) << 11;
     case 10: // Version 0.0.62: LENS FLARES (0 GAME, 1 OFF IN VR), for live.txt and the next start;
              // 0.0.7: MIRROR VIEW (bit 1: 0 OFF, 1 TEST), the same (an older launcher reads bit 0 only)
-        return marker | std::min<DWORD>(c38(combat38::lensFlares), 1) | std::min<DWORD>(c38(combat38::mirrorView), 1) << 1;
+        // 79.2b: bit 2 EYE JITTER (live.txt vr_jitter: 0 on, 1 off).
+        return marker | std::min<DWORD>(c38(combat38::lensFlares), 1) | std::min<DWORD>(c38(combat38::mirrorView), 1) << 1 |
+               (SpidyVrJitterNow() & 1u) << 2;
     default:
         return 3970;
     }

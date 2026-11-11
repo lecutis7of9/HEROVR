@@ -437,7 +437,10 @@ std::atomic<float> gameJitter[2]{}, eyeJitterSent[2]{};
 // x at +0x428 and -2 * its jitter y at +0x42c; the head view and the aligned head view passed the stock camera's
 // stored +0x428/+0x42c back in, so they carried twice the game's jitter with y flipped. They now pass 0.
 // 0 keep: c71a59c's doubled values, to compare. The headset eyes' jitter (eyeJitter) is not this.
-std::atomic<uint32_t> eyeJitterOff{0}, gameViewJitterOff{1};
+// 79.2b (t2168/t2169): vr_jitter OFF is the default in this test build. t2165 halved the eyes' walk and the far
+// buildings still shook (user, 2429458), so the eyes' lens now holds one fixed 1e-6 NDC offset unless live.txt or the
+// hologram (VR SETTINGS > GRAPHICS > EYE JITTER) says ON; the game's TAA still runs (it skips only a zero jitter).
+std::atomic<uint32_t> eyeJitterOff{1}, gameViewJitterOff{1};
 // Update 34.2: ENGINE TAA's jitter mode and scale (engine_taa::JitterMode), live, never
 // kept; and what it did, for the report (SpidyEngineTaaData, tools/run_game_vr.py).
 // Update 37: NONE by default (the run36 closing setting).

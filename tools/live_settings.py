@@ -636,9 +636,9 @@ SETTINGS = {
                          "frame, a second grip within 0.24 s turns it into the two-hand grab and yank) - live, no "
                          "restart needed"),
     # HERO VR 79.2 PROP PROBE (t2166, READ-ONLY diagnostic; world_trace.cpp prop79)
-    'prop_probe': ((0, 1), 'SpidyPropProbe', "PROP PROBE {} (0 on, the default: read-only - finds the game's "
+    'prop_probe': ((0, 1), 'SpidyPropProbe', "PROP PROBE {} (0 on: read-only, VR gameplay only - finds the game's "
                    "throwables (bins, boxes) and its own web yank / throw, logs them as '79.2 PROP PROBE' lines, writes "
-                   "nothing to the game; 1 off) - live, no restart needed"),
+                   "nothing to the game; 1 off, the default) - live, no restart needed"),
     # HERO VR 0.0.78 cut21 PROMPT LAYER (include/spidy/prompt_layer.hpp), CANDIDATE
     'prompt_layer': ((0, 1), 'SpidyPromptLayer', "PROMPT LAYER {} (0 on, the default: in VR play the game's own button "
                      "prompts, waypoint and markers show as small cards where the game puts them, cut from its UI "
@@ -1407,7 +1407,8 @@ PERSISTED = ('web_width', 'web_speed', 'aa', 'history', 'reach', 'monitor', 'sha
              'web_style', *(f'web_color_{style}' for style in WEB_STYLES),
              'music_volume', 'music_visualizer', 'music_track',
              'lens_flares',  # Version 0.0.62: the hologram's LENS FLARES (RESTART: kept for the next start)
-             'mirror_view')  # 0.0.7 MIRROR PERSIST FIX: the hologram's MIRROR VIEW (RESTART), the same
+             'mirror_view',  # 0.0.7 MIRROR PERSIST FIX: the hologram's MIRROR VIEW (RESTART), the same
+             'vr_jitter')  # 79.2b (t2169): the hologram's EYE JITTER (live), kept and applied at the next start
 # Update 23: live.txt-only settings (no hologram control) also applied when a session starts, so they keep.
 START_ONLY = ('web_start', 'trail')  # Update 34.2: trail kept from live.txt
 # Update 37: every new live.txt setting applies at the start too (a file written before the launch
@@ -1521,14 +1522,15 @@ CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach
                 15: 'hud_text', 16: 'hud_theme', 17: 'hud_text_color', 18: 'web_style', 19: 'web_color',
                 20: 'music_track', 27: 'music_volume', 28: 'music_visualizer',
                 29: 'lens_flares',  # Version 0.0.62: the hologram's LENS FLARES (RESTART), kept in live.txt
-                21: 'mirror_view'}  # 0.0.7: MIRROR VIEW (RESTART), kept in live.txt (was lost at every restart)
+                21: 'mirror_view',  # 0.0.7: MIRROR VIEW (RESTART), kept in live.txt (was lost at every restart)
+                22: 'vr_jitter'}  # 79.2b (t2169): VR SETTINGS > GRAPHICS > EYE JITTER, live, kept in live.txt
 # Update 18: WEB COLOR sets the chosen style's shade; the launcher keeps every style's.
 WEB_COLOR_KEYS = tuple(f'web_color_{style}' for style in WEB_STYLES)
 SELECTOR = {'web_width': 0, 'web_speed': 0, 'aa': 1, 'history': 1, 'reach': 1, 'monitor': 1, 'supersample': 2,
             'sharpen': 4, 'reticles': 4, 'hud_height': 5, 'hud_scale': 5, 'hud_text': 5, 'hud_theme': 5,
             'hud_text_color': 5, 'web_style': 6, **{key: 6 for key in WEB_COLOR_KEYS},
             'music_volume': 7, 'music_visualizer': 7, 'music_track': 7, 'lens_flares': 10,
-            'mirror_view': 10}
+            'mirror_view': 10, 'vr_jitter': 10}
 CHANGED_SELECTOR = 3
 MARKER = 1 << 30
 SUPERSAMPLES = (100, 200)
@@ -1553,7 +1555,8 @@ def decode_hud_settings(selector, code):
         return {'supersample': code & 1023}
     if selector == 10:  # Version 0.0.62: LENS FLARES (0 game, 1 off in vr); 0.0.7: MIRROR VIEW in bit 1
         return {'lens_flares': ('game', 'off_in_vr')[min(code & 1, 1)],
-                'mirror_view': ('off', 'test')[code >> 1 & 1]}
+                'mirror_view': ('off', 'test')[code >> 1 & 1],
+                'vr_jitter': ('on', 'off')[code >> 2 & 1]}  # 79.2b: EYE JITTER
     if selector == CHANGED_SELECTOR:
         changed = {CONTROL_KEYS[bit]: True for bit in CONTROL_KEYS if code >> bit & 1}
         if changed.pop('web_color', None):

@@ -26,9 +26,11 @@ class FarShake(unittest.TestCase):
         self.assertEqual(L.SETTINGS['vr_jitter'][:2], ((0, 1), 'SpidyVrJitter'))
         self.assertEqual(L.SETTINGS['vr_game_jitter'][:2], ((0, 1), 'SpidyVrGameJitter'))
         for name in ('vr_jitter', 'vr_game_jitter'):
-            self.assertNotIn(name, L.START_ONLY + L.PERSISTED)
             self.assertNotIn(name, L.RESTART)
             self.assertIn('no restart', L.SETTINGS[name][2])
+        # 79.2b (t2169): vr_jitter is the hologram's EYE JITTER now, kept in live.txt; vr_game_jitter is not kept.
+        self.assertIn('vr_jitter', L.PERSISTED)
+        self.assertNotIn('vr_game_jitter', L.START_ONLY + L.PERSISTED)
 
     def test_words(self):
         values, errors = L.parse('vr_jitter = off\nvr_game_jitter = keep\n')
@@ -54,7 +56,8 @@ class FarShake(unittest.TestCase):
         # (The game-screen 3D mode's eyes still take the stock jitter; that mode is not the headset's.)
         self.assertNotIn('main.values[0x428 / 4], main.values[0x42c / 4], false', s)
         self.assertEqual(s.count('eyeJitterFor(eyeJitterOff.load'), 2)
-        self.assertIn('std::atomic<uint32_t> eyeJitterOff{0}, gameViewJitterOff{1};', s)
+        # 79.2b (t2168/t2169): vr_jitter OFF is the default (the halved walk did not stop the far shake).
+        self.assertIn('std::atomic<uint32_t> eyeJitterOff{1}, gameViewJitterOff{1};', s)
         h = src('include/spidy/sm1style.hpp')
         self.assertIn('inline constexpr float steadyJitter = 1e-6f;', h)
         self.assertIn('return off ? 0.f : stock;', h)

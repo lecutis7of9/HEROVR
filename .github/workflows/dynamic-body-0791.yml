@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - feature/0791-dynamic-leg-animation
+      - feature/0791-renderer-gameplay-parity
   workflow_dispatch:
 
 permissions:
@@ -47,35 +48,23 @@ jobs:
           Remove-Item Env:SM2VR_LAUNCHER -ErrorAction SilentlyContinue
           ./tools/build.ps1 -Observer -FromSource
           if ($LASTEXITCODE) { throw "Build/tests failed ($LASTEXITCODE)" }
-      - name: Preserve Original 0.0.79 renderer, patch Revamped only
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+      - name: Stage current gameplay DLL for both rendering modes
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Path previous -Force | Out-Null
-          gh release download v0.0.79 --pattern 'HERO-VR-0.0.79-mod-win64.zip' --pattern 'HERO-VR-0.0.79-mod-win64.zip.sha256' --dir previous --clobber
-          if ($LASTEXITCODE) { throw 'Could not download official 0.0.79 mod' }
-          $zip = 'previous/HERO-VR-0.0.79-mod-win64.zip'
-          $checksum = 'previous/HERO-VR-0.0.79-mod-win64.zip.sha256'
-          $wanted = [regex]::Match([IO.File]::ReadAllText((Resolve-Path $checksum)), '(?i)[0-9a-f]{64}').Value
-          $actual = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
-          if ($wanted.Length -ne 64 -or $wanted.ToLowerInvariant() -ne $actual.ToLowerInvariant()) { throw 'Official 0.0.79 ZIP SHA256 mismatch' }
-          Expand-Archive -LiteralPath $zip -DestinationPath previous/mod -Force
-          $old = @(Get-ChildItem -LiteralPath previous/mod -Filter spidy_stereo_probe.dll -Recurse -File |
-            Where-Object { $_.FullName -match 'renderer-modes[\\/]original[\\/]spidy_stereo_probe\.dll$' })
-          if ($old.Count -ne 1) { throw "Expected one official Original DLL, got $($old.Count)" }
           $base = 'build/windows-ninja/renderer-modes'
-          New-Item -ItemType Directory -Path "$base/original", "$base/revamped" -Force | Out-Null
-          Copy-Item -LiteralPath $old[0].FullName -Destination "$base/original/spidy_stereo_probe.dll"
-          Copy-Item -LiteralPath 'build/windows-ninja/spidy_stereo_probe.dll' -Destination "$base/revamped/spidy_stereo_probe.dll"
-          $originalHash = (Get-FileHash "$base/original/spidy_stereo_probe.dll" -Algorithm SHA256).Hash
-          $revampedHash = (Get-FileHash "$base/revamped/spidy_stereo_probe.dll" -Algorithm SHA256).Hash
-          if ($originalHash -eq $revampedHash) { throw 'Distinct mode DLLs expected' }
-          "Original: official unchanged 0.0.79; Revamped: Dynamic Body test" >> $env:GITHUB_STEP_SUMMARY
+          $compiled = 'build/windows-ninja/spidy_stereo_probe.dll'
+          if (-not (Test-Path -LiteralPath $compiled)) { throw 'Current gameplay DLL missing' }
+          foreach ($mode in @('original', 'revamped')) {
+            $dir = Join-Path $base $mode
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            Copy-Item -LiteralPath $compiled -Destination (Join-Path $dir 'spidy_stereo_probe.dll') -Force
+            $hash = (Get-FileHash -LiteralPath (Join-Path $dir 'spidy_stereo_probe.dll') -Algorithm SHA256).Hash
+            if ($hash -ne (Get-FileHash -LiteralPath $compiled -Algorithm SHA256).Hash) { throw "$mode gameplay DLL differs from current build" }
+          }
+          "Both modes: same current gameplay DLL; launcher selects Original game AA or Revamped own 70% temporal AA through live.txt and staged marker." >> $env:GITHUB_STEP_SUMMARY
       - name: Package isolated test mod (never uploads to Releases)
         run: |
-          $name = 'HERO-VR-79.1-TEST'
+          $name = 'HERO-VR-79.1-DUAL-TEST'
           ./tools/package.ps1 -Name $name
           if ($LASTEXITCODE) { throw "Packaging failed ($LASTEXITCODE)" }
           $zip = "dist/$name-win64.zip"
@@ -96,7 +85,7 @@ jobs:
       - name: Attach test ZIP to this run (not a public release)
         uses: actions/upload-artifact@v4
         with:
-          name: herovr-79-1-combined-gameplay-test
+          name: herovr-79-1-dual-renderer-gameplay-test
           path: |
             dist/HERO-VR-79.1-TEST-win64.zip
             dist/HERO-VR-79.1-TEST-win64.zip.sha256

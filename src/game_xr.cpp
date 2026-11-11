@@ -90,6 +90,7 @@
 #include "spidy/game_offers.hpp"
 #include "spidy/game_pad.hpp"
 #include "spidy/environment_yank.hpp"
+#include "spidy/enemy_grip_split.hpp"
 #include "spidy/arm_sprint.hpp" // HEROVR 79.1: left-stick + natural opposite-arm running
 #include "spidy/extras385.hpp"
 #include "spidy/gestures385.hpp"
@@ -2617,6 +2618,8 @@ DWORD WINAPI run(void*) {
         environment_yank::GripPull environmentGrip;
         environment_yank::Output environmentGripFrame{};
         bool environmentThrowWas{};
+        enemy_grip_split::Gesture enemyGripGesture;
+        enemy_grip_split::Output enemyGripFrame{};
         game_swing::AimData aimed{};
         uint64_t pullsBefore{};
         // The right thumbstick pushed down is the game's D-pad down (heal),
@@ -6834,6 +6837,60 @@ DWORD WINAPI run(void*) {
                                 game_prompts::note("79.1 ENV THROW: grip and yank -> native L1+R1");
                             environmentThrowWas = environmentGripFrame.nativeThrow;
                         }
+                        // Use the already working grab-ray enemy selection. Reserve the first
+                        // aimed grip briefly so the second grip can choose a pull instead.
+                        // The game keeps the same target ID and native yank animation.
+                        enemy_grip_split::Input eg{};
+                        eg.seconds = frame.seconds;
+                        eg.enabled = input.focused && mapping == game_pad::Mapping::gameplay &&
+                                     heroNow() == hero_modes::spiderman && !calibrationInput &&
+                                     !padLayer.latched() && !phone.open() && !gadgetWheel.open() &&
+                                     !webLineInput && !flyNow.flying && !environmentGripFrame.claimed &&
+                                     c38(combat38::ropeGrab) != 1 &&
+                                     !swingState.webs[0].attached && !swingState.webs[1].attached &&
+                                     c38(combat38::grabWeb) != 2;
+                        const Vec3 headFront = frame.head.orientation.rotate({0, 0, -1});
+                        for (unsigned h = 0; h < 2; ++h) {
+                            const auto& hand = frame.hands[h];
+                            const bool tracked = hand.valid && validTrackedPose(hand.grip) &&
+                                                 validTrackedPose(hand.aim);
+                            const bool free = !grabWebs[h].on && !ropes[h].on && !u37.holdsGrip[h] &&
+                                              !grabPhases[h] && !swingState.webs[h].attached;
+                            eg.grips[h] = tracked && free && hand.squeeze > .6f;
+                            const Vec3 aim = tracked
+                                ? combat38::aimOf(hand.grip, hand.aim, c38(combat38::aimAxis))
+                                : Vec3{};
+                            eg.forward[h] = tracked && finite(headFront) && finite(aim) &&
+                                            dot(hand.grip.position - frame.head.position, headFront) > .13f &&
+                                            dot(aim, headFront) > .2f;
+                            if (eg.enabled && eg.forward[h] && grabEnemyCount) {
+                                float metres = -1.f;
+                                bool assisted = false;
+                                const Vec3 from = spidy::webShooter(hand.grip, h).position;
+                                const int target = combat38::grabAssistTarget(
+                                    from, aim, grabEnemies, grabEnemyCount,
+                                    c38(combat38::grabWeb) == 0 && !grabAirborne,
+                                    &metres, &assisted);
+                                if (target >= 0 && metres >= 0 && grabEnemyIds[static_cast<size_t>(target)])
+                                    eg.targets[h] = grabEnemyIds[static_cast<size_t>(target)];
+                            }
+                        }
+                        enemyGripFrame = enemyGripGesture.update(eg);
+                        if (enemyGripFrame.pullStarted && enemyGripFrame.hand >= 0) {
+                            const unsigned h = static_cast<unsigned>(enemyGripFrame.hand);
+                            for (uint32_t e = 0; e < grabEnemyCount; ++e) {
+                                if (grabEnemyIds[e] != enemyGripFrame.target)
+                                    continue;
+                                const auto point = grabEnemies[e] + Vec3{0, combat38::centreMass, 0};
+                                grabWebs[h].attach(static_cast<int>(e), point);
+                                grabIds[h] = enemyGripFrame.target;
+                                grabHandSet[h] = false;
+                                runtime.haptic(0, .45f);
+                                runtime.haptic(1, .45f);
+                                game_prompts::note("79.1 TWO GRIPS: existing enemy grab, pull arms to yank");
+                                break;
+                            }
+                        }
                         for (unsigned i = 0; i < 2; ++i) {
                             const auto& hand = motion.swing.hands[i];
                             // Update 37: a trigger held for a gadget gesture keeps its grip
@@ -6847,7 +6904,8 @@ DWORD WINAPI run(void*) {
                                 const float squeeze = std::isfinite(hand.grip) ? hand.grip : 0.f;
                                 const bool down = squeeze > (grabButtonWas[i] ? .3f : .6f);
                                 const bool press = down && !grabButtonWas[i] &&
-                                    !(environmentGripFrame.claimed & (1u << i));
+                                    !(environmentGripFrame.claimed & (1u << i)) &&
+                                    !(enemyGripFrame.claimed & (1u << i));
                                 grabButtonWas[i] = down;
                                 grabSqueeze[i] = down ? 1.f : 0.f;
                                 // Update 38.3: 0 ASSIST (the 12-degree cone on the ground), 1 EXACT (38.2's
@@ -6893,8 +6951,9 @@ DWORD WINAPI run(void*) {
                                     }
                                 } else if (grabMode == 2) {
                                     grabWebs[i].release();
-                                } else if (press && hand.tracked && !grabWebs[i].on && frame.hands[i].valid &&
-                                           validTrackedPose(frame.hands[i].grip) && grabEnemyCount) {
+                                } else if (heroNow() != hero_modes::spiderman && press && hand.tracked && !grabWebs[i].on &&
+                                           frame.hands[i].valid && validTrackedPose(frame.hands[i].grip) &&
+                                           grabEnemyCount) {
                                     const Pose& g = frame.hands[i].grip;
                                     const Vec3 from = spidy::webShooter(g, i).position;
                                     const Vec3 ray = combat38::aimOf(g, frame.hands[i].aim, c38(combat38::aimAxis));
@@ -6917,7 +6976,8 @@ DWORD WINAPI run(void*) {
                                     }
                                 }
                             }
-                            const bool envOwns = (environmentGripFrame.claimed & (1u << i)) != 0;
+                            const bool envOwns = (environmentGripFrame.claimed & (1u << i)) != 0 ||
+                                                 (enemyGripFrame.claimed & (1u << i)) != 0;
                             const bool nativeAimOwns = i == 0 && webLineInput;
                             input.hands[i] = {hand.aim, hand.gripRelativeToHead, hand.tracked,
                                               envOwns || nativeAimOwns ? 0.f : hand.trigger,
@@ -8271,10 +8331,9 @@ DWORD WINAPI run(void*) {
                         // straight to the game's virtual Xbox pad in flight.
                         // Prompt-owned Y still follows NamedPress. Ground Y,
                         // vents and doors keep their existing interaction.
-                        const bool airWebZipY = inFlight && steering && !calibrationInput &&
-                                                !layerOn && !fly076Flying &&
-                                                (origins.play() & buttonY) != 0 &&
-                                                !(named & game_pad::NamedPress::controlY);
+                        // Free Y from unprompted midair attacks. The targeted grip now sends Y
+                        // for native web strikes. Named story prompts retain their own Y.
+                        const bool airWebZipY = false;
                         // Spider-Man 2's NATIVE Web Line: L2 aim + Y
                         // (DualSense Triangle). A left physical trigger
                         // held while looking at the building from a perch
@@ -8849,6 +8908,13 @@ DWORD WINAPI run(void*) {
                             ++crawlFeedForced77;
                         }
                         auto pad = game_pad::fromControllers(buttons, mapping, walk);
+                        // The one-hand aimed grip requests the same native web-strike
+                        // Y as the previous airborne button, without consuming physical Y.
+                        // Never steal a real mission prompt, PAD or Web Line aim.
+                        if (mapping == game_pad::Mapping::gameplay &&
+                            enemyGripFrame.zip && !webLineInput && !walk.demand.any() &&
+                            !layerOn && !storyAbility.sending())
+                            pad.buttons |= game_pad::y;
                         // HEROVR: ground sprint by forward left-stick intent
                         // AND repeated counter-phase arm swings. Send the
                         // game's native RT Sprint/Parkour input (never L3: Dive)
@@ -9421,7 +9487,7 @@ DWORD WINAPI run(void*) {
                                          !u37.climbing[i];
                                 // Update 38: SpidyVR's busy rule - a hand whose own web holds or
                                 // carries, a grab, a taken web or a climbing hand punches nothing.
-                                h.busy = !h.free;
+                                h.busy = !h.free || (enemyGripFrame.claimed & (1u << i)) != 0;
                                 busyWhy77[i] = (swingState.webs[i].attached ? 1u : 0u) | (grabPhases[i] ? 2u : 0u) |
                                                (u37.taken[i] ? 4u : 0u) | (u37.climbing[i] ? 8u : 0u);
                                 // 0.0.75 THOR THROW NO LUNGE: the hammer hand throws, it does not lunge THOR forward.
@@ -9599,7 +9665,9 @@ DWORD WINAPI run(void*) {
                                 grabHandWas[i] = rel;
                                 grabHandSet[i] = finite(rel);
                                 const Vec3 toBody = cf.head + Vec3{0, -.35f, 0} - cf.hands[i].position;
-                                if (grab.update(dt, grabSqueeze[i] > .5f && cf.hands[i].tracked, found >= 0, velocity, toBody)) {
+                                if (grab.update(dt, grabSqueeze[i] > .5f && cf.hands[i].tracked &&
+                                                (heroNow() != hero_modes::spiderman || enemyGripFrame.pullActive),
+                                                found >= 0, velocity, toBody)) {
                                     // Update 38.5: the pull is a yank, so it sends the yank's input (YANK SLOT,
                                     // default Y HOLD: the game's published hold Triangle, CANDIDATE); YANK SLOT
                                     // OFF keeps 38.4's Grabber input (run384: 5 grab yanks on it, none felt).

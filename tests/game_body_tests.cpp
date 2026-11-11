@@ -12,6 +12,7 @@
 #include "spidy/native_body.hpp"
 #include "spidy/game_pad.hpp"
 #include "spidy/environment_yank.hpp"
+#include "spidy/enemy_grip_split.hpp"
 #include "spidy/wall_run_clearance.hpp"
 #include "spidy/vr_settings.hpp"
 #include <chrono>
@@ -423,6 +424,36 @@ int main() {
         check(!sameHands, "moving both hands together must not trigger sprint");
         in.tracked[1] = false;
         check(!detector.update(in), "losing a hand must release sprint");
+    });
+    test("79.1 one-hand enemy zip, two-hand yank precedence, swing and reset", [] {
+        using namespace enemy_grip_split;
+        Gesture g;
+        Input f{};
+        f.enabled=true; f.seconds=.08f;
+        f.forward={true,true}; f.grips={true,false}; f.targets={123,123};
+        auto o=g.update(f);
+        check(o.claimed==1 && !o.zip && !o.pullStarted, "first grip waits for second hand");
+        f.grips[1]=true; f.targets[1]=0; // second hand extended, not perfectly aimed
+        o=g.update(f);
+        check(o.pullStarted && o.pullActive && o.claimed==3 && o.target==123 &&
+                  !o.zip, "two grips win and choose same target without zip");
+        f.grips[0]=false;
+        o=g.update(f);
+        check(!o.zip && !o.pullActive, "let-go never launches a delayed zip");
+        f.grips={false,false};g.update(f);
+        f.grips={true,false};f.targets={123,0};
+        o=g.update(f);
+        check(!o.zip && o.claimed==1, "new first grip starts pending");
+        for(int k=0;k<5;++k)o=g.update(f);
+        check(o.zip && o.target==123, "one hand eventually sends native enemy web strike");
+        f.grips={false,false};g.update(f);
+        f.grips={true,false};f.targets={0,0};
+        o=g.update(f);
+        check(!o.zip && !o.pullStarted && o.claimed==0, "no enemy: ordinary grip swing");
+        f.grips={false,false};g.update(f);
+        f.enabled=false;f.grips={true,false};f.targets={123,0};
+        o=g.update(f);
+        check(o.claimed==0 && !o.zip, "menus and inactive VR never claim grips");
     });
     test("79.1 mission pad forwards Web Line, stealth, photo and Prowler controls", [] {
         namespace pad = game_pad;

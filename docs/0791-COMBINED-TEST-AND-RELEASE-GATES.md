@@ -20,9 +20,13 @@ In a single launch, check the following in this order:
    web-swing and release work. Repeat after each new action.
 2. **Ground sprint:** left stick forward with alternating empty arm pumps sends
    game's native sprint/parkour; stops when pumping stops. Confirm no L3 dive.
-3. **Air Y web-zip / web strike:** press Y in air at an eligible enemy and confirm
-   the game's actual target-dependent action (Sandman scripted completion is
-   an additional story test, not required to approve general Y routing).
+3. **Enemy grip split:** with one free hand aimed at a tracked enemy, squeeze
+   grip and hold briefly (0.24 s) to request the game's native web-strike.
+   With both hands forward, squeeze both grips within 0.24 s, then pull to
+   run the existing GrabWeb yank. Confirm two grips NEVER trigger a zip.
+   Grips with no enemy continue normal web-swinging. Y is no longer an
+   unprompted airborne enemy-attack shortcut; mission prompts retain Y.
+   Confirm Sandman scripted web-strike with grip separately.
 4. **Web Line:** on valid ground/perch aim with left trigger and tap Y; check
    bridge placement, walking/standing on it and no collision with the existing
    airborne Y action.

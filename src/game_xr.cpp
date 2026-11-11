@@ -6843,7 +6843,7 @@ DWORD WINAPI run(void*) {
                         enemy_grip_split::Input eg{};
                         eg.seconds = frame.seconds;
                         eg.enabled = input.focused && mapping == game_pad::Mapping::gameplay &&
-                                     heroNow() == hero_modes::spiderman && !calibrationInput &&
+                                     heroNow() == hero_modes::spiderMan && !calibrationInput &&
                                      !padLayer.latched() && !phone.open() && !gadgetWheel.open() &&
                                      !webLineInput && !flyNow.flying && !environmentGripFrame.claimed &&
                                      c38(combat38::ropeGrab) != 1 &&
@@ -6957,7 +6957,7 @@ DWORD WINAPI run(void*) {
                                     }
                                 } else if (grabMode == 2) {
                                     grabWebs[i].release();
-                                } else if (heroNow() != hero_modes::spiderman && press && hand.tracked && !grabWebs[i].on &&
+                                } else if (heroNow() != hero_modes::spiderMan && press && hand.tracked && !grabWebs[i].on &&
                                            frame.hands[i].valid && validTrackedPose(frame.hands[i].grip) &&
                                            grabEnemyCount) {
                                     const Pose& g = frame.hands[i].grip;
@@ -9672,7 +9672,7 @@ DWORD WINAPI run(void*) {
                                 grabHandSet[i] = finite(rel);
                                 const Vec3 toBody = cf.head + Vec3{0, -.35f, 0} - cf.hands[i].position;
                                 if (grab.update(dt, grabSqueeze[i] > .5f && cf.hands[i].tracked &&
-                                                (heroNow() != hero_modes::spiderman || enemyGripFrame.pullActive),
+                                                (heroNow() != hero_modes::spiderMan || enemyGripFrame.pullActive),
                                                 found >= 0, velocity, toBody)) {
                                     // Update 38.5: the pull is a yank, so it sends the yank's input (YANK SLOT,
                                     // default Y HOLD: the game's published hold Triangle, CANDIDATE); YANK SLOT

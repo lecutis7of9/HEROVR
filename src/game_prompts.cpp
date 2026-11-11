@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <windows.h>
+#include "spidy/safe_format.hpp" // 0.0.79.1 t2158: sprintf_s cuts instead of ending the game (last include)
 using namespace spidy;
 using namespace spidy::game_prompts;
 

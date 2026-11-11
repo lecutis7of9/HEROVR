@@ -46,6 +46,7 @@
 #include <vector>
 #include <windows.h>
 #include <wrl/client.h>
+#include "spidy/safe_format.hpp" // 0.0.79.1 t2158: sprintf_s cuts instead of ending the game (last include)
 using Microsoft::WRL::ComPtr;
 using namespace spidy;
 extern "C" IMAGE_DOS_HEADER __ImageBase;

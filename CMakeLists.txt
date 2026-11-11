@@ -406,6 +406,11 @@ if(SPIDY_BUILD_OBSERVER)
   target_compile_definitions(spidy_stereo_probe PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_compile_options(spidy_stereo_probe PRIVATE /W4 /permissive-)
   target_link_libraries(spidy_stereo_probe PRIVATE minhook d3d12 d3dcompiler winmm spidy_core)
+  # HERO VR 0.0.79.1 (t2158): symbols for the crash breadcrumb's module+offset stack (debug info in the objects,
+  # a .pdb and a .map beside the DLL; the release optimisations kept). The package ships the DLL only.
+  target_compile_options(spidy_stereo_probe PRIVATE /Z7)
+  target_compile_options(spidy_core PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/Z7>)
+  target_link_options(spidy_stereo_probe PRIVATE /DEBUG /OPT:REF /OPT:ICF /MAP)
   add_library(spidy_render_probe SHARED src/render_probe.cpp)
   target_compile_definitions(spidy_render_probe PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_compile_options(spidy_render_probe PRIVATE /W4 /permissive-)

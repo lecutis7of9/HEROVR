@@ -23,6 +23,7 @@
 #include <type_traits>
 #include <intrin.h>
 #include <windows.h>
+#include "spidy/safe_format.hpp" // 0.0.79.1 t2158: sprintf_s cuts instead of ending the game (last include)
 using namespace spidy;
 using namespace spidy::game_menu;
 using vr_settings::Item;

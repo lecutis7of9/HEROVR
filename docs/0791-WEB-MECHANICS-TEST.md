@@ -82,3 +82,12 @@ mod's top folder; deleting it does the same. The base DLL always runs the ORIGIN
 After a failed start: Reports > Collect reports. `send-me.zip` now holds `xr-breadcrumb.txt` (the VR module's last
 export entered, the VR worker's frame phase and any C++ runtime note, written so it survives a crash),
 `console-tail.txt` (the last 200 session console lines) and the game's own log.
+
+### Breadcrumb v2 (t2158)
+
+`xr-breadcrumb.txt` now also has: the VR worker's start-up step (`init: ...` lines before `loop top`), the C runtime's
+invalid-parameter note with tick and thread, up to 8 lines of `stack (tid N): spidy_stereo_probe.dll+0x...` return
+addresses (resolved with the CI run's `herovr-79-1-gameplay-dll-symbols` artifact: .map / .pdb of the same build), a
+`sprintf_s cut short` line when a console/log text was too long for its buffer (it used to end the game; it is now cut),
+and a count of invalid parameters. After a failed start the launcher console also says whether Spider-Man2.exe is still
+running and whether Steam still marks the game as running (nothing is closed automatically).

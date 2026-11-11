@@ -222,6 +222,7 @@
 #include <thread>
 #include <wincodec.h> // Version 0.0.72 REAL MODELS: the models' PNG / JPEG textures
 #include "spidy/export_guard.hpp" // 0.0.79.1 t2155: guarded remote calls and the crash breadcrumb
+#include "spidy/safe_format.hpp" // 0.0.79.1 t2158: sprintf_s cuts instead of ending the game (last include)
 using namespace spidy;
 // HERO VR 0.0.77 CUTSCENES: the immersive eyes stereo_probe.cpp put on the game's camera (the same DLL).
 namespace spidy::cutscene077 {
@@ -2185,6 +2186,7 @@ DWORD WINAPI run(void*) {
     return 0xE0790001u;
 }
 DWORD runBody() {
+    spidy::export_guard::phase("init: cave quiet / monitor memory"); // t2158: start-up steps in the crash breadcrumb
     // 0.0.74 test 3 CAVE QUIET: a duck a crash left is put back now; whatever way run ends, the game's sound is back.
     spidy::gameDuckRecover();
     struct CaveQuietEnd {
@@ -2237,6 +2239,7 @@ DWORD runBody() {
     game_player::Watch players;
     bool padInstalled{};
     try {
+        spidy::export_guard::phase("init: graphics device");
         auto queue = reinterpret_cast<ID3D12CommandQueue*>(config.queue);
         ComPtr<ID3D12Device> device;
         if (FAILED(queue->GetDevice(IID_PPV_ARGS(&device))))
@@ -2248,7 +2251,9 @@ DWORD runBody() {
         // Without a session the headset keeps the runtime's own view (Virtual Desktop: the PC's screen, the title and menu).
         const auto prepareClock = std::chrono::steady_clock::now();
         D3D12Renderer overlay;
+        spidy::export_guard::phase("init: overlay renderer");
         overlay.initialize(device.Get(), queue);
+        spidy::export_guard::phase("init: calibration art");
         std::string artMissing;
         // Update 36: the calibration panel's pictures (calibration_art.hpp),
         // decoded from the DLL and uploaded once. Should that fail, the
@@ -2280,6 +2285,7 @@ DWORD runBody() {
         // Now: 512 px (256 px when commit is short; about 40 / 10 MB), the encoded images freed once
         // used, every step guarded (out of memory included) and each result on the launcher console.
         try {
+            spidy::export_guard::phase("init: models (reading the Models folder)");
             auto& models = mesh_model::library();
             const std::string root = modelsRoot();
             const bool rootThere = GetFileAttributesA(root.c_str()) != INVALID_FILE_ATTRIBUTES;
@@ -2422,6 +2428,7 @@ DWORD runBody() {
             while ((size >> levels) >= 1)
                 ++levels;
             mesh_model::TextureArray textures;
+            spidy::export_guard::phase("init: model textures (decode thread)");
             try {
                 std::thread decode([&] {
                     const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
@@ -2474,6 +2481,7 @@ DWORD runBody() {
                       std::chrono::duration<double>(std::chrono::steady_clock::now() - prepareClock).count());
             consoleLine(line);
         }
+        spidy::export_guard::phase("init: OpenXR runtime selection / session start");
         {
             RuntimeSelection selected(config.runtime);
             LayerSwitches layers;
@@ -2548,6 +2556,7 @@ DWORD runBody() {
         EyeSnapshotSchedule snapshots;
         EyeSnapshot pendingSnapshot{};
         uint64_t snapshotTicket{}, gapGeneration{};
+        spidy::export_guard::phase("init: session started; players / world log / damage test");
         message(2, 0, "Waiting for the headset");
         players.start(config.base);
         world_trace::start(config.base); // Update 37: the read-only WORLD LOG (its own low thread)
@@ -3943,6 +3952,7 @@ DWORD runBody() {
             rig.reset();
             history.clear();
         };
+        spidy::export_guard::phase("init: last steps before the frame loop");
         bool headsetLost{}, restartTold{};
         unsigned recoveriesSeen{};
         uint64_t stallToldFor = ~0ull;

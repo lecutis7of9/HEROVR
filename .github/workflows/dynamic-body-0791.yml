@@ -177,3 +177,13 @@ jobs:
             dist/HERO-VR-79.1-DUAL-TEST-win64.zip.sha256
           if-no-files-found: error
           retention-days: 14
+      - name: Attach gameplay DLL symbols (map + pdb; resolve the crash breadcrumb's module+offset stack)
+        uses: actions/upload-artifact@v4
+        with:
+          name: herovr-79-1-gameplay-dll-symbols
+          path: |
+            build/windows-ninja/**/spidy_stereo_probe.map
+            build/windows-ninja/**/spidy_stereo_probe.pdb
+            build/windows-ninja/spidy_stereo_probe.dll
+          if-no-files-found: warn
+          retention-days: 14

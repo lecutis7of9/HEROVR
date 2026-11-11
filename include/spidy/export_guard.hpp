@@ -15,8 +15,13 @@
 
 namespace spidy::export_guard {
 inline constexpr DWORD exportThrew = 0xE0790002u; // an export's body threw; caught, nothing changed after it
-inline constexpr size_t lineBytes = 160, lines = 6, fileBytes = lineBytes * lines;
-enum Line : size_t { header = 0, exportLine = 1, phaseLine = 2, noteLine = 3, crtLine = 4, workerLine = 5 };
+inline constexpr size_t lineBytes = 160, lines = 16, fileBytes = lineBytes * lines;
+// t2158: crtLine says what the C runtime caught; stackLine.. (8 lines) its return addresses as module+offset
+// (resolve with the CI artifact's spidy_stereo_probe.map / .pdb); formatLine: the last sprintf_s cut short.
+enum Line : size_t {
+    header = 0, exportLine = 1, phaseLine = 2, noteLine = 3, crtLine = 4, workerLine = 5, formatLine = 6,
+    stackLine = 7, stackLines = 8, countLine = 15
+};
 
 inline void anchor() noexcept {}
 
@@ -122,32 +127,104 @@ inline void phase(const char* name) noexcept {
 
 inline void worker(const char* text) noexcept { mark(workerLine, "VR worker:", text); }
 
-// This DLL's own CRT (/MT): terminate, invalid parameter (STL hardening, *_s overflow) and pure calls in OUR code
-// note themselves first, then end the game as before.
+// t2158: up to 24 return addresses of the calling thread, as module+0xOFFSET, onto the stack lines.
+inline void stack(void* first = nullptr) noexcept {
+    void* frames[40]{};
+    const USHORT n = CaptureStackBackTrace(1, 40, frames, nullptr);
+    char text[lineBytes];
+    size_t used = 0;
+    size_t line = stackLine;
+    auto flush = [&] {
+        if (line < stackLine + stackLines)
+            put(static_cast<Line>(line++), text);
+        used = 0;
+        text[0] = 0;
+    };
+    text[0] = 0;
+    used = static_cast<size_t>(std::snprintf(text, sizeof text, "stack (tid %lu):", GetCurrentThreadId()));
+    auto add = [&](void* at) {
+        HMODULE module{};
+        char name[MAX_PATH]{};
+        uintptr_t base = 0;
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               static_cast<LPCSTR>(at), &module) &&
+            GetModuleFileNameA(module, name, MAX_PATH)) {
+            base = reinterpret_cast<uintptr_t>(module);
+        } else {
+            std::snprintf(name, sizeof name, "?");
+        }
+        const char* leaf = std::strrchr(name, '\\');
+        leaf = leaf ? leaf + 1 : name;
+        char one[96];
+        const int k = std::snprintf(one, sizeof one, " %.40s+0x%llX", leaf,
+                                    static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(at) - base));
+        if (k <= 0)
+            return;
+        if (used + static_cast<size_t>(k) >= lineBytes - 1)
+            flush();
+        std::memcpy(text + used, one, static_cast<size_t>(k) + 1);
+        used += static_cast<size_t>(k);
+    };
+    if (first)
+        add(first);
+    for (USHORT i = 0; i < n; ++i)
+        add(frames[i]);
+    if (used)
+        flush();
+}
+
+// This DLL's own CRT (/MT): terminate, invalid parameter (*_s overflow, a bad handle or stream) and pure calls in
+// OUR code (and what is linked into it) note themselves, with the thread's stack, first. t2158: the invalid
+// parameter handler only records (it never ends the game itself): the CRT function then returns its error as
+// usual, and only the CRT's own no-return checks still end the game - after this note.
 inline void crtHandlers() noexcept {
     // set_terminate is per thread in the UCRT: each thread that enters an export or marks a phase sets it.
     thread_local bool terminateSet = false;
     if (!terminateSet) {
         terminateSet = true;
         std::set_terminate([] {
-            put(crtLine, "CRT: std::terminate in spidy_stereo_probe.dll (an uncaught C++ exception or noexcept "
-                         "violation) - the game ends with 0xC0000409");
+            mark(crtLine, "CRT: std::terminate (uncaught C++ exception / noexcept) - game ends 0xC0000409;", "in our DLL");
+            stack(_ReturnAddress());
             std::abort();
         });
     }
     static const bool once = []() noexcept {
-        _set_invalid_parameter_handler([](const wchar_t*, const wchar_t*, const wchar_t*, unsigned, uintptr_t) {
-            put(crtLine, "CRT: invalid parameter in spidy_stereo_probe.dll (STL bounds check, *_s overflow, bad "
-                         "handle) - the game ends with 0xC0000409");
-            __fastfail(FAST_FAIL_INVALID_ARG);
+        _set_invalid_parameter_handler([](const wchar_t* expression, const wchar_t* function, const wchar_t* file,
+                                          unsigned line, uintptr_t) {
+            static std::atomic<unsigned long long> count{0};
+            const unsigned long long n = ++count;
+            char text[lineBytes];
+            std::snprintf(text, sizeof text, "CRT: invalid parameter #%llu tick %llu tid %lu: %ls %ls %ls:%u", n,
+                          static_cast<unsigned long long>(GetTickCount64()), GetCurrentThreadId(),
+                          expression ? expression : L"(release: no expression)", function ? function : L"",
+                          file ? file : L"", line);
+            put(crtLine, text);
+            stack(_ReturnAddress());
+            std::snprintf(text, sizeof text, "CRT invalid parameters this session: %llu (the last one is above)", n);
+            put(countLine, text);
         });
         _set_purecall_handler([] {
-            put(crtLine, "CRT: pure virtual call in spidy_stereo_probe.dll");
+            mark(crtLine, "CRT: pure virtual call", "in our DLL");
+            stack(_ReturnAddress());
             std::abort();
         });
         return true;
     }();
     (void)once;
+}
+
+// t2158: a sprintf_s / swprintf_s whose text did not fit (safe_format.hpp cuts it instead of ending the game).
+inline void formatCut(void* caller, size_t size, int wanted) noexcept {
+    HMODULE module{};
+    uintptr_t base = 0;
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           static_cast<LPCSTR>(caller), &module))
+        base = reinterpret_cast<uintptr_t>(module);
+    char text[lineBytes];
+    std::snprintf(text, sizeof text, "sprintf_s cut short (would have ended the game): +0x%llX buffer %zu wanted %d tick %llu tid %lu",
+                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(caller) - base), size, wanted,
+                  static_cast<unsigned long long>(GetTickCount64()), GetCurrentThreadId());
+    put(formatLine, text);
 }
 } // namespace spidy::export_guard
 

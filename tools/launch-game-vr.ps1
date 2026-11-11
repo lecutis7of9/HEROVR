@@ -97,6 +97,39 @@ function Show-StartFailure([int]$Code, [string]$Reason) {
         [void][System.Windows.Forms.MessageBox]::Show($text, 'HERO VR', 'OK', 'None', 'Button1', 'DefaultDesktopOnly')
     } catch { Write-Host $text }
 }
+# HERO VR 0.0.79.1 (t2158): after a failed start, what is still running - a Spider-Man2.exe that lingers (crashed,
+# writing its dump, or hung) and Steam's own "game running" mark (HKCU\Software\Valve\Steam RunningAppID / Apps\
+# 2651280 Running), which makes Steam say "already running" on the next start. Read only: nothing is closed.
+function Write-GameState {
+    try {
+        $games = @(Get-Process -Name 'Spider-Man2' -ErrorAction SilentlyContinue)
+        if ($games.Count) {
+            foreach ($g in $games) {
+                $started = $(try { $g.StartTime.ToString('HH:mm:ss') } catch { '?' })
+                $window = if ($g.MainWindowHandle -ne [IntPtr]::Zero) { 'has a window' } else { 'NO window' }
+                $responding = $(try { if ($g.Responding) { 'responding' } else { 'NOT responding' } } catch { '?' })
+                Write-Host ("Game state: Spider-Man2.exe is STILL RUNNING (pid $($g.Id), started $started, $window, $responding, " +
+                            "$([math]::Round($g.WorkingSet64 / 1MB)) MB). It may be closing or writing a crash dump; " +
+                            'wait a minute, or end it in Task Manager (Details tab) before the next PLAY VR.') -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host 'Game state: Spider-Man2.exe is not running.'
+        }
+        $wer = @(Get-Process -Name 'WerFault' -ErrorAction SilentlyContinue)
+        if ($wer.Count) { Write-Host "Game state: Windows Error Reporting (WerFault.exe) is running: a crash report is being written." -ForegroundColor Yellow }
+        $steam = @(Get-Process -Name 'steam' -ErrorAction SilentlyContinue)
+        $key = 'HKCU:\Software\Valve\Steam'
+        $runningApp = (Get-ItemProperty -LiteralPath $key -Name RunningAppID -ErrorAction SilentlyContinue).RunningAppID
+        $appRunning = (Get-ItemProperty -LiteralPath "$key\Apps\2651280" -Name Running -ErrorAction SilentlyContinue).Running
+        $steamText = if ($steam.Count) { 'Steam is running' } else { 'Steam is not running' }
+        Write-Host "Game state: $steamText; Steam RunningAppID = $(if ($null -ne $runningApp) { $runningApp } else { 'none' }); Spider-Man 2 Running = $(if ($null -ne $appRunning) { $appRunning } else { 'none' })."
+        if (-not $games.Count -and ("$runningApp" -eq '2651280' -or "$appRunning" -eq '1')) {
+            Write-Host ('Game state: Steam still marks Spider-Man 2 as RUNNING although its process is gone: Steam will say ' +
+                        '"already running". Wait a moment, or exit Steam from its tray menu (Steam > Exit) and start it again ' +
+                        'before the next PLAY VR. Nothing was closed automatically.') -ForegroundColor Yellow
+        }
+    } catch { Write-Host ('Game state: could not be read (' + $_.Exception.Message + ')') }
+}
 # A throw before the session (the package's Python, the mod files, the options) shows the same way, then goes on as before.
 trap { Show-StartFailure 1 $_.Exception.Message; break }
 $ErrorActionPreference='Stop'
@@ -488,5 +521,6 @@ $captureArgs+=@('--snap-turn',$SnapTurn,'--smooth-turn',$SmoothTurn,'--haptics',
                '--flip-speed',$FlipSpeed,'--monitor-rate',$MonitorRate,'--building-reach',$BuildingReach,'--screen-depth',$depthIndex)
 & $Python (Join-Path $PSScriptRoot 'run_game_vr.py') --seconds $Seconds --size $Size --swing-speed $SwingSpeed --output $report @captureArgs
 $vrExit = $LASTEXITCODE
+if ($vrExit -ne 0 -and $vrExit -ne 130) { Write-GameState }
 Show-StartFailure $vrExit
 exit $vrExit

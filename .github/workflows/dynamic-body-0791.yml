@@ -36,6 +36,15 @@ jobs:
           if ($LASTEXITCODE) { throw 'Python diagnostics regressions failed' }
           python -B tests/player_check_tests.py
           if ($LASTEXITCODE) { throw 'Windows folder preflight regressions failed' }
+      - name: Compile and run webline gesture regression
+        run: |
+          $compiler = (Get-Command clang++ -ErrorAction SilentlyContinue)
+          if (-not $compiler) { $compiler = (Get-Command g++ -ErrorAction SilentlyContinue) }
+          if (-not $compiler) { throw 'No C++ compiler for webline regression' }
+          & $compiler.Source -std=c++20 -Iinclude tests/webline_gesture_tests.cpp -o webline_gesture_tests.exe
+          if ($LASTEXITCODE) { throw 'Webline regression compile failed' }
+          ./webline_gesture_tests.exe
+          if ($LASTEXITCODE) { throw 'Webline gesture regression failed' }
       - name: Fetch native build dependencies
         run: |
           ./tools/bootstrap.ps1 -Observer

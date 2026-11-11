@@ -222,7 +222,7 @@ inline const char* windowEdgesLine(uint32_t state) {
 }
 
 inline constexpr uint32_t magic = 0x53314d53; // SM1S
-inline constexpr uint32_t version = 2;
+inline constexpr uint32_t version = 3; // 79.3: allCalls / eyeByTable
 // SpidySm1StyleData (stereo_probe.cpp): the per-eye proof that TemporalAa ran, and the history gate.
 struct Data {
     uint32_t magic = sm1style::magic, version = sm1style::version, bytes = 256, flags{}; // flags: Flag bits
@@ -241,7 +241,10 @@ struct Data {
     // set was shared (the main set, the other eye's, or a history set not the current one), and runs whose job was
     // not the eye's job of its run before.
     uint64_t ownHistory[2]{}, sharedHistory[2]{}, jobChanged[2]{};
-    uint64_t reserved[1]{};
+    // Version 3 (79.3, t2172): every TemporalAa call (the game's own view's too) and the eye runs found through the eye
+    // job table (the job's eye from its copy until it ends) - sm1Jobs (each eye's latest job only) missed the runs of a
+    // job whose eye had copied the next frame's job already (the right eye's 76 of 3695 in the fbd8c29 report).
+    uint32_t allCalls{}, eyeByTable{};
 };
 // flagSteps: the jitter and the job AA run (live, or eyes made smaller than their image after a fall back).
 enum Flag : uint32_t {

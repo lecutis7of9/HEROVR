@@ -162,3 +162,21 @@ Test (about 3 minutes):
 
 Test: boot, check the splash is smooth. In a street turn your head slowly looking at far buildings. Then flip
 VR SETTINGS > GRAPHICS > EYE JITTER to ON and look again, then back to OFF. Say which one shakes. Collect reports.
+
+## 79.3 (t2172): lazy models, the right eye's TAA count
+
+- Models (65 of 67, 173 texture layers, some 240 MB on the GPU) are no longer read at start. Plain SPIDER-MAN reads
+  none. The first time another hero is active, the roster opens, a hero model is asked for or PLAYER 2's props show,
+  a worker reads and decodes them (the built-in looks meanwhile) and the headset's thread adopts them and uploads the
+  texture array between two frames (one short hitch). Console: `MODELS (79.3 LAZY): not read at start`, then
+  `reading them now for ...` and `read and decoded in X s on a worker, adopted and uploaded in Y ms`.
+- Right eye TAA: the fbd8c29 report counted 2081 left / 76 right TemporalAa runs for 3695 eye jobs each. The count
+  only matched a run to each eye's LATEST job (the game copies the next frame's job before the last one's TAA runs);
+  unmatched runs still ran the game's TAA, uncounted. The eye is now found from the eye job table (recorded at the
+  job's copy, dropped at its end); SpidySm1StyleData version 3 also counts every TemporalAa call and the console's
+  SM1STYLE line gives the per-eye AA writes and queued TAA commands. Nothing the game runs changed (counting only).
+- vr_aa = game and VR SETTINGS > GRAPHICS > EYE JITTER (default OFF) unchanged.
+
+Test: start as SPIDER-MAN, play 3 minutes in a street (console: no MODELS lines but `not read at start`). Say whether
+the lag / audio stutter is still there. Then switch to another hero once (models read then) and play 1 minute.
+Collect reports.

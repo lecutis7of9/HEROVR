@@ -14,7 +14,7 @@ def sm1style_snapshot(game, address):
     if len(raw) != 256:
         return None
     magic, version, size, flags = struct.unpack_from('<4I', raw)
-    if magic != 0x53314d53 or size != 256 or version not in (1, 2):
+    if magic != 0x53314d53 or size != 256 or version not in (1, 2, 3):
         return None
     reason, percent, width, height = struct.unpack_from('<4I', raw, 16)
     calls, ran, history = (struct.unpack_from('<2Q', raw, 32 + 16 * i) for i in range(3))
@@ -25,6 +25,13 @@ def sm1style_snapshot(game, address):
         out[eye] = dict(calls=calls[i], ran=ran[i], history=history[i])
         if extra:
             out[eye].update(own_history=extra[i], shared_history=extra[2 + i], job_changed=extra[4 + i])
+    # 79.3 (t2172): the eye jobs given AA 1 (aa_writes), every TemporalAa call (all_calls, the game's own view's too) and
+    # the eye runs found through the eye job table (eye_by_table); the TemporalAa commands queued by step 4 (queued).
+    writes, queued = struct.unpack_from('<2Q', raw, 80), struct.unpack_from('<2Q', raw, 96)
+    for i, eye in enumerate(('left', 'right')):
+        out[eye]['aa_writes'], out[eye]['queued'] = writes[i], queued[i]
+    if version >= 3:
+        out['all_calls'], out['eye_by_table'] = struct.unpack_from('<2I', raw, 248)
     return out
 
 
@@ -42,4 +49,7 @@ def sm1style_line(record):
     shared = l['shared_history'] + r['shared_history']
     return (line + f"; each eye's own history set in {l['own_history']} / {r['own_history']}, shared "
             f"{shared} ({'none: the eyes never read each other' if not shared else 'SHARED: the eyes mix history'}); "
-            f"eye job changed {l['job_changed']} / {r['job_changed']}.")
+            f"eye job changed {l['job_changed']} / {r['job_changed']}" +
+            (f"; eye AA writes {l.get('aa_writes', 0)} / {r.get('aa_writes', 0)}, TAA queued by us {l.get('queued', 0)} / "
+             f"{r.get('queued', 0)}, TemporalAa calls in all "
+             f"{record['all_calls']} ({record['eye_by_table']} eye runs found by the job table)." if 'all_calls' in record else '.'))

@@ -2171,13 +2171,25 @@ uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
 // 0.0.74 test 10 SM1STYLE: the per-eye proof. TemporalAa 0x2c2dc60 reads no arguments (CONFIRMED); the four
 // registers are passed on as they came. read() only: nothing of the game's is written here.
 using TemporalAa = void (*)(void*, void*, void*, void*);
+unsigned jobEye(void* view, uint64_t* serial = nullptr, uint64_t* generation = nullptr); // below (the eye job table, 2: none)
 TemporalAa originalTemporalAa{};
 void* temporalAaHook{};
 void temporalAa(void* a, void* b, void* c, void* d) {
     namespace mt = spidy::sm1style;
     const uintptr_t job = enabled ? pointer(base + mt::jobGlobal) : 0;
+    if (enabled)
+        ++SpidySm1StyleData.allCalls;
     int eye = -1;
-    for (int i = 0; job && i < 2; ++i)
+    // 79.3 (t2172): the job's eye from the eye job table first (recorded at its copy, dropped at its end, so a job still
+    // running when its eye copied the next one is still found); sm1Jobs (each eye's latest) only when it is not there.
+    if (job) {
+        const unsigned tableEye = jobEye(reinterpret_cast<void*>(job), nullptr, nullptr);
+        if (tableEye < 2) {
+            eye = static_cast<int>(tableEye);
+            ++SpidySm1StyleData.eyeByTable;
+        }
+    }
+    for (int i = 0; job && eye < 0 && i < 2; ++i)
         if (sm1Jobs[i].load(std::memory_order_relaxed) == job)
             eye = i;
     if (eye < 0) {
@@ -2390,7 +2402,7 @@ void markJob(void* view, bool ended) {
     ReleaseSRWLockShared(&jobLock);
 }
 // 0.0.75 SEE-THROUGH: the eye whose job `view` is (2: none), read under the job lock.
-unsigned jobEye(void* view, uint64_t* serial = nullptr, uint64_t* generation = nullptr) {
+unsigned jobEye(void* view, uint64_t* serial, uint64_t* generation) {
     AcquireSRWLockShared(&jobLock);
     unsigned eye = 2;
     if (const auto job = jobs.find(view)) {

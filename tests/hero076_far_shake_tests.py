@@ -87,12 +87,19 @@ class FarShake(unittest.TestCase):
         struct.pack_into('<2Q', raw, 64, 8, 9)      # history
         struct.pack_into('<6Q', raw, 200, 9, 10, 0, 0, 0, 1)
         rec = P.sm1style_snapshot(Fake(bytes(raw)), 0)
-        self.assertEqual(rec['left'], dict(calls=10, ran=9, history=8, own_history=9, shared_history=0, job_changed=0))
+        self.assertEqual(rec['left'], dict(calls=10, ran=9, history=8, own_history=9, shared_history=0, job_changed=0, aa_writes=0, queued=0))
         self.assertEqual(rec['right']['job_changed'], 1)
         self.assertIn('the eyes never read each other', P.sm1style_line(rec))
         struct.pack_into('<Q', raw, 216, 3)
         self.assertIn('SHARED', P.sm1style_line(P.sm1style_snapshot(Fake(bytes(raw)), 0)))
         self.assertIsNone(P.sm1style_snapshot(Fake(bytes(255)), 0))
+        # 79.3 (t2172): version 3 - every TemporalAa call and the eye runs found by the eye job table.
+        struct.pack_into('<4I', raw, 0, 0x53314d53, 3, 256, 0)
+        struct.pack_into('<2I', raw, 248, 30, 21)
+        rec = P.sm1style_snapshot(Fake(bytes(raw)), 0)
+        self.assertEqual((rec['all_calls'], rec['eye_by_table']), (30, 21))
+        self.assertIn('TemporalAa calls in all 30', P.sm1style_line(rec))
+        self.assertIn('jobEye(reinterpret_cast<void*>(job), nullptr, nullptr)', s)
 
     def test_docs(self):
         for doc in ('CHANGELOG.md', 'README-HERO-VR.md', 'BUILD-SM2.md', 'docs/VISUAL-0.0.76.md'):

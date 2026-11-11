@@ -901,6 +901,18 @@ std::atomic<uint64_t> suitShownAtMs{0};
 // thread fans the worn suit's cape out into wings while it is (suit_wear::cape).
 std::atomic<bool> capeGlidingNow{false};
 std::atomic<bool> suitsRigged{false}; // Test build 10: suitRigs made (the game thread reads them after)
+// 79.3 LAZY MODELS (t2172): the drop-in models (some 240 MB of textures on the GPU, 65 models in memory) are no longer
+// read at start. Plain SPIDER-MAN never needs them; the first frame that does (another hero, the roster, a slot model or
+// PLAYER 2's props) asks for them (modelsWant: why), a worker reads and decodes them into a library of its own and the
+// headset's thread adopts that library and uploads the texture array between two frames (modelsAdopted). Until then
+// every model use sees NOT TRIED: the built-in look, as with a missing model. 1 hero, 2 roster, 3 slot model, 4 PLAYER 2.
+std::atomic<uint32_t> modelsWant{0};
+std::atomic<bool> modelsAdopted{false};
+void wantModels(uint32_t why) noexcept {
+    uint32_t none = 0;
+    if (!modelsAdopted.load(std::memory_order_relaxed))
+        modelsWant.compare_exchange_strong(none, why);
+}
 bool suitShownNow() { return suit_wear::shownNow(GetTickCount64(), suitShownAtMs.load(std::memory_order_relaxed)); }
 // 0.0.78 SUIT HOLSTERS: the suit drawn now has its own thigh holsters (hero007::ownThighHolsters).
 bool suitOwnHolsters() {
@@ -2291,203 +2303,246 @@ DWORD runBody() {
         // and every model was drawn as its flat-coloured light copy, said only in a report nobody saw.
         // Now: 512 px (256 px when commit is short; about 40 / 10 MB), the encoded images freed once
         // used, every step guarded (out of memory included) and each result on the launcher console.
+        // 79.3 LAZY MODELS (t2172): nothing read here any more (wantModels above); only what needs no model.
+        bikeOwnMarked = GetFileAttributesW(bikePath(bike075::own, L"override.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
+        // 0.0.74 test 1 BATMOBILE: the saved pick (Documents\HERO VR\batmobile.txt) over live.txt's start value.
         try {
-            spidy::export_guard::phase("init: models (reading the Models folder)");
-            auto& models = mesh_model::library();
-            const std::string root = modelsRoot();
-            const bool rootThere = GetFileAttributesA(root.c_str()) != INVALID_FILE_ATTRIBUTES;
-            consoleLine(std::string("MODELS: folder ") + root + (rootThere ? "" : " - NOT FOUND (MODEL MISSING: the built-in looks are drawn)"));
-            uint32_t loadedCount = 0;
-            std::string missingSlots;
-            // 0.0.76 HARLEYS: Models\Vehicle\Motorcycle (the player's own bike) only with its override.txt
-            bikeOwnMarked = GetFileAttributesW(bikePath(bike075::own, L"override.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
-            for (uint32_t slot = 1; slot < mesh_model::slots; ++slot) {
-                mesh_model::Status status = mesh_model::invalid;
-                if ((slot == mesh_model::slotBikeBody || slot == mesh_model::slotBikeBars) && !bikeOwnMarked) {
-                    models.meshes[slot] = {};
-                    models.status[slot] = mesh_model::missing; // never read later either (slotModel loads notTried only)
-                    models.error[slot] = "no override.txt: the player's own bike is not used";
-                    game_prompts::note((std::string("0.0.76 HARLEYS: ") + mesh_model::slotFolders[slot] + " not read (no override.txt)").c_str());
-                    continue;
-                }
-                if (!mesh_model::slotShipped(slot)) { // HERO VR 0.0.78 cut14: the sniper and the rifle come later (not counted)
-                    models.meshes[slot] = {};
-                    models.status[slot] = mesh_model::notTried;
-                    continue;
-                }
-                if (mesh_model::slotIsHideout(slot) && c38(combat38::hideouts) != 0) { // 0.0.74 test 1 HIDEOUTS OFF: not loaded
-                    models.meshes[slot] = {};
-                    models.status[slot] = mesh_model::notTried;
-                    game_prompts::note((std::string("0.0.74 test 1 HIDEOUTS OFF: ") + mesh_model::slotFolders[slot] + " not loaded").c_str());
-                    continue;
-                }
-                // 0.0.74 test 1 BATMOBILE OFF: none of its models loaded (turning it on needs a restart).
-                if (mesh_model::slotIsBatmobile(slot) && c38(combat38::batmobile) != 0) {
-                    models.meshes[slot] = {};
-                    models.status[slot] = mesh_model::notTried;
-                    game_prompts::note((std::string("0.0.74 test 1 BATMOBILE OFF: ") + mesh_model::slotFolders[slot] + " not loaded").c_str());
-                    continue;
-                }
-                try {
-                    status = models.load(slot, root);
-                } catch (...) { // out of memory or worse: this slot is MODEL MISSING, nothing else stops
-                    models.meshes[slot] = {};
-                    models.status[slot] = mesh_model::invalid;
-                    models.error[slot] = "could not be read (out of memory?)";
-                }
-                char line[400];
-                sprintf_s(line, "Version 0.0.72 REAL MODELS %s: %s %u triangles%s%.300s", mesh_model::slotFolders[slot],
-                          mesh_model::statusNames[status < 5 ? static_cast<int>(status) : 0],
-                          models.model(slot) ? models.model(slot)->triangles() : 0u,
-                          status == mesh_model::loaded ? "" : " - the built-in look drawn: ", models.error[slot].c_str());
-                game_prompts::note(line);
-                OutputDebugStringA(line);
-                if (models.model(slot))
-                    ++loadedCount;
-                else {
-                    missingSlots += missingSlots.empty() ? "" : ", ";
-                    missingSlots += mesh_model::slotFolders[slot];
-                    consoleLine(line);
-                }
+            const int pick = readBatmobilePick();
+            if (pick >= 0) {
+                combat38Values[combat38::batmobileChoice] = static_cast<uint32_t>(pick);
+                game_prompts::note((std::string("0.0.74 test 1 BATMOBILE: the saved pick ") + batmobile074::names[batmobile074::clampCar(
+                                                                                                static_cast<uint32_t>(pick))])
+                                       .c_str());
             }
-            // 0.0.74 test 1 BATMOBILE: the saved pick (Documents\HERO VR\batmobile.txt) over live.txt's start value.
+        } catch (...) {
+        }
+        batmobilePickRead = true;
+        suitsRigged = false;
+        modelsAdopted = false;
+        modelsWant = 0;
+        // The worker's results: its own library (moved into the session's one on adoption), the suits' rigs, the
+        // texture array's layers, and its lines (said on the headset's thread: the console is that thread's).
+        struct ModelsJob {
+            std::unique_ptr<mesh_model::Library> lib;
+            suit_wear::Rig rigs[mesh_model::suitSlots];
+            mesh_model::TextureArray textures;
+            std::vector<std::pair<bool, std::string>> lines; // true: the console too (else the prompt notes only)
+            uint32_t loadedCount{}, rigged{}, size{};
+            uint64_t commitFree{};
+            std::string missingSlots, unrigged;
+            double seconds{};
+            bool failed{};
+            std::atomic<bool> done{false};
+        };
+        std::shared_ptr<ModelsJob> modelsJob;
+        std::thread modelsThread;
+        struct ModelsJoin {
+            std::thread& t;
+            ~ModelsJoin() {
+                if (t.joinable())
+                    t.join();
+            }
+        } modelsJoin{modelsThread};
+        uint32_t modelsWhy{};
+        const auto modelsWork = [](std::shared_ptr<ModelsJob> job, bool ownBike) {
+            const auto clock = std::chrono::steady_clock::now();
+            const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
             try {
-                const int pick = readBatmobilePick();
-                if (pick >= 0) {
-                    combat38Values[combat38::batmobileChoice] = static_cast<uint32_t>(pick);
-                    game_prompts::note((std::string("0.0.74 test 1 BATMOBILE: the saved pick ") + batmobile074::names[batmobile074::clampCar(
-                                                                                                    static_cast<uint32_t>(pick))])
-                                           .c_str());
+                job->lib = std::make_unique<mesh_model::Library>();
+                auto& models = *job->lib;
+                const std::string root = modelsRoot();
+                const bool rootThere = GetFileAttributesA(root.c_str()) != INVALID_FILE_ATTRIBUTES;
+                job->lines.emplace_back(true, std::string("MODELS: folder ") + root +
+                                                  (rootThere ? "" : " - NOT FOUND (MODEL MISSING: the built-in looks are drawn)"));
+                for (uint32_t slot = 1; slot < mesh_model::slots; ++slot) {
+                    mesh_model::Status status = mesh_model::invalid;
+                    if ((slot == mesh_model::slotBikeBody || slot == mesh_model::slotBikeBars) && !ownBike) {
+                        models.meshes[slot] = {};
+                        models.status[slot] = mesh_model::missing; // never read later either (slotModel loads notTried only)
+                        models.error[slot] = "no override.txt: the player's own bike is not used";
+                        job->lines.emplace_back(false, std::string("0.0.76 HARLEYS: ") + mesh_model::slotFolders[slot] +
+                                                           " not read (no override.txt)");
+                        continue;
+                    }
+                    if (!mesh_model::slotShipped(slot)) { // HERO VR 0.0.78 cut14: the sniper and the rifle come later (not counted)
+                        models.meshes[slot] = {};
+                        models.status[slot] = mesh_model::notTried;
+                        continue;
+                    }
+                    if (mesh_model::slotIsHideout(slot) && c38(combat38::hideouts) != 0) { // 0.0.74 test 1 HIDEOUTS OFF: not loaded
+                        models.meshes[slot] = {};
+                        models.status[slot] = mesh_model::notTried;
+                        job->lines.emplace_back(false, std::string("0.0.74 test 1 HIDEOUTS OFF: ") + mesh_model::slotFolders[slot] +
+                                                           " not loaded");
+                        continue;
+                    }
+                    // 0.0.74 test 1 BATMOBILE OFF: none of its models loaded (turning it on needs a restart).
+                    if (mesh_model::slotIsBatmobile(slot) && c38(combat38::batmobile) != 0) {
+                        models.meshes[slot] = {};
+                        models.status[slot] = mesh_model::notTried;
+                        job->lines.emplace_back(false, std::string("0.0.74 test 1 BATMOBILE OFF: ") + mesh_model::slotFolders[slot] +
+                                                           " not loaded");
+                        continue;
+                    }
+                    try {
+                        status = models.load(slot, root);
+                    } catch (...) { // out of memory or worse: this slot is MODEL MISSING, nothing else stops
+                        models.meshes[slot] = {};
+                        models.status[slot] = mesh_model::invalid;
+                        models.error[slot] = "could not be read (out of memory?)";
+                    }
+                    char line[400];
+                    sprintf_s(line, "Version 0.0.72 REAL MODELS %s: %s %u triangles%s%.300s", mesh_model::slotFolders[slot],
+                              mesh_model::statusNames[status < 5 ? static_cast<int>(status) : 0],
+                              models.model(slot) ? models.model(slot)->triangles() : 0u,
+                              status == mesh_model::loaded ? "" : " - the built-in look drawn: ", models.error[slot].c_str());
+                    if (models.model(slot)) {
+                        ++job->loadedCount;
+                        job->lines.emplace_back(false, line);
+                    } else {
+                        job->missingSlots += job->missingSlots.empty() ? "" : ", ";
+                        job->missingSlots += mesh_model::slotFolders[slot];
+                        job->lines.emplace_back(true, line);
+                    }
                 }
-            } catch (...) {
-            }
-            batmobilePickRead = true;
-            // 0.0.74 test 1 HIDEOUTS: each loaded room's walk data (no room.txt: that trip is not offered).
-            for (uint32_t which = 1; which < 3; ++which) {
-                const uint32_t slot = which == 1 ? mesh_model::slotHideoutSafehouse : mesh_model::slotHideoutBatcave;
-                hideoutRoomOk[which] = false;
-                if (!models.model(slot))
-                    continue;
-                try {
-                    readHideoutRoom(which);
-                } catch (...) {
-                    hideoutRoomOk[which] = false;
-                    hideoutRoomError[which] = "could not be read";
-                }
-                consoleLine(std::string("HIDEOUTS: ") + hideout074::names[which] +
-                            (hideoutRoomOk[which] ? " ready (CANDIDATE)" : " not offered - " + hideoutRoomError[which]));
-            }
-            // 0.0.76 HARLEYS: each bike's layout (its body model and layout, or that bike is MODEL MISSING)
-            for (uint32_t which = 0; which < bike075::bikes; ++which) {
-                const uint32_t body = which == bike075::cap ? mesh_model::slotBikeCapBody
-                                      : which == bike075::wolverine ? mesh_model::slotBikeWolverineBody
-                                                                    : mesh_model::slotBikeBody;
-                bikeLayoutOk[which] = false;
-                if (which == bike075::own && !bikeOwnMarked) {
-                    bikeLayoutError[which] = "no override.txt";
-                    continue;
-                }
-                if (!models.model(body)) {
-                    bikeLayoutError[which] = "no body model";
-                    consoleLine(std::string("MOTORCYCLE: ") + bike075::folders[which] + " - MODEL MISSING (no body model)");
-                    continue;
-                }
-                try {
-                    readBikeLayout(which);
-                } catch (...) {
-                    bikeLayoutOk[which] = false;
-                    bikeLayoutError[which] = "layout.json could not be read";
-                }
-                consoleLine(std::string("MOTORCYCLE: ") + bike075::folders[which] +
-                            (bikeLayoutOk[which] ? " ready" : " - MODEL MISSING (" + bikeLayoutError[which] + ")"));
-            }
-            consoleLine("MODELS: " + std::to_string(loadedCount) + " of " + std::to_string(mesh_model::slotsShipped()) + " loaded" +
-                        (missingSlots.empty() ? "" : " (MODEL MISSING: " + missingSlots + ")"));
-            // Build 9 SUITS: each loaded suit made ready to wear (its skin welded, each triangle's bone).
-            {
-                uint32_t rigged = 0;
-                std::string unrigged;
-                suitsRigged = false;
+                // Build 9 SUITS: each loaded suit made ready to wear (its skin welded, each triangle's bone).
                 for (uint32_t k = 0; k < mesh_model::suitSlots; ++k) {
-                    suitRigs[k] = {};
                     const mesh_model::Mesh* m = models.model(mesh_model::slotSuitFirst + k);
                     bool ok = false;
                     try {
-                        ok = m && suit_wear::makeRig(*m, suitRigs[k], mesh_model::suitFolders[k]);
+                        ok = m && suit_wear::makeRig(*m, job->rigs[k], mesh_model::suitFolders[k]);
                     } catch (...) {
-                        suitRigs[k] = {};
+                        job->rigs[k] = {};
                     }
-                    rigged += ok;
+                    job->rigged += ok;
                     if (m && !ok)
-                        unrigged += (unrigged.empty() ? "" : ", ") + std::string(mesh_model::suitFolders[k]);
+                        job->unrigged += (job->unrigged.empty() ? "" : ", ") + std::string(mesh_model::suitFolders[k]);
                 }
-                suitsRigged = true;
-                consoleLine("SUITS: " + std::to_string(rigged) + " of " + std::to_string(mesh_model::suitSlots) + " ready to wear" +
-                            (unrigged.empty() ? "" : " (NOT WEARABLE: " + unrigged + ")"));
-            }
-            MEMORYSTATUSEX memory{sizeof(memory)};
-            const uint64_t commitFree = GlobalMemoryStatusEx(&memory) ? memory.ullAvailPageFile : 0;
-            // Build 7: 512 px from 768 MB of free commit (29 layers: about 40 MB with mips). Builds 5-6 asked
-            // for 3 GB, so the user's 1228 MB got 256 px and every model looked blurred (the test-6 log).
-            // Build 9: with the suits about 110 layers (about 150 MB at 512 px, the same again while uploading).
-            const uint32_t size = commitFree >= (768ull << 20) ? 512u : 256u;
-            uint32_t levels = 1;
-            while ((size >> levels) >= 1)
-                ++levels;
-            mesh_model::TextureArray textures;
-            spidy::export_guard::phase("init: model textures (decode thread)");
-            try {
-                std::thread decode([&] {
-                    const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-                    try {
-                        textures = mesh_model::prepareTextures(models, &wicDecode, size, levels);
-                    } catch (...) {
-                        textures = {};
-                        textures.notes.push_back("the textures could not be prepared (out of memory?)");
-                    }
-                    if (SUCCEEDED(com))
-                        CoUninitialize();
-                });
-                decode.join();
+                MEMORYSTATUSEX memory{sizeof(memory)};
+                job->commitFree = GlobalMemoryStatusEx(&memory) ? memory.ullAvailPageFile : 0;
+                // Build 7: 512 px from 768 MB of free commit (256 px when short).
+                job->size = job->commitFree >= (768ull << 20) ? 512u : 256u;
+                uint32_t levels = 1;
+                while ((job->size >> levels) >= 1)
+                    ++levels;
+                try {
+                    job->textures = mesh_model::prepareTextures(models, &wicDecode, job->size, levels);
+                } catch (...) {
+                    job->textures = {};
+                    job->textures.notes.push_back("the textures could not be prepared (out of memory?)");
+                }
+                // The encoded images are not needed again (their layers are made): give the memory back.
+                for (uint32_t slot = 1; slot < mesh_model::slots; ++slot)
+                    for (auto& im : models.meshes[slot].images)
+                        std::vector<uint8_t>().swap(im.bytes);
             } catch (...) {
-                textures.notes.push_back("no thread for the textures");
+                job->failed = true;
             }
-            // The encoded images are not needed again (their layers are made): give the memory back.
-            for (uint32_t slot = 1; slot < mesh_model::slots; ++slot)
-                for (auto& im : models.meshes[slot].images)
-                    std::vector<uint8_t>().swap(im.bytes);
-            for (const auto& note : textures.notes) {
-                game_prompts::note(("Version 0.0.72 REAL MODELS texture: " + note).c_str());
-                OutputDebugStringA(note.c_str());
-                if (note.find("layer") == std::string::npos || note.find("not") != std::string::npos)
-                    consoleLine("MODELS texture: " + note);
-            }
-            char summary[200];
-            sprintf_s(summary, "MODELS: textures %zu layers at %u px (free commit %llu MB)", textures.layers.size(), size,
-                      static_cast<unsigned long long>(commitFree >> 20));
-            consoleLine(summary);
-            bool texturedOk = false;
-            if (!textures.layers.empty()) {
-                texturedOk = overlay.setModelTextures(textures.size, textures.levels, textures.layers);
-                if (!texturedOk) {
-                    game_prompts::note(("Version 0.0.72 REAL MODELS untextured: " + overlay.modelFault()).c_str());
-                    OutputDebugStringA(overlay.modelFault().c_str());
+            if (SUCCEEDED(com))
+                CoUninitialize();
+            job->seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - clock).count();
+            job->done.store(true, std::memory_order_release);
+        };
+        // On the headset's thread, between two frames: the worker's library becomes the session's (slots still NOT
+        // TRIED there only - none is read before this), the hideouts' and bikes' layouts are read, the suits' rigs set
+        // and the texture array uploaded (the overlay's own list, as the readback does).
+        const auto adoptModels = [&](ModelsJob& job) {
+            const auto clock = std::chrono::steady_clock::now();
+            auto& models = mesh_model::library();
+            try {
+                for (const auto& [console, text] : job.lines) {
+                    game_prompts::note(text.c_str());
+                    if (console)
+                        consoleLine(text);
                 }
+                if (job.failed || !job.lib)
+                    throw std::runtime_error("worker");
+                for (uint32_t slot = 1; slot < mesh_model::slots; ++slot) {
+                    if (models.status[slot] != mesh_model::notTried)
+                        continue;
+                    models.meshes[slot] = std::move(job.lib->meshes[slot]);
+                    models.error[slot] = std::move(job.lib->error[slot]);
+                    models.status[slot] = job.lib->status[slot];
+                }
+                // 0.0.74 test 1 HIDEOUTS: each loaded room's walk data (no room.txt: that trip is not offered).
+                for (uint32_t which = 1; which < 3; ++which) {
+                    const uint32_t slot = which == 1 ? mesh_model::slotHideoutSafehouse : mesh_model::slotHideoutBatcave;
+                    hideoutRoomOk[which] = false;
+                    if (!models.model(slot))
+                        continue;
+                    try {
+                        readHideoutRoom(which);
+                    } catch (...) {
+                        hideoutRoomOk[which] = false;
+                        hideoutRoomError[which] = "could not be read";
+                    }
+                    consoleLine(std::string("HIDEOUTS: ") + hideout074::names[which] +
+                                (hideoutRoomOk[which] ? " ready (CANDIDATE)" : " not offered - " + hideoutRoomError[which]));
+                }
+                // 0.0.76 HARLEYS: each bike's layout (its body model and layout, or that bike is MODEL MISSING)
+                for (uint32_t which = 0; which < bike075::bikes; ++which) {
+                    const uint32_t body = which == bike075::cap ? mesh_model::slotBikeCapBody
+                                          : which == bike075::wolverine ? mesh_model::slotBikeWolverineBody
+                                                                        : mesh_model::slotBikeBody;
+                    bikeLayoutOk[which] = false;
+                    if (which == bike075::own && !bikeOwnMarked) {
+                        bikeLayoutError[which] = "no override.txt";
+                        continue;
+                    }
+                    if (!models.model(body)) {
+                        bikeLayoutError[which] = "no body model";
+                        consoleLine(std::string("MOTORCYCLE: ") + bike075::folders[which] + " - MODEL MISSING (no body model)");
+                        continue;
+                    }
+                    try {
+                        readBikeLayout(which);
+                    } catch (...) {
+                        bikeLayoutOk[which] = false;
+                        bikeLayoutError[which] = "layout.json could not be read";
+                    }
+                    consoleLine(std::string("MOTORCYCLE: ") + bike075::folders[which] +
+                                (bikeLayoutOk[which] ? " ready" : " - MODEL MISSING (" + bikeLayoutError[which] + ")"));
+                }
+                consoleLine("MODELS: " + std::to_string(job.loadedCount) + " of " + std::to_string(mesh_model::slotsShipped()) +
+                            " loaded" + (job.missingSlots.empty() ? "" : " (MODEL MISSING: " + job.missingSlots + ")"));
+                for (uint32_t k = 0; k < mesh_model::suitSlots; ++k)
+                    suitRigs[k] = std::move(job.rigs[k]);
+                suitsRigged = true; // the game thread reads the rigs from now on (never before)
+                consoleLine("SUITS: " + std::to_string(job.rigged) + " of " + std::to_string(mesh_model::suitSlots) + " ready to wear" +
+                            (job.unrigged.empty() ? "" : " (NOT WEARABLE: " + job.unrigged + ")"));
+                for (const auto& note : job.textures.notes) {
+                    game_prompts::note(("Version 0.0.72 REAL MODELS texture: " + note).c_str());
+                    if (note.find("layer") == std::string::npos || note.find("not") != std::string::npos)
+                        consoleLine("MODELS texture: " + note);
+                }
+                char summary[200];
+                sprintf_s(summary, "MODELS: textures %zu layers at %u px (free commit %llu MB)", job.textures.layers.size(), job.size,
+                          static_cast<unsigned long long>(job.commitFree >> 20));
+                consoleLine(summary);
+                bool texturedOk = false;
+                if (!job.textures.layers.empty()) {
+                    texturedOk = overlay.setModelTextures(job.textures.size, job.textures.levels, job.textures.layers);
+                    if (!texturedOk)
+                        game_prompts::note(("Version 0.0.72 REAL MODELS untextured: " + overlay.modelFault()).c_str());
+                }
+                job.textures = {}; // the CPU copies: uploaded (or refused); freed now
+                job.lib.reset();   // its meshes were moved out (the empty shells go)
+                consoleLine(texturedOk && overlay.modelReady()
+                                ? std::string("MODELS: TEXTURED - the real models are drawn")
+                                : "MODELS: UNTEXTURED - the flat light copies are drawn: " +
+                                      (overlay.modelFault().empty() ? std::string("no textures were read") : overlay.modelFault()));
+            } catch (...) {
+                suitsRigged = false;
+                consoleLine("MODELS: could not be prepared (out of memory?) - the built-in looks are drawn");
             }
-            textures = {}; // the CPU copies: uploaded (or refused); freed now
-            consoleLine(texturedOk && overlay.modelReady()
-                            ? std::string("MODELS: TEXTURED - the real models are drawn")
-                            : "MODELS: UNTEXTURED - the flat light copies are drawn: " +
-                                  (overlay.modelFault().empty() ? std::string("no textures were read") : overlay.modelFault()));
-        } catch (...) {
-            consoleLine("MODELS: could not be prepared (out of memory?) - the built-in looks are drawn");
-        }
-        {
-            char line[160];
-            sprintf_s(line, "MODELS: prepared in %.1f s, before the headset's session (its view is not black meanwhile)",
-                      std::chrono::duration<double>(std::chrono::steady_clock::now() - prepareClock).count());
+            char line[200];
+            sprintf_s(line, "MODELS (79.3 LAZY): read and decoded in %.1f s on a worker, adopted and uploaded in %.0f ms on the headset's thread",
+                      job.seconds, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - clock).count());
             consoleLine(line);
-        }
+            modelsAdopted = true;
+        };
+        consoleLine("MODELS (79.3 LAZY): not read at start - plain SPIDER-MAN needs none; read when another hero, the roster, "
+                    "a vehicle / hideout hero or PLAYER 2's props first need them");
         spidy::export_guard::phase("init: OpenXR runtime selection / session start");
         {
             RuntimeSelection selected(config.runtime);
@@ -3983,6 +4038,32 @@ DWORD runBody() {
                 launcherVerdict = launcher_watch::launcherClosed;
                 break;
             }
+            // 79.3 LAZY MODELS: asked for (another hero, the roster, a model or PLAYER 2's props) - the worker starts;
+            // once it is done its models are adopted here, between two frames.
+            if (!modelsAdopted.load(std::memory_order_relaxed)) {
+                if (heroNow() != hero_modes::spiderMan)
+                    wantModels(1);
+                if (!modelsJob && modelsWant.load() != 0) {
+                    modelsWhy = modelsWant.load();
+                    static constexpr const char* whyNames[] = {"?", "a hero other than SPIDER-MAN", "the roster", "a model",
+                                                               "PLAYER 2's props"};
+                    consoleLine(std::string("MODELS (79.3 LAZY): reading them now for ") + whyNames[modelsWhy < 5 ? modelsWhy : 0] +
+                                " (the built-in looks until they are ready)");
+                    modelsJob = std::make_shared<ModelsJob>();
+                    try {
+                        modelsThread = std::thread(modelsWork, modelsJob, bikeOwnMarked);
+                    } catch (...) {
+                        modelsJob->failed = true;
+                        modelsJob->done = true;
+                    }
+                }
+                if (modelsJob && modelsJob->done.load(std::memory_order_acquire)) {
+                    if (modelsThread.joinable())
+                        modelsThread.join();
+                    adoptModels(*modelsJob);
+                    modelsJob.reset();
+                }
+            }
             double copyMs{}, overlayMs{};
             Presentation drawn{};
             // This frame shows the game's presented frame on the screen, or
@@ -5015,6 +5096,7 @@ DWORD runBody() {
                                         wristChanged |= 1u << 21;
                                 }
                                 if (result.heroRoster && !rosterFault) { // Build 8: the roster page, in front of the head
+                                    wantModels(2); // 79.3 LAZY MODELS: the roster's figures
                                     if (validTrackedPose(frame.head) && rosterPage.open(frame.head, rosterClock))
                                         consoleLine("ROSTER: opened");
                                 }
@@ -14461,6 +14543,10 @@ DWORD runBody() {
                             const auto slotModel = [&](uint32_t slot, const char* what) -> const mesh_model::Mesh* {
                                 if (slot == 0 || slot >= mesh_model::slots)
                                     return nullptr; // build 5: MODEL MISSING never reads out of range
+                                if (!modelsAdopted.load(std::memory_order_relaxed)) { // 79.3 LAZY MODELS: not read yet
+                                    wantModels(3);
+                                    return nullptr;
+                                }
                                 if (models.status[slot] == mesh_model::notTried) {
                                     mesh_model::Status status = mesh_model::invalid;
                                     try {
@@ -17024,6 +17110,10 @@ DWORD runBody() {
                                             const auto mpModel = [&](uint32_t slot) -> const mesh_model::Mesh* {
                                                 if (slot == 0 || slot >= mesh_model::slots)
                                                     return nullptr;
+                                                if (!modelsAdopted.load(std::memory_order_relaxed)) { // 79.3 LAZY MODELS
+                                                    wantModels(4);
+                                                    return nullptr;
+                                                }
                                                 if (lib.status[slot] == mesh_model::notTried) {
                                                     mesh_model::Status st = mesh_model::invalid;
                                                     try {
@@ -17790,6 +17880,8 @@ DWORD runBody() {
                                     hud.page = wristMenu.page();
                                     hud.scroll = wristMenu.scroll();
                                     hud.roster = wristMenu.roster(); // 0.0.73 test 3 HOLO ROSTER (closed: the page)
+                                    if (hud.roster.screen != holo_roster::Screen::closed)
+                                        wantModels(2); // 79.3 LAZY MODELS
                                     hud.heroTiles = c38(combat38::heroMenu) != 1; // 0.0.73 test 4: never the old list
                                     // 0.0.73 test 3 PORTRAITS: the tiles' portraits, the old popup's (Models\Roster),
                                     // into the textured pass; none (no textures, no Roster): the initials discs.

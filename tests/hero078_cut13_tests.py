@@ -112,8 +112,10 @@ class BootScreen(unittest.TestCase):
         run = g[g.index('DWORD WINAPI run(void*) {'):]
         start = run.index('runtime.initialize(device.Get(), queue, config.eyeSize, config.renderScale);')
         self.assertEqual(run.count('runtime.initialize('), 1)
-        for prep in ('overlay.initialize(device.Get(), queue);', 'prepareTextures(models, &wicDecode, size, levels)',
-                     'MODELS: TEXTURED - the real models are drawn', 'MODELS: prepared in %.1f s'):
+        # 79.3 LAZY MODELS (t2172): the models are no longer read before the session (plain SPIDER-MAN needs none);
+        # the worker is defined there and run from the loop when a hero, the roster or a model first needs them.
+        for prep in ('overlay.initialize(device.Get(), queue);', 'prepareTextures(models, &wicDecode, job->size, levels)',
+                     'MODELS: TEXTURED - the real models are drawn', 'MODELS (79.3 LAZY): not read at start'):
             self.assertLess(run.index(prep), start, prep)
         self.assertLess(start, run.index('message(2, 0, "Waiting for the headset");'))
         self.assertLess(run.index('XrRuntime runtime;'), run.index('D3D12Renderer overlay;'))  # torn down after the overlay

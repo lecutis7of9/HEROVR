@@ -20,6 +20,12 @@ namespace Sm2VrLauncher
         {
             return string.Equals(text, Revamped, StringComparison.OrdinalIgnoreCase) ? Revamped : Original;
         }
+        // t2149: the user sees "PERFORMANCE" for the internal "revamped" mode (folder, settings key and
+        // value unchanged, so existing installs and launcher settings keep working).
+        public static string Display(string mode)
+        {
+            return Normal(mode) == Revamped ? "PERFORMANCE" : "ORIGINAL";
+        }
         public static string Store(string root, string mode)
         {
             // Public 0.0.79: distribute both renderers inside build/windows-ninja so
@@ -47,7 +53,7 @@ namespace Sm2VrLauncher
                     throw new InvalidOperationException("Close Spider-Man 2 before changing renderer mode. VR modules cannot be swapped inside a running game.");
                 string source = Store(root, mode);
                 if (!File.Exists(source))
-                    throw new FileNotFoundException("The Original/Revamped renderer files are missing. Install the complete 0.0.79 mod package or use Update to repair it.", source);
+                    throw new FileNotFoundException("The Original/Performance renderer files are missing. Install the complete 0.0.79 mod package or use Update to repair it.", source);
                 string target = SystemInfo.BuiltModule(root);
                 if (!File.Exists(target)) throw new FileNotFoundException("The HERO VR mod is not installed.", target);
                 string digest = Hash(source);
@@ -87,7 +93,7 @@ namespace Sm2VrLauncher
                     !LiveFile.Set(root, "vr_render", "native") ||
                     !LiveFile.Set(root, "sm1style", "on"))
                     throw new IOException("Could not set the selected renderer's picture mode in live.txt.");
-                info = (mode == Revamped ? "REVAMPED: 70% temporal reconstruction" : "ORIGINAL: HERO VR 0.0.78 renderer") +
+                info = (mode == Revamped ? "PERFORMANCE: 70% temporal reconstruction" : "ORIGINAL: HERO VR 0.0.78 renderer") +
                        " (DLL SHA256 " + digest.Substring(0, 12) + "...)";
                 return true;
             }
@@ -147,9 +153,9 @@ namespace Sm2VrLauncher
             using (var format = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center })
                 g.DrawString("RENDER\nMODE", Theme.UiBold(9f), label, new RectangleF(11, 0, originalButton.Left - 14, Height), format);
             DrawChoice(g, originalButton, "ORIGINAL", selected == RendererModes.Original, hoverOriginal);
-            DrawChoice(g, revampedButton, "REVAMPED", selected == RendererModes.Revamped, hoverRevamped);
+            DrawChoice(g, revampedButton, "PERFORMANCE", selected == RendererModes.Revamped, hoverRevamped);
             string difference = selected == RendererModes.Revamped
-                ? "Revamped: 70% temporal upscale, smoother image and higher FPS."
+                ? "Performance: 70% temporal upscale, smoother image and higher FPS."
                 : "Original: standard HERO VR 0.0.78 rendering and image detail.";
             using (var caption = new SolidBrush(Color.FromArgb(224, Theme.Sub)))
             using (var format = new StringFormat {
@@ -171,9 +177,14 @@ namespace Sm2VrLauncher
                 using (var pen = new Pen(current ? accent : Color.FromArgb(75, 120, 126, 135), current ? 1.8f : 1f))
                     g.DrawPath(pen, p);
             }
-            using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            // t2149: "PERFORMANCE" is longer than the old "REVAMPED": shrink the label to fit a narrow
+            // button instead of wrapping or clipping it (never below 7 pt).
+            float size = 10.4f;
+            while (size > 7f && g.MeasureString(text, Theme.UiBold(size)).Width > rect.Width - 8) size -= .4f;
+            using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center,
+                                                   FormatFlags = StringFormatFlags.NoWrap })
             using (var brush = new SolidBrush(current ? Theme.Text : Theme.Sub))
-                g.DrawString(text, Theme.UiBold(10.4f), brush, shape, format);
+                g.DrawString(text, Theme.UiBold(size), brush, shape, format);
         }
         protected override void OnMouseMove(MouseEventArgs e)
         {

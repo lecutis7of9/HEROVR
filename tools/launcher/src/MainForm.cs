@@ -293,11 +293,11 @@ namespace Sm2VrLauncher
                 settings.Set(RendererModes.Key, rendererPicker.Selection);
                 settings.Save();
                 if (sessionLog != null)
-                    sessionLog.Line("RENDERER: " + rendererPicker.Selection.ToUpperInvariant() +
+                    sessionLog.Line("RENDERER: " + RendererModes.Display(rendererPicker.Selection) +
                         " selected. The DLL changes safely before the next PLAY VR.", Theme.Info);
             };
             tip.SetToolTip(rendererPicker,
-                "ORIGINAL: the standard v0.0.78 render path. REVAMPED: the new 70% temporal upscaler for better performance and stable images. " +
+                "ORIGINAL: the standard v0.0.78 render path. PERFORMANCE: the new 70% temporal upscaler for better performance and stable images. " +
                 "Select either mode before PLAY VR; changing modes requires restarting the game.");
         }
 

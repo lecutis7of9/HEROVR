@@ -10,8 +10,8 @@ START
 1. Unzip the whole ZIP into a new folder (not Program Files, not OneDrive).
 2. Start your VR app (Virtual Desktop / Steam VR), then double-click
    "HERO VR Launcher.cmd" at the top of the folder.
-3. In the launcher pick ORIGINAL or REVAMPED, then start Spider-Man 2.
-   Both modes load the SAME gameplay DLL (same SHA256); only rendering differs.
+3. In the launcher pick ORIGINAL or PERFORMANCE (formerly "Revamped"),
+   then start Spider-Man 2. Both modes load the SAME gameplay DLL (same SHA256); only rendering differs.
 
 1) WEB LINE GESTURE  (status: PARTIAL - drives the game's own Web Line input)
 -----------------------------------------------------------------------------

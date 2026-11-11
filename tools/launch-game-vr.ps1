@@ -226,9 +226,9 @@ if ((Test-Path -LiteralPath $revampedStereo) -and (Test-Path -LiteralPath $activ
         if (-not (Test-Path -LiteralPath $enableMarker)) {
             Set-Content -LiteralPath $enableMarker -Value 'Revamped 70% eye reconstruction' -Encoding ascii
         }
-        Write-Host 'Renderer: REVAMPED module and staged 70% enable marker (live.txt VR AA preference still applies).' -ForegroundColor Green
+        Write-Host 'Renderer: PERFORMANCE module and staged 70% enable marker (live.txt VR AA preference still applies).' -ForegroundColor Green
     } else {
-        Write-Host 'Renderer: active DLL is not the staged Revamped module; no 70% enable marker set.'
+        Write-Host 'Renderer: active DLL is not the staged Performance module; no 70% enable marker set.'
     }
 }
 # An update zip extracted into a folder of its own rather than over the mod ($portVersion is printed at the start).

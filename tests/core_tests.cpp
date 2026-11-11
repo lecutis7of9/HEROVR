@@ -49,7 +49,9 @@
 #include "spidy/van_screen.hpp"
 #include "spidy/hideout074.hpp"
 #include "spidy/ua_expansion.hpp"
+#include "spidy/ua_body.hpp"
 #include "spidy/ua_cast.hpp"
+#include "spidy/model_origin.hpp"
 #include "spidy/batcave074.hpp"
 #include "spidy/crime_gps074.hpp"
 #include "spidy/cave_quiet074.hpp"
@@ -27844,7 +27846,7 @@ int main() {
     test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
         namespace mm = spidy::mesh_model;
         check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slotSuitEnd == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23 &&
-                  mm::slots == mm::slotSuitEnd + 14 + 2 + 4 + 12 + 2 /* 0.0.75 MOTORCYCLE body + bars, 0.0.76 HARLEYS two pairs, 0.0.78 PUNISHER ARSENAL, UA EXPANSION STARK TOWER + its cast */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
+                  mm::slots == mm::slotSuitEnd + 14 + 2 + 4 + 12 + 3 /* 0.0.75 MOTORCYCLE body + bars, 0.0.76 HARLEYS two pairs, 0.0.78 PUNISHER ARSENAL, UA EXPANSION STARK TOWER + its cast + the player's UA body */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
               "the suits follow the roster");
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;
@@ -37718,6 +37720,134 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
               "no process id: the 5.2 s hold-up no longer ends VR");
         check(lw::lateMs(deadline + 5, deadline) == 5 && lw::lateMs(deadline - 5, deadline) == 0, "how late");
         check(lw::keepAliveMs == 5000 && lw::firstKeepAliveMs == 10000, "the keep-alive's lengths unchanged");
+    });
+    test("UA EXPANSION fix 2 BLACK CHUNKS: a room past the far plane gets a black sphere round the eye, never faces through it", [] {
+        namespace ho = hideout074;
+        // Stark Tower's raised sky box: about +-121 m across, -48..43 m high round the eye - its box's corners ~181 m out
+        // (at 150 m - the old reach - its corners were pulled in one by one and its faces bent in through the sky). With
+        // uaBackdropMost it is not pulled at all: a plain box inside the far plane.
+        mesh_model::Mesh tower;
+        tower.corners = {{-121, -48, -121}, {121, 43, 121}, {121, -48, -121}};
+        tower.colors = {{0, 0, 0}};
+        tower.low = {-121, -48, -121};
+        tower.high = {121, 43, 121};
+        // and a bigger one (or the eye walked to a side): a sphere
+        mesh_model::Mesh mesh;
+        mesh.corners = {{-160, -60, -160}, {160, 60, 160}, {160, -60, -160}};
+        mesh.colors = {{0, 0, 0}};
+        mesh.low = {-160, -60, -160};
+        mesh.high = {160, 60, 160};
+        ho::Place place;
+        place.at = {3000, 20, -2000}; // the city's kilometres
+        const Vec3 eye = place.at + Vec3{0, 1.65f, 0};
+        std::vector<Vertex> out;
+        check(ho::appendBackdrop(out, tower, place, eye, 2.f, ho::uaBackdropMost) && out.size() == 36, "Stark Tower: its whole box");
+        bool flat = true;
+        for (const auto& vx : out)
+            flat &= length(vx.position - eye) <= ho::uaBackdropMost && length(vx.position - eye) > 150.f;
+        check(flat, "never pulled in (its faces flat, outside the sky box)");
+        out.clear();
+        check(ho::appendBackdrop(out, mesh, place, eye, 2.f, ho::uaBackdropMost), "drawn");
+        check(out.size() == size_t{6} * ho::sphereRings * ho::sphereSegments, "a sphere, not the bent box");
+        bool inside = true, black = true;
+        float nearest = 1e9f;
+        for (size_t k = 0; k < out.size(); ++k) {
+            const float l = length(out[k].position - eye);
+            inside &= l <= ho::uaBackdropMost + .05f;
+            black &= out[k].color.x == 0 && out[k].color.y == 0 && out[k].color.z == 0 && out[k].alpha == 1;
+            if (k % 3 == 0) { // each facet's middle: none nearer than sphereInner of the radius
+                const Vec3 m = (out[k].position + out[k + 1].position + out[k + 2].position) * (1.f / 3.f);
+                nearest = std::min(nearest, length(m - eye));
+            }
+        }
+        check(inside && black, "black, opaque, its corners at the radius");
+        check(nearest >= ho::sphereInner * ho::uaBackdropMost * .99f && nearest > 170.f,
+              "every facet past the room's sky box (the old box's pulled faces came to ~121 m)");
+        check(ho::uaBackdropMost < 200.f && ho::uaBackdropMost > 165.f, "inside the overlay's 200 m far plane, past the sky box");
+        // a room that fits keeps its box (the hideouts unchanged)
+        mesh_model::Mesh small;
+        small.corners = {{-5, 0, -5}, {5, 3, 5}, {5, 0, -5}};
+        small.colors = {{0, 0, 0}};
+        small.low = {-5, 0, -5};
+        small.high = {5, 3, 5};
+        out.clear();
+        check(ho::appendBackdrop(out, small, place, eye) && out.size() == 36, "a small room: its box as before");
+        out.clear();
+        ho::appendBackdropSphere(out, Vec3{NAN, 0, 0}, 100.f);
+        check(out.empty(), "a NaN eye: nothing");
+    });
+    test("UA EXPANSION fix 2 FLICKER: the models drawn relative to the eye keep their depth kilometres out", [] {
+        namespace mo = model_origin;
+        // a view-projection at the city's kilometres (translation in the fourth column, row-major)
+        Mat4 vp{};
+        const float s = .7f;
+        vp = {s, 0, .1f, -s * 3000.f - .1f * -2000.f, 0, s, 0, -s * 20.f, 0, .02f, -1.0001f, 1.0001f * -2000.f - .02f * 20.f - .03f,
+              0, 0, -1, -2000.f};
+        const std::array<double, 3> o = mo::of(Vec3{3000.004f, 21.656f, -2000.003f});
+        check(o[0] == 3000.0 && std::abs(o[1] - 21.66) < 1e-9 && o[2] == -2000.0, "the origin: the eye to whole centimetres");
+        const Mat4 rel = mo::relative(vp, o);
+        bool same = true;
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 3; ++c)
+                same &= rel[r * 4 + c] == vp[r * 4 + c];
+        check(same, "only the fourth column moves");
+        // a corner 2 m from the eye: relative and absolute agree (worked in double), the relative one in floats exactly
+        const double p[3] = {3001.25, 20.5, -2001.75};
+        for (int r = 0; r < 4; ++r) {
+            double absolute = vp[r * 4 + 3];
+            double relative = rel[r * 4 + 3];
+            for (int c = 0; c < 3; ++c) {
+                absolute += static_cast<double>(vp[r * 4 + c]) * p[c];
+                relative += static_cast<double>(rel[r * 4 + c]) * static_cast<float>(p[c] - o[c]);
+            }
+            same &= std::abs(absolute - relative) < 1e-3 * (1 + std::abs(absolute));
+        }
+        check(same, "the same clip position");
+        std::vector<Vertex> in{Vertex{Vec3{3001.25f, 20.5f, -2001.75f}, Vec3{.1f, .2f, .3f}, .5f, {1, 2, 3, 4}}}, out;
+        mo::shift(in, o, out);
+        check(out.size() == 1 && std::abs(out[0].position.x - 1.25f) < 1e-3f && std::abs(out[0].position.y + 1.16f) < 1e-3f &&
+                  std::abs(out[0].position.z + 1.75f) < 1e-3f && out[0].color.y == .2f && out[0].alpha == .5f && out[0].shape.w == 4,
+              "the positions moved, the rest kept");
+        check(mo::usable(o) && !mo::usable({NAN, 0, 0}) && !mo::usable({1e9, 0, 0}), "a bad origin: not used");
+    });
+    test("UA EXPANSION fix 2 PLAYER BODY: the UA body's slot, which body, its bones, its feet, the drive", [] {
+        namespace mm = mesh_model;
+        namespace ub = ua_body;
+        check(mm::slotUaBody == mm::slotUaStarkCast + 1 && std::string(mm::slotFolders[mm::slotUaBody]) == ub::folder &&
+                  mm::slotIsUa(mm::slotUaBody) && mm::slotIsUaBody(mm::slotUaBody) && !mm::slotIsUaCast(mm::slotUaBody) &&
+                  !mm::slotIsSuit(mm::slotUaBody) && !mm::slotMayDecimate[mm::slotUaBody] && mm::slotShipped(mm::slotUaBody) &&
+                  mm::slotDrawCap[mm::slotUaBody] == mm::drawTriangles,
+              "slotUaBody: Models\\UA\\Body, loaded with UA LOCATIONS, never decimated, a suit's cap");
+        check(hero007::modelSinkBudget >= 3 * (size_t{mm::uaRoomTriangles} + size_t{ua_cast::drawBudget} + size_t{mm::drawTriangles}),
+              "the model sink holds the room, its characters and the player's body");
+        using S = ub::Source;
+        check(ub::pick(true, false, true, true, true) == S::wornSuit && ub::pick(true, false, false, true, true) == S::uaBody &&
+                  ub::pick(true, false, false, false, true) == S::gloves && ub::pick(true, false, false, false, false) == S::none,
+              "in a UA place: the worn suit, else the UA body, else the gloves");
+        check(ub::pick(false, false, true, true, true) == S::none && ub::pick(true, true, true, true, true) == S::none,
+              "outside a UA place, or on the flat screen: nothing from here");
+        check(ub::mask(0) == suit_wear::bodyBones && ub::mask(1) == suit_wear::bodyBones && ub::mask(2) == suit_wear::armBones &&
+                  !(ub::mask(0) & (1u << suit_wear::boneHead)),
+              "the full body (never the head over the eyes); SUIT BODY OFF keeps the hands");
+        const Vec3 eye{3000, 21.65f, -2000};
+        const Vec3 f = ub::feet(eye, 20.f);
+        check(f.x == eye.x && f.z == eye.z && f.y == 20.f, "the feet on the room's floor under the eyes");
+        check(std::abs(ub::feet(eye, NAN).y - (eye.y - 1.65f)) < 1e-4f && std::abs(ub::feet(eye, 40.f).y - (eye.y - 1.65f)) < 1e-4f,
+              "a bad floor (NaN, above the eyes): eye height under them");
+        suit_wear::Tracked t;
+        t.curl[0] = .3f;
+        const suit_wear::Tracked before = t;
+        ub::apply(ub::Drive{}, t);
+        check(t.curl[0] == before.curl[0] && t.gripForward[1].z == before.gripForward[1].z && t.handleTiltDeg[0] == before.handleTiltDeg[0],
+              "an empty drive: the tracked hands as they are");
+        ub::Drive d;
+        d.handPose[1] = true;
+        d.palmForward[1] = {0, 0, -2};
+        d.palmX[1] = {1, 0, 0};
+        d.curl[0] = 1.5f;
+        ub::apply(d, t);
+        check(t.curl[0] == 1.f && t.handleTiltDeg[1] == 0.f && std::abs(t.gripForward[1].z + 1) < 1e-5f && std::abs(t.gripUp[1].y - 1) < 1e-5f,
+              "a power's drive: its palm frame (up = z x x) and its curl");
     });
     test("ULTIMATE ALLIANCE EXPANSION CHARACTERS: cast.txt, talk.txt, who is there, whom he talks to, the talk, the draw", [] {
         namespace mm = mesh_model;

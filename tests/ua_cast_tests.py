@@ -252,9 +252,9 @@ class Wiring(unittest.TestCase):
 
     def test_slot_and_budget(self):
         m = src('include/spidy/mesh_model.hpp')
-        self.assertIn('"UA/StarkTower", "UA/StarkTower/Cast"};', m)
-        self.assertIn('uaRoomTriangles, uaCastTriangles};', m)
-        self.assertIn('slotUaStarkTower == 74 && slotUaStarkCast == 75 && slots == 76', m)
+        self.assertIn('"UA/StarkTower", "UA/StarkTower/Cast", "UA/Body"};', m)
+        self.assertIn('uaRoomTriangles, uaCastTriangles, drawTriangles};', m)
+        self.assertIn('slotUaStarkTower == 74 && slotUaStarkCast == 75 && slotUaBody == 76 && slots == 77', m)
         self.assertIn('size_t{mesh_model::uaCastDrawnTriangles}', src('include/spidy/hero007_visual.hpp'))
         self.assertIn('src/ua_cast.cpp', src('CMakeLists.txt'))
 

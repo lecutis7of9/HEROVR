@@ -58,6 +58,10 @@ The converter does the following:
    the floor plan), `eye_window.png`, `eye_spawn.png`, `look_up.png`, `cast_hub.png` (the hub with its
    characters), `cast_floor.png` and `cast_closeup.png` (Nick Fury with a subtitle mock).
    `--no-cast` leaves the characters out.
+9. Builds **your body** for UA places (`tools/ua/build_body.py` in Blender, then `tools/ua/ua_body.py`): MUA's own
+   Spider-Man (the classic suit, `packages/generated/characters/spiderman_0901.fb`) on its own skeleton, made into a
+   HERO VR suit (the 16-bone skin the roster suits use) at `Models/UA/Body/scene.glb`, beside `UA/StarkTower`.
+   `--no-body` leaves it out (you get the fallback gloves instead).
 
 ## Play
 
@@ -77,6 +81,13 @@ The converter does the following:
    - The RETURN TO CITY button over your left wrist (poke it with your right hand)
    - Hold B for 0.8 s
    - The page's button again (it reads **STARK TOWER - RETURN TO CITY**)
+
+**Your body.** In a UA place the game's own picture is hidden, and with it the game's body, so HERO VR draws you
+a body of its own. It follows your headset and both controllers: your arms reach your hands, your fingers curl
+with the trigger and grip, and your legs step when you walk. You stand on the room's floor. It uses the suit you
+wear if you wear a roster suit (IRON MAN, CAP and so on). Otherwise it uses the converted MUA Spider-Man
+(`Models/UA/Body`). If neither is there, you get the fallback gloves. You see the full body except the head and
+neck. With SUIT BODY OFF you still keep your arms and hands. Combat and powers do not drive it yet.
 
 The page's button tells you why a press does nothing: **NOT CONVERTED** (run the converter, then restart) or
 **OFF** (`ua_locations` is off).
@@ -104,6 +115,19 @@ ends the talk and shows **MISSIONS: COMING SOON**. The missions themselves come 
 
 On the gold ring by the Quinjet, where Wyatt stands, A goes home. To talk to Wyatt there, point at him instead of
 looking at him.
+
+## Fix 2 (after Stark Tower test 1)
+
+- **Black shapes outside the windows, near the ceiling:** the black box that hides the game's picture was pulled
+  inside the far plane one corner at a time, so its faces bent in through the sky and the skyline. A UA place now
+  reaches 190 m (the overlay sees 200 m). Any room bigger than that gets a black sphere round your eye instead of
+  a box, and the sphere never cuts through the room. The converter also closes the top of MUA's sky box (it had
+  none, since the game's camera never looked up), so the glass under the ceiling shows sky instead of black.
+- **Flicker on the furniture:** the room's models are now drawn relative to your eye (the position offsets are
+  worked out in double precision on the CPU). The GPU no longer does float maths on city coordinates kilometres
+  from the origin. The converter also drops exact duplicate faces (the map places some pieces several times in
+  the same spot; about 2,400 faces).
+- **No body or hands:** see **Your body** above.
 
 ## Known limits (CANDIDATE, untested in the headset)
 

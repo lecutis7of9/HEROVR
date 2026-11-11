@@ -1139,6 +1139,18 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
     sceneKept_ = {}; // the last frame's reads are done (waitForSubmission above)
     SceneDepth scene = std::move(scene_);
     scene_ = {};
+    // UA EXPANSION fix 2 (model_origin.hpp): this frame's model origin (then cleared: set again each frame).
+    const bool modelRelative = modelOriginSet_ && !textured.empty();
+    const std::array<double, 3> modelOrigin = modelOrigin_;
+    modelOriginSet_ = false;
+    if (modelRelative) {
+        model_origin::shift(textured, modelOrigin, modelShifted_);
+        textured = modelShifted_;
+    }
+    Mat4 modelViewProjection[2]{};
+    for (size_t eye = 0; eye < views.size() && eye < 2; ++eye)
+        modelViewProjection[eye] = modelRelative ? model_origin::relative(views[eye].viewProjection, modelOrigin)
+                                                 : views[eye].viewProjection;
     bool occlude = false;
     if (!textured.empty() && (scene.count || scene.sunShadow > 0) && sceneFault_.empty()) {
         try {
@@ -1276,7 +1288,7 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
                 ID3D12DescriptorHeap* heaps[] = {modelHeap_.Get()};
                 list_->SetDescriptorHeaps(1, heaps);
                 list_->SetGraphicsRootSignature(modelRoot_.Get());
-                list_->SetGraphicsRoot32BitConstants(0, 16, views[eye].viewProjection.data(), 0);
+                list_->SetGraphicsRoot32BitConstants(0, 16, modelViewProjection[eye].data(), 0);
                 list_->SetGraphicsRootDescriptorTable(1, modelHeap_->GetGPUDescriptorHandleForHeapStart());
                 list_->SetPipelineState(modelPipeline_.Get());
                 const auto base = static_cast<UINT>(vertices.size() + art.size() + translucent.size());
@@ -1305,7 +1317,7 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
                                            scene.toSun[0], scene.toSun[1], scene.toSun[2], sunShadow ? scene.sunShadow : 0.f,
                                            scene.marchMetres, std::floor(scene.marchSteps), .12f, .5f};
                     list_->SetGraphicsRootSignature(occludedRoot_.Get());
-                    list_->SetGraphicsRoot32BitConstants(0, 16, views[eye].viewProjection.data(), 0);
+                    list_->SetGraphicsRoot32BitConstants(0, 16, modelViewProjection[eye].data(), 0);
                     list_->SetGraphicsRootDescriptorTable(1, modelHeap_->GetGPUDescriptorHandleForHeapStart());
                     list_->SetGraphicsRootDescriptorTable(2, depthAt);
                     list_->SetPipelineState(occludedPipeline_.Get());

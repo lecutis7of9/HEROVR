@@ -346,18 +346,40 @@ bool appendBackdrop(std::vector<Vertex>& out, const mesh_model::Mesh& mesh, cons
         return false;
     const Vec3 lo = mesh.low - Vec3{margin, margin, margin}, hi = mesh.high + Vec3{margin, margin, margin};
     Vec3 c[8];
+    bool fits = true;
     for (int i = 0; i < 8; ++i) {
         const Vec3 r{i & 1 ? hi.x : lo.x, i & 2 ? hi.y : lo.y, i & 4 ? hi.z : lo.z};
         c[i] = place.world(r);
-        const Vec3 d = c[i] - eye;
-        const float l = length(d);
         if (!fine(c[i]))
             return false;
-        if (l > most) // pulled in toward the eye: the far plane would cut it
-            c[i] = eye + d * (most / l);
+        fits = fits && length(c[i] - eye) <= most;
     }
-    box(out, c, Vec3{0, 0, 0});
+    if (fits) {
+        box(out, c, Vec3{0, 0, 0});
+        return true;
+    }
+    // UA EXPANSION fix 2 (the black chunks outside Stark Tower's windows): a box corner past the far plane was pulled
+    // in toward the eye alone, which bent the box's faces in through the room's far sky and city (they hid them). A
+    // room that big gets a black sphere round the eye instead, its every facet `most` metres away or nearly.
+    appendBackdropSphere(out, eye, most);
     return true;
+}
+
+void appendBackdropSphere(std::vector<Vertex>& out, Vec3 eye, float radius) {
+    if (!fine(eye) || !fine(radius) || !(radius > 0))
+        return;
+    const auto at = [&](int ring, int seg) {
+        const float th = 3.14159265f * static_cast<float>(ring) / static_cast<float>(sphereRings);
+        const float ph = 6.28318531f * static_cast<float>(seg) / static_cast<float>(sphereSegments);
+        return eye + Vec3{std::sin(th) * std::cos(ph), std::cos(th), std::sin(th) * std::sin(ph)} * radius;
+    };
+    const Vec3 black{0, 0, 0};
+    for (int r = 0; r < sphereRings; ++r)
+        for (int s = 0; s < sphereSegments; ++s) {
+            const Vec3 a = at(r, s), b = at(r + 1, s), c = at(r + 1, s + 1), d = at(r, s + 1);
+            for (const Vec3 p : {a, b, c, a, c, d})
+                out.push_back(Vertex{p, black, 1.f, {}});
+        }
 }
 
 void appendFallbackBox(std::vector<Vertex>& out, Vec3 eye, float floorY, float half) {

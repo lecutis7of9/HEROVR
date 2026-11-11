@@ -125,6 +125,15 @@ bool appendRoom(std::vector<Vertex>& sink, const mesh_model::Mesh& mesh, const P
 // mesh's bounds, at most `most` metres from the eye (the overlay's far plane is 200 m).
 bool appendBackdrop(std::vector<Vertex>& out, const mesh_model::Mesh& mesh, const Place& place, Vec3 eye, float margin = 2.f,
                     float most = 150.f);
+// UA EXPANSION fix 2: when the box round the room would reach past `most` (a UA place's raised city and sky box),
+// appendBackdrop draws this instead: a black sphere round the eye, its corners `radius` metres out (its facets at
+// least radius x cos(the half step), about 0.98 radius), never through the room.
+inline constexpr int sphereRings = 12, sphereSegments = 24;
+inline constexpr float sphereInner = .98f; // the nearest facet over the radius (cos of half a 15-degree step, rounded down)
+void appendBackdropSphere(std::vector<Vertex>& out, Vec3 eye, float radius);
+// UA EXPANSION fix 2: a UA place's backdrop reach - its sky box reaches about 165 m from the eye, the overlay's far
+// plane is 200 m: the sphere's corners at 190 m (facets at 186 m or more).
+inline constexpr float uaBackdropMost = 190.f;
 // Without a room model (the safety net): a black box `half` metres round the eye and a grey floor.
 void appendFallbackBox(std::vector<Vertex>& out, Vec3 eye, float floorY, float half = 6.f);
 

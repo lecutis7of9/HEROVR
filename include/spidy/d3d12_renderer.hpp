@@ -1,5 +1,6 @@
 #pragma once
 #include "math.hpp"
+#include "model_origin.hpp"
 #include "vertex.hpp"
 #include <array>
 #include <cstdint>
@@ -114,6 +115,13 @@ class D3D12Renderer {
         float marchMetres = 24.f, marchSteps = 12.f;
     };
     void setSceneDepth(SceneDepth depth) noexcept;
+    // UA EXPANSION fix 2 (model_origin.hpp): for the next renderViews only, the model sink's (`textured`) vertices
+    // drawn relative to `origin` (the eye) - moved by -origin on the CPU, the view-projection by the same in double -
+    // so the GPU's float maths keeps every millimetre of a room's depth. Not set (or unusable): drawn as before.
+    void setModelOrigin(std::array<double, 3> origin) noexcept {
+        modelOrigin_ = origin;
+        modelOriginSet_ = model_origin::usable(origin);
+    }
     // Empty, or why the occluded models' pass is off for the session.
     const std::string& sceneFault() const {
         return sceneFault_;
@@ -298,6 +306,10 @@ class D3D12Renderer {
     // 0.0.74 test 10 SEE-THROUGH: the depth for the next frame, the one the last frame read (kept
     // until its work is done), and the pass.
     SceneDepth scene_, sceneKept_;
+    // UA EXPANSION fix 2: the next frame's model origin, and the moved copy of the models' vertices it uploads.
+    std::array<double, 3> modelOrigin_{};
+    bool modelOriginSet_ = false;
+    std::vector<Vertex> modelShifted_;
     ComPtr<ID3D12RootSignature> occludedRoot_;
     ComPtr<ID3D12PipelineState> occludedPipeline_;
     DXGI_FORMAT occludedFormat_ = DXGI_FORMAT_UNKNOWN;

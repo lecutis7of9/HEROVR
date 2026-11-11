@@ -38,6 +38,7 @@
 #include "spidy/world_light.hpp" // HERO VR 0.0.78 WORLD LIGHT
 #include "spidy/hideout074.hpp"  // 0.0.74 test 1 HIDEOUTS
 #include "spidy/ua_expansion.hpp" // ULTIMATE ALLIANCE EXPANSION
+#include "spidy/ua_body.hpp"
 #include "spidy/ua_cast.hpp"      // ULTIMATE ALLIANCE EXPANSION CHARACTERS
 #include "spidy/batcave074.hpp"   // 0.0.74 test 2b BATCAVE
 #include "spidy/crime_gps074.hpp"  // 0.0.74 test 2b CRIME GPS
@@ -886,6 +887,10 @@ void markModelMissing(uint32_t slot) {
 // the render thread after) and the wear's cost (the render thread's mean, microseconds a frame).
 std::atomic<uint32_t> wornSuitSlot{0};
 suit_wear::Rig suitRigs[mesh_model::suitSlots];
+// UA EXPANSION fix 2 (ua_body.hpp): the player's avatar in a UA place (Models\UA\Body), made ready at load like a
+// suit; uaBodyReady once it is (the render thread reads it after suitsRigged).
+suit_wear::Rig uaBodyRig;
+std::atomic<bool> uaBodyReady{false};
 std::atomic<uint32_t> suitWearMicros{0}, suitWearVertices{0};
 // 0.0.73 MP SOLO TEST: the player's action flags (mp::Action: flying, swinging, grapple, firing) for the packet,
 // set on the game thread, read on the render thread (mod-internal state - CONFIRMED, no game address).
@@ -2538,6 +2543,20 @@ DWORD runBody() {
                     rigged += ok;
                     if (m && !ok)
                         unrigged += (unrigged.empty() ? "" : ", ") + std::string(mesh_model::suitFolders[k]);
+                }
+                // UA EXPANSION fix 2: the UA place's avatar (the converted MUA1 body) made ready the same way.
+                uaBodyRig = {};
+                uaBodyReady = false;
+                if (const mesh_model::Mesh* ub = models.model(mesh_model::slotUaBody)) {
+                    bool ok = false;
+                    try {
+                        ok = suit_wear::makeRig(*ub, uaBodyRig, "UA_Body");
+                    } catch (...) {
+                        uaBodyRig = {};
+                    }
+                    uaBodyReady = ok;
+                    consoleLine(std::string("UA EXPANSION: the player's body (UA/Body) ") +
+                                (ok ? "ready, " + std::to_string(ub->triangles()) + " triangles" : "NOT WEARABLE (its skin did not rig)"));
                 }
                 suitsRigged = true;
                 consoleLine("SUITS: " + std::to_string(rigged) + " of " + std::to_string(mesh_model::suitSlots) + " ready to wear" +
@@ -14417,8 +14436,10 @@ DWORD runBody() {
                     // Version 0.0.72 GAME BODY fallback (spec point 3): while the hero is not drawn as the
                     // body (the game's switch hides him), a glove on each tracked controller (glove_overlay.hpp).
                     // Test build 10: never over a shown suit; always for BATMAN without one (suit_wear::glovesShown).
+                    // UA EXPANSION fix 2 (ua_body::pick): in a UA place with no body drawn (no suit, no UA body), the gloves.
                     if (suit_wear::glovesShown(strictBody, hero_modes::gameBodyShown(heroNow()), flatScreen, native_body::drawn(),
-                                               suitShownNow()))
+                                               suitShownNow()) ||
+                        (uaVisit.active() && !flatScreen && !suitShownNow()))
                         for (unsigned i = 0; i < 2; ++i) {
                             saved.gloveOn[i] = frame.hands[i].valid && validTrackedPose(frame.hands[i].grip) ? 1.f : 0.f;
                             saved.gloveFist[i] = gloveFist[i];
@@ -16016,7 +16037,8 @@ DWORD runBody() {
                             try {
                                 if (saved->hideoutModel && overlay.modelReady())
                                     drew = hideout074::appendRoom(modelVertices, *saved->hideoutModel, place, hero007::modelSinkBudget) &&
-                                           hideout074::appendBackdrop(vertices, *saved->hideoutModel, place, viewer);
+                                           hideout074::appendBackdrop(vertices, *saved->hideoutModel, place, viewer, 2.f,
+                                                                      saved->hideoutView.ua ? hideout074::uaBackdropMost : 150.f);
                                 // ULTIMATE ALLIANCE EXPANSION CHARACTERS: in the room's place; a fault or over the budget: the
                                 // room without them (never the fallback box)
                                 if (drew && saved->uaCastModel && saved->uaCast && !saved->uaPoses.empty()) {
@@ -16880,18 +16902,36 @@ DWORD runBody() {
                         bool suitWorn = false;
                         suit_wear::BoneMove clawMoves[suit_wear::bones]; // 0.0.73 test 5 CLAW BONE: the suit's bones now
                         bool clawMovesOk = false;
-                        if (const uint32_t ws = wornSuitSlot.load(); !saved->flatScreen && mesh_model::slotIsSuit(ws) &&
-                                                                     overlay.modelReady() && validTrackedPose(rendered.headPose)) {
+                        // UA EXPANSION fix 2 (ua_body.hpp): in a UA place the player always has a body - the worn suit,
+                        // else the converted UA body (Models\UA\Body) standing on the room's floor (ua_body::pick).
+                        const bool uaHere = saved->hideoutAway && saved->hideoutView.ua;
+                        const uint32_t wornNow = wornSuitSlot.load();
+                        const bool wornReady = mesh_model::slotIsSuit(wornNow) && suitsRigged.load() &&
+                                               suitRigs[wornNow - mesh_model::slotSuitFirst].ok;
+                        const ua_body::Source uaSource =
+                            ua_body::pick(uaHere, saved->flatScreen, wornReady,
+                                          uaBodyReady.load() && suitsRigged.load() && mesh_model::library().model(mesh_model::slotUaBody),
+                                          false);
+                        const uint32_t bodySlot = uaSource == ua_body::Source::uaBody ? mesh_model::slotUaBody : wornNow;
+                        if (const uint32_t ws = bodySlot; !saved->flatScreen &&
+                                                          (mesh_model::slotIsSuit(ws) || mesh_model::slotIsUaBody(ws)) &&
+                                                          overlay.modelReady() && validTrackedPose(rendered.headPose)) {
                             const auto suitStart = std::chrono::steady_clock::now();
                             try {
                                 suitMesh = mesh_model::library().model(ws);
-                                suitRig = &suitRigs[ws - mesh_model::slotSuitFirst];
+                                suitRig = mesh_model::slotIsUaBody(ws) ? &uaBodyRig : &suitRigs[ws - mesh_model::slotSuitFirst];
                                 if (suitMesh && suitRig->ok) {
                                     suit_wear::Tracked t;
                                     const Quat turn = trackingTurn(rendered.swing);
                                     t.up = normalized(turn.rotate(Vec3{0, 1, 0}));
                                     t.feet = rendered.anchor + travel;
                                     t.eye = rendered.headPose.position + travel;
+                                    // UA EXPANSION fix 2: in a UA place the feet stand on the room's floor under the eyes
+                                    // (the frozen hero's are out in the street), upright.
+                                    if (uaHere) {
+                                        t.up = Vec3{0, 1, 0};
+                                        t.feet = ua_body::feet(t.eye, saved->hideoutFloor + travel.y, ua_expansion::eyeHeight);
+                                    }
                                     // 0.0.76 roll fix: rolled, the body turns with the view about the head (its up
                                     // already did): the chest stays under the head, not across the view.
                                     if (rendered.flyRollBodyOnly) // 0.0.76 LEVEL VIEW: the body alone rolls
@@ -16981,11 +17021,18 @@ DWORD runBody() {
                                     if (std::isfinite(eyeUp) && eyeUp > .8f && eyeUp < 2.4f)
                                         suitStanding = eyeUp > suitStanding ? eyeUp : suitStanding + (eyeUp - suitStanding) * .0004f;
                                     t.standingEye = suitStanding;
+                                    // UA EXPANSION fix 2: the avatar's drive (empty today; combat and powers fill it later).
+                                    if (uaHere)
+                                        ua_body::apply(ua_body::Drive{}, t);
                                     suit_wear::Skeleton live;
                                     suit_wear::BoneMove mv[suit_wear::bones];
                                     // Test build 10: BODY on - the suit's FULL BODY in the game body's place; BATMAN never OFF.
-                                    const uint32_t mask = suit_wear::partBones(suit_wear::firstPersonPart(
-                                        suit_wear::partOf(c38(combat38::suitBody)), hero_modes::gameBodyShown(heroNow()), saved->bodyWanted));
+                                    // UA EXPANSION fix 2: in a UA place the FULL BODY (ua_body::mask: SUIT BODY OFF keeps the arms).
+                                    const uint32_t mask =
+                                        uaHere ? ua_body::mask(c38(combat38::suitBody))
+                                               : suit_wear::partBones(suit_wear::firstPersonPart(suit_wear::partOf(c38(combat38::suitBody)),
+                                                                                                 hero_modes::gameBodyShown(heroNow()),
+                                                                                                 saved->bodyWanted));
                                     // skinned only when something shows it (SUIT BODY on, or the mirror up): else no cost
                                     // (and posed for the CLAW BONE claws even with nothing of the suit shown: no skin then)
                                     const bool skinWanted = mask || (mirrorOn.load() && !mirrorReuse);
@@ -17612,7 +17659,9 @@ DWORD runBody() {
                                     suitWearVertices = static_cast<uint32_t>(modelVertices.size() - before);
                                     if (mf.frameOnly && mirrorGuard.half) // kept for the next (reused) frame
                                         mirrorKept.assign(modelVertices.begin() + static_cast<std::ptrdiff_t>(before), modelVertices.end()),
-                                            mirrorKeptTravel = travel, mirrorKeptSlot = wornSuitSlot.load(), mirrorKeptNow = true;
+                                            mirrorKeptTravel = travel,
+                                            mirrorKeptSlot = bodySlot, // UA fix 2: the UA body's slot is never reused as a worn suit's
+                                            mirrorKeptNow = true;
                                     else
                                         mirrorKept.clear();
                                     mirrorKeptSoft.clear();
@@ -18698,6 +18747,10 @@ DWORD runBody() {
                             } catch (...) {
                                 overlay.setSceneDepth({});
                             }
+                            // UA EXPANSION fix 2 (model_origin.hpp): in a hideout or UA place the models drawn relative to the
+                            // eye - the room's close, stacked surfaces kept apart in depth (no crawling stripes).
+                            if (saved->hideoutAway && !saved->flatScreen)
+                                overlay.setModelOrigin(model_origin::of(viewer));
                             try {
                                 overlay.renderViews(overlayViews, vertices, true, false, translucent, &grade, art, modelVertices);
                             } catch (const std::exception& e) {

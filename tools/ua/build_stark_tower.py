@@ -190,6 +190,79 @@ for o in bpy.data.objects:
     o.matrix_world = mathutils.Matrix.Identity(4)
 
 
+# ---- UA EXPANSION fix 2 (the black band at the windows' top): the sky box is open-topped (MUA's camera never
+# looked up); from the eye, the glass just under the 12 m ceiling looks out over its top wall into nothing - the
+# black backdrop. A lid closes it: a low cone from the box's top ring up to a point over the middle, every corner
+# taking the top ring's own UVs (the apex their mean), so the painted sky's top colour carries on overhead. ----
+import bmesh  # noqa: E402
+import math as _m  # noqa: E402
+for o in backdrop:
+    if 'skybox' not in ' '.join(images_of(o)):
+        continue
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    uvl = bm.loops.layers.uv.active
+    top = max(v.co.z for v in bm.verts)
+    ring = {}
+    for v in bm.verts:
+        if v.co.z > top - 0.25 and v.link_loops:
+            key = (round(v.co.x, 2), round(v.co.y, 2))
+            ring.setdefault(key, (v.co.copy(), tuple(v.link_loops[0][uvl].uv) if uvl else (0.5, 0.0)))
+    pts = list(ring.values())
+    if len(pts) >= 3:
+        mx = sum(p[0].x for p in pts) / len(pts)
+        my = sum(p[0].y for p in pts) / len(pts)
+        pts.sort(key=lambda p: _m.atan2(p[0].y - my, p[0].x - mx))
+        reach = max(_m.hypot(p[0].x - mx, p[0].y - my) for p in pts)
+        apex = bm.verts.new((mx, my, top + reach * 0.35))
+        auv = (sum(p[1][0] for p in pts) / len(pts), sum(p[1][1] for p in pts) / len(pts))
+        made = 0
+        for i in range(len(pts)):
+            (pa, ua), (pb, ub) = pts[i], pts[(i + 1) % len(pts)]
+            va, vb = bm.verts.new(pa), bm.verts.new(pb)
+            try:
+                f = bm.faces.new((va, vb, apex))
+            except ValueError:
+                continue
+            if uvl:
+                for loop, uv in zip(f.loops, (ua, ub, auv)):
+                    loop[uvl].uv = uv
+            made += 1
+        bm.to_mesh(o.data)
+        moved.append(f'{o.name}: sky lid, {made} faces over its open top ({top:.1f} m, apex +{reach * 0.35:.1f} m)')
+    bm.free()
+
+
+# ---- UA EXPANSION fix 2 (the furniture's flicker): exact duplicate faces dropped. The map places some pieces more
+# than once in the same spot (a lamp cone twelve times, a desk's detail three times, a combined block 28 times, pillar
+# and display copies): the same face drawn twice, with no culling, depth-tested equal - wasted triangles at best, and
+# two faces with different UVs or lighting fight in stripes. The first of each (its corners to the millimetre) kept.
+import bmesh  # noqa: E402
+seen, dropped = set(), 0
+for o in sorted((o for o in bpy.data.objects if o.type == 'MESH'), key=lambda o: o.name):
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    dup = []
+    for f in bm.faces:
+        key = tuple(sorted(tuple(round(c, 3) for c in v.co) for v in f.verts))
+        if key in seen:
+            dup.append(f)
+        else:
+            seen.add(key)
+    if dup:
+        bmesh.ops.delete(bm, geom=dup, context='FACES_ONLY')
+        bm.to_mesh(o.data)
+        dropped += len(dup)
+    bm.free()
+empty = [o for o in bpy.data.objects if o.type == 'MESH' and not o.data.polygons]
+for o in empty:
+    for coll in (backdrop, ceiling, panes):
+        if o in coll:
+            coll.remove(o)
+    bpy.data.objects.remove(o)
+moved.append(f'duplicate faces dropped {dropped} ({len(empty)} objects left empty, removed)')
+
+
 def to_room(p):  # engb units (z-up) -> room.txt / glTF (x, y up, z = -blender y), metres
     return [round((p[0] - O[0]) * S, 3), round((p[2] - O[2]) * S, 3), round(-(p[1] - O[1]) * S, 3)]
 

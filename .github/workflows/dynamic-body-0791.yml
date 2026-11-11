@@ -48,6 +48,10 @@ jobs:
           Remove-Item Env:SM2VR_LAUNCHER -ErrorAction SilentlyContinue
           ./tools/build.ps1 -Observer -FromSource
           if ($LASTEXITCODE) { throw "Build/tests failed ($LASTEXITCODE)" }
+      - name: Build selectable HERO VR launcher for test package
+        run: |
+          ./tools/launcher/build.ps1 -Out 'SM2VRLauncher.exe'
+          if ($LASTEXITCODE -or -not (Test-Path -LiteralPath 'tools/launcher/SM2VRLauncher.exe')) { throw 'HERO VR launcher compilation failed' }
       - name: Stage current gameplay DLL for both rendering modes
         run: |
           $ErrorActionPreference = 'Stop'
@@ -87,7 +91,7 @@ jobs:
         with:
           name: herovr-79-1-dual-renderer-gameplay-test
           path: |
-            dist/HERO-VR-79.1-TEST-win64.zip
-            dist/HERO-VR-79.1-TEST-win64.zip.sha256
+            dist/HERO-VR-79.1-DUAL-TEST-win64.zip
+            dist/HERO-VR-79.1-DUAL-TEST-win64.zip.sha256
           if-no-files-found: error
           retention-days: 14

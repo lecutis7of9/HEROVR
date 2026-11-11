@@ -2672,6 +2672,12 @@ DWORD runBody() {
         webline_native::Pad weblinePad{};
         uint32_t weblineClaimed{};
         uint64_t weblineStarts{}, weblineCommits{}, weblineCancels{};
+        // t2161: a grip that did not start the gesture says why (rate-limited, 79.1 WEBLINE REFUSED).
+        bool weblineGripWas[2]{};
+        double weblineClock{}, weblineRefusedAt = -100.0; // frame.seconds is the frame's step, so a clock of its own
+        uint64_t weblineRefusals{};
+        bool nativeWebLineYWas{};
+        uint64_t nativeWebLineSends{};
         game_swing::AimData aimed{};
         uint64_t pullsBefore{};
         // The right thumbstick pushed down is the game's D-pad down (heal),
@@ -6816,9 +6822,10 @@ DWORD runBody() {
                             consoleLine(weblineGestureNow.load() == webline_native::modeOff
                                             ? "HERO VR 79.1 WEB TEST: webline gesture OFF (live.txt webline_gesture)"
                                             : "HERO VR 79.1 WEB TEST: webline gesture ON -> the game's own Web Line input (L2 + Y)");
-                            consoleLine("HERO VR 79.1 WEB TEST: physical prop/enemy movement is NOT available on Spider-Man 2 "
-                                        "(native_bodies not ported): a prop grip + yank sends the game's own L1+R1 throw only "
-                                        "where the game offers it; two grips on an enemy use the existing grab web + yank");
+                            consoleLine("HERO VR 79.1 WEB TEST: webbing/yanking props is NOT available on Spider-Man 2: the prop "
+                                        "catch is not ported (sm2_port.hpp notPorted) and the L1+R1 environment-throw grip waits "
+                                        "for a game prompt this build cannot read (button prompts not ported on SM2: 0 prompt "
+                                        "calls), so it never fires. A grip on a thug is the grab web, pull to yank.");
                             // Fists and the web shooter take the swing's input samples;
                             // both are optional and, like the grab, can be switched on later.
                             applySettings();
@@ -6976,6 +6983,8 @@ DWORD runBody() {
                                 spidy::ball_sure::outOfCombat(grabEnemyCount, world_trace::nearestEnemyMetres()) &&
                                 !enemyGripFrame.claimed;
                             spidy::export_guard::phase("79.1 webline gesture update");
+                            if (std::isfinite(frame.seconds) && frame.seconds > 0)
+                                weblineClock += std::min(static_cast<double>(frame.seconds), .25);
                             weblineClaimed = 0;
                             bool lineActive = false, lineCommit = false, lineCancel = false;
                             for (unsigned h = 0; h < 2; ++h) {
@@ -6992,13 +7001,65 @@ DWORD runBody() {
                                               (environmentGripFrame.claimed & (1u << h)) ||
                                               (enemyGripFrame.claimed & (1u << h)) ||
                                               weblineGestures[h ^ 1u].active();
-                                li.hand = hand.grip.position;
-                                li.aim = hand.aim.orientation.rotate({0, 0, -1});
+                                // t2161 ROOT CAUSE: the aim sample's point is in the GAME WORLD (SM2 metres,
+                                // e.g. 2426, 1, 768), but the hand was the OpenXR tracking-space grip, so the
+                                // gesture's 35 m reach test failed on every grip and it never started. Use the
+                                // hand's world aim pose the swing bridge itself shot that ray from.
+                                const auto& worldHand = motion.swing.hands[h];
+                                li.hand = worldHand.aim.position;
+                                li.aim = worldHand.aim.orientation.rotate({0, 0, -1});
                                 const auto& sampled = aimed.hands[h];
                                 if (sampled.kind == static_cast<uint32_t>(game_swing::AimKind::anchor) &&
                                     finite(sampled.point))
                                     li.hit = RayHit{sampled.point, sampled.normal, 1, true};
+                                const bool gripRise = squeeze > .6f && !weblineGripWas[h];
+                                weblineGripWas[h] = squeeze > .6f;
+                                const bool wasHolding = weblineGestures[h].holding();
                                 const auto lo = weblineGestures[h].update(li);
+                                // t2161: every grip press that did not start a Web Line logs its first
+                                // reason, at most one line per 1.5 s (live.txt webline_gesture = off: none).
+                                if (gripRise && !lo.started && !wasHolding && lineMode != webline_native::modeOff &&
+                                    weblineClock - weblineRefusedAt > 1.5) {
+                                    weblineRefusedAt = weblineClock;
+                                    ++weblineRefusals;
+                                    const char* kinds[] = {"none", "anchor", "air", "blocked", "prop", "character", "strand"};
+                                    const char* kindName = sampled.kind < 7 ? kinds[sampled.kind] : "?";
+                                    const float enemyM = world_trace::nearestEnemyMetres();
+                                    const float reach = finite(sampled.point) && finite(li.hand)
+                                                            ? length(sampled.point - li.hand) : -1.f;
+                                    const char* why =
+                                        !sampleAim ? "no aim sampler (swing bridge)" :
+                                        !input.focused ? "headset not focused" :
+                                        !webline_native::allowed(lineMode, lineAir) ? "in the air (webline_gesture = on: ground, perch or wall only; 'anywhere' allows the air)" :
+                                        mapping != game_pad::Mapping::gameplay ? "not in gameplay mapping (menu/cutscene)" :
+                                        heroNow() != hero_modes::spiderMan ? "hero is not Spider-Man" :
+                                        calibrationInput ? "calibrating" :
+                                        padLayer.latched() ? "pad layer on" :
+                                        phone.open() ? "phone open" :
+                                        gadgetWheel.open() ? "gadget wheel open" :
+                                        swingState.owned ? "swinging (the swing owns the body)" :
+                                        flyNow.flying ? "flying" :
+                                        webLineInput ? "the left trigger is already the native L2 Web Line aim" :
+                                        c38(combat38::ropeGrab) == 1 ? "rope_grab is on" :
+                                        !spidy::ball_sure::outOfCombat(grabEnemyCount, enemyM) ? "an enemy within 30 m" :
+                                        enemyGripFrame.claimed ? "an enemy grip took the hands" :
+                                        !tracked ? "hand not tracked" :
+                                        swingState.webs[h].attached ? "this hand's swing web is still attached" :
+                                        grabWebs[h].on ? "this hand's grab web is on" :
+                                        ropes[h].on ? "this hand holds a rope" :
+                                        (u37.holdsGrip[h] || grabPhases[h]) ? "this hand holds a grab/gadget" :
+                                        (environmentGripFrame.claimed & (1u << h)) ? "the environment grip took it" :
+                                        weblineGestures[h ^ 1u].active() ? "the other hand is laying a Web Line" :
+                                        sampled.kind != static_cast<uint32_t>(game_swing::AimKind::anchor) ? "the hand is not aimed at a surface a web holds on" :
+                                        reach > 35.f ? "the surface is over 35 m away" : "no anchor this frame";
+                                    char note[400];
+                                    sprintf_s(note, "79.1 WEBLINE REFUSED #%llu (%s hand): %s [aim=%s reach=%.1f m, air=%d, mode=%u, enemies=%u nearest=%.0f m]",
+                                              static_cast<unsigned long long>(weblineRefusals), h ? "right" : "left", why,
+                                              kindName, reach, lineAir ? 1 : 0, lineMode,
+                                              static_cast<unsigned>(grabEnemyCount), std::isfinite(enemyM) ? enemyM : -1.f);
+                                    game_prompts::note(note);
+                                    consoleLine(note);
+                                }
                                 if (lo.claimed)
                                     weblineClaimed |= 1u << h;
                                 lineActive |= weblineGestures[h].active();
@@ -7006,6 +7067,7 @@ DWORD runBody() {
                                     ++weblineStarts;
                                     runtime.haptic(static_cast<int>(h), .3f);
                                     game_prompts::note("79.1 WEBLINE: first anchor - hold grip, sweep, release on a second surface");
+                                    consoleLine("79.1 WEBLINE: first anchor - hold grip, sweep, release on a second surface");
                                 }
                                 if (lo.commit) {
                                     lineCommit = true;
@@ -7016,12 +7078,14 @@ DWORD runBody() {
                                               static_cast<unsigned long long>(weblineCommits),
                                               length(lo.to - lo.from));
                                     game_prompts::note(note);
+                                    consoleLine(note);
                                 }
                                 if (lo.cancelled) {
                                     lineCancel = true;
                                     ++weblineCancels;
                                     runtime.haptic(static_cast<int>(h), .12f);
                                     game_prompts::note("79.1 WEBLINE: cancelled (no valid second surface, or the hand was needed)");
+                                    consoleLine("79.1 WEBLINE: cancelled (no valid second surface, or the hand was needed)");
                                 }
                             }
                             weblinePad = weblineDriver.update(frame.seconds, lineOn || weblineDriver.busy(),
@@ -8505,6 +8569,18 @@ DWORD runBody() {
                             (nativeWebLineAim && (origins.play() & buttonY) &&
                              !(named & game_pad::NamedPress::controlY)) ||
                             (weblinePad.y && steering && !layerOn); // 79.1 WEBLINE GESTURE commit
+                        { // t2161: each manual native Web Line (left trigger held + Y) the game is sent, in the log.
+                            const bool yNow = nativeWebLineAim && (origins.play() & buttonY) &&
+                                              !(named & game_pad::NamedPress::controlY);
+                            if (yNow && !nativeWebLineYWas && ++nativeWebLineSends <= 200) {
+                                char note[160];
+                                sprintf_s(note, "79.1 NATIVE WEB LINE #%llu: L2 held + Y sent to the game (the game decides if a line forms)",
+                                          static_cast<unsigned long long>(nativeWebLineSends));
+                                game_prompts::note(note);
+                                consoleLine(note);
+                            }
+                            nativeWebLineYWas = yNow;
+                        }
                         yCardSentFrames += yCardNear && walk.interact;
                         { // CUT5 CINE PROMPT: each Y press near the scene's offer, and whether the game's Y went out.
                             const bool yDown = (origins.play() & buttonY) != 0;

@@ -398,8 +398,10 @@ if($GameWebs) { Write-Host "Webs: the game's own web lines (-GameWebs; without i
 else { $captureArgs+=@('--overlay-webs'); Write-Host "Webs: Spidy overlay strands (add -GameWebs for the game's own web lines)." }
 if($NoWebGrab) { $captureArgs+=@('--no-web-grab'); Write-Host 'Web grab off: webs only swing.' }
 else {
-    Write-Host "A web aimed at a throwable prop or a thug catches it: the $reel reels it in, a sharp pull yanks"
-    Write-Host "it to your hand, release the $web to throw (add -NoWebGrab to only swing)."
+    # t2161: the SpidyVR prop catch (game_grab) has been off on Spider-Man 2 since the first SM2 build
+    # (sm2_port.hpp notPorted), so a web never caught a prop here. Say only what works.
+    Write-Host "Web on a thug: aim the $web at him and pull to yank (GRAB WEB). Webbing props (bins, boxes, cars) is NOT"
+    Write-Host 'available on Spider-Man 2 yet: there is no SM2 prop-physics path (see TEST-NOTES.txt).' -ForegroundColor Yellow
 }
 if($NoAirWebs -or $RealAnchors) {
     $captureArgs+=@('--no-air-webs')

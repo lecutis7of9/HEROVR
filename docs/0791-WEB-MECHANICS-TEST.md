@@ -33,15 +33,18 @@ START
   ground-launched swing web. Jump first, or set webline_gesture = off.
 - Manual route unchanged: hold LEFT TRIGGER (aim) and press Y.
 
-2) PROP GRAB / THROW  (status: PARTIAL - native canned throw, no physics tether)
--------------------------------------------------------------------------------
-- When the game shows its L1+R1 environment-throw prompt: squeeze GRIP at the
-  prop and YANK the hand back toward you (about 17 cm): HERO VR sends the
-  game's own L1+R1 environment throw (its canned web-spin throw).
-- NOT in this build: dragging/whipping the prop with your hand and throwing it
-  by hand velocity. Spider-Man 2's prop physics hooks (Havok pre-collide,
-  free-body, set body velocity) are NOT reverse-engineered for 2.810.0.0; the
-  SpidyVR (SM1) adapter is disabled for SM2 (native_bodies "not ported").
+2) PROP GRAB / THROW  (status: NOT AVAILABLE on Spider-Man 2)
+-------------------------------------------------------------
+- Webbing / yanking props does NOT work in this build, and never worked in any
+  SM2 build (v0.0.78 included): the SpidyVR prop catch (game_grab) has been
+  switched off on SM2 since the first SM2 commit (sm2_port.hpp notPorted), and
+  the Havok prop hooks (pre-collide, free body, body velocity) are not found
+  for Spider-Man2.exe 2.810.0.0.
+- The grip-and-yank -> game L1+R1 environment throw (79.1) only fires while the
+  game shows its L1+R1 prompt, and SM2's button prompts are not readable in
+  this build (game_prompts not ported: e5d2746's session report had 0 prompt
+  calls), so it never fires either. The old start-up line "A web aimed at a
+  throwable prop or a thug catches it ..." was wrong for SM2 and is removed.
 
 3) ENEMY GRAB  (status: PARTIAL - native web strike + existing grab-web yank)
 -----------------------------------------------------------------------------
@@ -63,6 +66,20 @@ The webline gesture never takes a grip with enemies within 30 m.
 
 Console diagnostics: "HERO VR 79.1 WEB TEST" lines at swing start and
 "79.1 WEBLINE" notes on each start / commit / cancel.
+
+### t2161 web line fix
+
+- ROOT CAUSE (confirmed in e5d2746's session report): the gesture compared the
+  game-world aim point (SM2 metres, e.g. x 2426, z 768) with the hand's OpenXR
+  tracking-space position, so the 35 m reach test failed on every grip and the
+  gesture never started. It now uses the hand's world aim pose.
+- Every grip press that does not start a Web Line logs ONE line (at most every
+  1.5 s): "79.1 WEBLINE REFUSED #n (left|right hand): <reason> [aim=... reach=...
+  air=... mode=... enemies=... nearest=...]".
+- Each manual native Web Line (LEFT TRIGGER held fully, left grip released,
+  both swing webs detached, then Y) logs "79.1 NATIVE WEB LINE #n: L2 held + Y
+  sent to the game". Whether Spider-Man 2 forms a line there is the game's
+  decision; it is not confirmed in a headset yet.
 
 ## Start-up crash bisect (t2155)
 
@@ -91,3 +108,14 @@ addresses (resolved with the CI run's `herovr-79-1-gameplay-dll-symbols` artifac
 `sprintf_s cut short` line when a console/log text was too long for its buffer (it used to end the game; it is now cut),
 and a count of invalid parameters. After a failed start the launcher console also says whether Spider-Man2.exe is still
 running and whether Steam still marks the game as running (nothing is closed automatically).
+
+## t2161: picture and models
+
+- ORIGINAL now uses v0.0.78's picture exactly: VR AA = ours (SpidyVR's own per-eye TAA). Since 7991b24 the launcher's
+  renderer picker (tools/launcher/src/RendererModes.cs, Apply) wrote `vr_aa = game` into live.txt on every ORIGINAL
+  launch: the legacy SM1STYLE route, the game's TAA in each eye with its Halton jitter, which made distant buildings
+  shake. Both modes now write `vr_aa = ours`; the only difference left is PERFORMANCE's 70% marker. The next PLAY VR
+  rewrites the line in your live.txt.
+- The ZIP now carries `Models\` (123 files, the same ones v0.0.78's launcher ZIP ships under HV078\Models), and the
+  DLL finds the mod folder from `HERO VR Launcher.cmd` (it only looked for `Launch Spidy VR.cmd` /
+  `Spidy Launcher.exe`, so it searched beside the staged DLL in reports\stereo-modules\<sha>).

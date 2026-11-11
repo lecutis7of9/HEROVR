@@ -12,7 +12,8 @@
 param(
     [switch]$KeepFolder,   # keep the staged folder (build\package\...) to look through
     [string]$Name,         # the zip's and its folder's name; default SM2-VR-<PORT-VERSION>-win64 (release.yml passes its own)
-    [string]$TestNotes     # optional: a private test's notes, packed as TEST-NOTES.txt at the top (releases pass none)
+    [string]$TestNotes,    # optional: a private test's notes, packed as TEST-NOTES.txt at the top (releases pass none)
+    [string]$ModelsFrom    # optional (t2161): a Models folder to ship at the top (the 79.1 test ZIP: v0.0.78's own Models)
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -142,6 +143,14 @@ if (Test-Path -LiteralPath $bisectSource) {
     [IO.File]::WriteAllText((Join-Path $stage 'tools\BISECT-toggle-base-DLL.cmd'), $text, (New-Object Text.ASCIIEncoding))
 }
 Copy-Item -LiteralPath $versionFile -Destination $stage
+# t2161: the 3D models (props, suits, vehicles, weapons) the DLL loads from <mod>\Models (phone_music.cpp spidyHome).
+# They are not in git; v0.0.78 shipped them in HERO-VR-Launcher-0.0.78.zip (HV078\Models), which CI unpacks here.
+if ($ModelsFrom) {
+    if (-not (Test-Path -LiteralPath $ModelsFrom -PathType Container)) { throw "Models folder missing: $ModelsFrom" }
+    Copy-Item -LiteralPath $ModelsFrom -Destination (Join-Path $stage 'Models') -Recurse
+    $modelCount = @(Get-ChildItem -LiteralPath (Join-Path $stage 'Models') -Recurse -File).Count
+    Write-Host "Models: $modelCount files from $ModelsFrom"
+}
 # t2150: the public version (VERSION, e.g. 0.0.79) too, or a session says "unknown (VERSION missing)".
 $publicVersion = Join-Path $root 'VERSION'
 if (Test-Path -LiteralPath $publicVersion) { Copy-Item -LiteralPath $publicVersion -Destination $stage }

@@ -473,7 +473,10 @@ std::wstring spidyHome() {
         if (slash == std::wstring::npos)
             break;
         folder.erase(slash);
-        for (const wchar_t* launcher : {L"\\Launch Spidy VR.cmd", L"\\Spidy Launcher.exe"})
+        // 0.0.79.1 t2161: the test packages start from "HERO VR Launcher.cmd" (no "Launch Spidy VR.cmd" at
+        // the top), so without it the Models and the install Music folder were looked for beside the staged
+        // DLL in reports\stereo-modules\<sha> ("REAL MODELS ...: MISSING").
+        for (const wchar_t* launcher : {L"\\Launch Spidy VR.cmd", L"\\Spidy Launcher.exe", L"\\HERO VR Launcher.cmd"})
             if (GetFileAttributesW((folder + launcher).c_str()) != INVALID_FILE_ATTRIBUTES)
                 root = folder;
     }

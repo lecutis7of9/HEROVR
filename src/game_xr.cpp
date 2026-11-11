@@ -1480,6 +1480,11 @@ std::atomic<uint32_t> promptLayerNow{prompt_layer::layerOn};
 // surface, stretch, release on another surface -> the game's own Web Line input, L2 + Y; only while standing, perched
 // or on a wall, so mid-air grip swings are untouched), 1 off, 2 anywhere (airborne too).
 std::atomic<uint32_t> weblineGestureNow{spidy::webline_native::modeOn};
+// HERO VR 0.0.79.1 (user report t2145: 9d58d65's grip split made combat sluggish): live.txt enemy_grip_split - 0 off
+// (the default: the pre-9d58d65 combat path exactly - a grip on an enemy is GRAB WEB at once, pull to yank; physical Y
+// in the air is the game's web strike), 1 on (enemy_grip_split.hpp: aimed grip = native web strike on the press frame,
+// a second grip within 0.24 s upgrades it to the two-hand grab/pull).
+std::atomic<uint32_t> enemyGripSplitNow{0};
 bool promptLayerFrame{};
 cut16::BossGate bossGate16;
 uint32_t bossFight16 = 0; // a living boss read within cut16::bossFightMetres (3 s grace)
@@ -6870,7 +6875,8 @@ DWORD WINAPI run(void*) {
                         // The game keeps the same target ID and native yank animation.
                         enemy_grip_split::Input eg{};
                         eg.seconds = frame.seconds;
-                        eg.enabled = input.focused && mapping == game_pad::Mapping::gameplay &&
+                        const bool gripSplitOn = enemyGripSplitNow.load() == 1; // opt-in; off = pre-9d58d65
+                        eg.enabled = gripSplitOn && input.focused && mapping == game_pad::Mapping::gameplay &&
                                      heroNow() == hero_modes::spiderMan && !calibrationInput &&
                                      !padLayer.latched() && !phone.open() && !gadgetWheel.open() &&
                                      !webLineInput && !flyNow.flying && !environmentGripFrame.claimed &&
@@ -6928,7 +6934,11 @@ DWORD WINAPI run(void*) {
                                 heroNow() == hero_modes::spiderMan && !calibrationInput &&
                                 !padLayer.latched() && !phone.open() && !gadgetWheel.open() &&
                                 !swingState.owned && !flyNow.flying && !webLineInput &&
-                                c38(combat38::ropeGrab) != 1;
+                                c38(combat38::ropeGrab) != 1 &&
+                                // Never in a fight: enemies within 30 m (ball_sure's combat range) keep
+                                // every grip for swinging, GRAB WEB and the enemy grips (t2145).
+                                spidy::ball_sure::outOfCombat(grabEnemyCount, world_trace::nearestEnemyMetres()) &&
+                                !enemyGripFrame.claimed;
                             weblineClaimed = 0;
                             bool lineActive = false, lineCommit = false, lineCancel = false;
                             for (unsigned h = 0; h < 2; ++h) {
@@ -7056,7 +7066,8 @@ DWORD WINAPI run(void*) {
                                     }
                                 } else if (grabMode == 2) {
                                     grabWebs[i].release();
-                                } else if (heroNow() != hero_modes::spiderMan && press && hand.tracked && !grabWebs[i].on &&
+                                } else if ((heroNow() != hero_modes::spiderMan || !gripSplitOn) && press && hand.tracked &&
+                                           !grabWebs[i].on &&
                                            frame.hands[i].valid && validTrackedPose(frame.hands[i].grip) &&
                                            grabEnemyCount) {
                                     const Pose& g = frame.hands[i].grip;
@@ -8437,9 +8448,14 @@ DWORD WINAPI run(void*) {
                         // straight to the game's virtual Xbox pad in flight.
                         // Prompt-owned Y still follows NamedPress. Ground Y,
                         // vents and doors keep their existing interaction.
-                        // Free Y from unprompted midair attacks. The targeted grip now sends Y
-                        // for native web strikes. Named story prompts retain their own Y.
-                        const bool airWebZipY = false;
+                        // enemy_grip_split on (opt-in): 9d58d65's rule, the targeted grip sends the
+                        // strike's Y and the physical air Y is not passed. Off (the default): the
+                        // pre-9d58d65 rule exactly, the physical Y in the air goes straight out.
+                        const bool airWebZipY = enemyGripSplitNow.load() != 1 &&
+                                                inFlight && steering && !calibrationInput &&
+                                                !layerOn && !fly076Flying &&
+                                                (origins.play() & buttonY) != 0 &&
+                                                !(named & game_pad::NamedPress::controlY);
                         // Spider-Man 2's NATIVE Web Line: L2 aim + Y
                         // (DualSense Triangle). A left physical trigger
                         // held while looking at the building from a perch
@@ -9775,7 +9791,8 @@ DWORD WINAPI run(void*) {
                                 grabHandSet[i] = finite(rel);
                                 const Vec3 toBody = cf.head + Vec3{0, -.35f, 0} - cf.hands[i].position;
                                 if (grab.update(dt, grabSqueeze[i] > .5f && cf.hands[i].tracked &&
-                                                (heroNow() != hero_modes::spiderMan || enemyGripFrame.pullActive),
+                                                (heroNow() != hero_modes::spiderMan || enemyGripSplitNow.load() != 1 ||
+                                                 enemyGripFrame.pullActive),
                                                 found >= 0, velocity, toBody)) {
                                     // Update 38.5: the pull is a yank, so it sends the yank's input (YANK SLOT,
                                     // default Y HOLD: the game's published hold Triangle, CANDIDATE); YANK SLOT
@@ -18749,6 +18766,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyUiDump(void* v) { return setL
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptLayer(void* v) { return setLive(v, 0, 1, 5646, promptLayerNow, asU32); }
 // HERO VR 0.0.79.1 web-mechanics test: live.txt webline_gesture, 0 on, 1 off, 2 anywhere (webline_native::Mode).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeblineGesture(void* v) { return setLive(v, 0, 2, 5647, weblineGestureNow, asU32); }
+// HERO VR 0.0.79.1: live.txt enemy_grip_split, 0 off (the default: pre-9d58d65 combat), 1 on (strike-first split).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyEnemyGripSplit(void* v) { return setLive(v, 0, 1, 5648, enemyGripSplitNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
 }

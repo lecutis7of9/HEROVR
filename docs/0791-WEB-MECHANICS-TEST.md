@@ -45,13 +45,21 @@ START
 
 3) ENEMY GRAB  (status: PARTIAL - native web strike + existing grab-web yank)
 -----------------------------------------------------------------------------
-- ONE hand reached forward, GRIP on a targeted enemy: after ~0.24 s the game's
-  own web strike / zip (native Y).
-- BOTH hands forward, GRIPS within 0.24 s on the same enemy: the existing grab
-  web attaches; pull both arms back to send the game's own yank.
-- NOT in this build: moving the enemy with your hand (fling/slam/pin by hand
-  motion). SM2's BotStateFlung velocity write is not confirmed for 2.810.0.0;
-  rope_grab only sends the game's yank.
+DEFAULT (live.txt enemy_grip_split = off): combat exactly as before 79.1's
+grip split (commit 9d58d65), which made combat sluggish:
+- GRIP aimed at an enemy: the grab web attaches at once; pull the hand back
+  toward you to send the game's own yank.
+- Y in the air: straight to the game as its web strike (no delay).
+OPT-IN (enemy_grip_split = on):
+- ONE hand reached forward, GRIP on a targeted enemy: the game's web strike
+  (native Y) on that same frame - no 0.24 s wait any more.
+- Second hand GRIPS within 0.24 s on the same enemy: upgrades to the two-hand
+  grab; pull both arms back for the game's yank. Physical air Y is not passed
+  in this mode (9d58d65's rule).
+- NOT in this build either way: moving the enemy with your hands (fling/slam/
+  pin). SM2's BotStateFlung velocity write is not confirmed for 2.810.0.0.
+
+The webline gesture never takes a grip with enemies within 30 m.
 
 Console diagnostics: "HERO VR 79.1 WEB TEST" lines at swing start and
 "79.1 WEBLINE" notes on each start / commit / cancel.

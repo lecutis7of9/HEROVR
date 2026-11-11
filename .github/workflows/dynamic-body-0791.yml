@@ -58,6 +58,10 @@ jobs:
           if ($LASTEXITCODE) { throw 'Webline regression compile failed' }
           ./webline_gesture_tests.exe
           if ($LASTEXITCODE) { throw 'Webline gesture regression failed' }
+          & $compiler.Source -std=c++20 -Iinclude tests/enemy_grip_split_tests.cpp -o enemy_grip_split_tests.exe
+          if ($LASTEXITCODE) { throw 'Enemy grip split regression compile failed' }
+          ./enemy_grip_split_tests.exe
+          if ($LASTEXITCODE) { throw 'Enemy grip split regression failed' }
       - name: Fetch native build dependencies
         run: |
           ./tools/bootstrap.ps1 -Observer

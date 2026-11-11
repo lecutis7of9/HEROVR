@@ -425,27 +425,26 @@ int main() {
         in.tracked[1] = false;
         check(!detector.update(in), "losing a hand must release sprint");
     });
-    test("79.1 one-hand enemy zip, two-hand yank precedence, swing and reset", [] {
+    test("79.1 enemy grip split (opt-in): strike on the press frame, second hand upgrades to pull", [] {
         using namespace enemy_grip_split;
         Gesture g;
         Input f{};
-        f.enabled=true; f.seconds=.08f;
+        f.enabled=true; f.seconds=.011f;
         f.forward={true,true}; f.grips={true,false}; f.targets={123,123};
         auto o=g.update(f);
-        check(o.claimed==1 && !o.zip && !o.pullStarted, "first grip waits for second hand");
+        check(o.claimed==1 && o.zip && o.strikeStarted && !o.pullStarted,
+              "first aimed grip sends the native web strike on the SAME frame (no 0.24 s wait)");
         f.grips[1]=true; f.targets[1]=0; // second hand extended, not perfectly aimed
         o=g.update(f);
-        check(o.pullStarted && o.pullActive && o.claimed==3 && o.target==123 &&
-                  !o.zip, "two grips win and choose same target without zip");
+        check(o.pullStarted && o.pullActive && o.claimed==3 && o.target==123,
+              "a second grip inside the window upgrades the strike to the two-hand pull");
         f.grips[0]=false;
         o=g.update(f);
         check(!o.zip && !o.pullActive, "let-go never launches a delayed zip");
         f.grips={false,false};g.update(f);
         f.grips={true,false};f.targets={123,0};
         o=g.update(f);
-        check(!o.zip && o.claimed==1, "new first grip starts pending");
-        for(int k=0;k<5;++k)o=g.update(f);
-        check(o.zip && o.target==123, "one hand eventually sends native enemy web strike");
+        check(o.zip && o.strikeStarted && o.claimed==1, "a new first grip strikes at once again");
         f.grips={false,false};g.update(f);
         f.grips={true,false};f.targets={0,0};
         o=g.update(f);
@@ -453,7 +452,7 @@ int main() {
         f.grips={false,false};g.update(f);
         f.enabled=false;f.grips={true,false};f.targets={123,0};
         o=g.update(f);
-        check(o.claimed==0 && !o.zip, "menus and inactive VR never claim grips");
+        check(o.claimed==0 && !o.zip, "menus, inactive VR or the split switched off never claim grips");
     });
     test("79.1 mission pad forwards Web Line, stealth, photo and Prowler controls", [] {
         namespace pad = game_pad;

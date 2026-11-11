@@ -6854,8 +6854,14 @@ DWORD WINAPI run(void*) {
                             const auto& hand = frame.hands[h];
                             const bool tracked = hand.valid && validTrackedPose(hand.grip) &&
                                                  validTrackedPose(hand.aim);
-                            const bool free = !grabWebs[h].on && !ropes[h].on && !u37.holdsGrip[h] &&
-                                              !grabPhases[h] && !swingState.webs[h].attached;
+                            // A pull started by our two-hand gesture owns this one GrabWeb.
+                            // Preserve its first-hand grip as eligible on subsequent frames:
+                            // otherwise attaching the web would cancel the pull immediately.
+                            const bool ours = enemyGripFrame.pullActive &&
+                                              enemyGripFrame.hand == static_cast<int>(h);
+                            const bool free = (!grabWebs[h].on || ours) && !ropes[h].on &&
+                                              !u37.holdsGrip[h] && !grabPhases[h] &&
+                                              !swingState.webs[h].attached;
                             eg.grips[h] = tracked && free && hand.squeeze > .6f;
                             const Vec3 aim = tracked
                                 ? combat38::aimOf(hand.grip, hand.aim, c38(combat38::aimAxis))

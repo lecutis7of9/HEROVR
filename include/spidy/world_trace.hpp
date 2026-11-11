@@ -237,6 +237,13 @@ uint32_t enemiesFar(std::array<Vec3, farSlots>& out, float& ageSeconds);
 // scan's 64 enemy records are now the 64 nearest the hero (they were the registry's first 64, so a crowd of
 // far or idle enemies could hide a crime nearby).
 void setEnemiesWanted(bool on);
+// 79.2 PROP PROBE (t2166, READ-ONLY; live.txt prop_probe): Spider-Man 2's throwables (MeleeInteractable) and the
+// game's own yank / throw components found in the registry by exact vtable + RTTI name; positions, the hands' nearest
+// throwable, throwables that move and motion-component words that change, as rate-limited console lines.
+void setPropProbe(bool on);
+bool propProbeOn();
+void propAims(const Vec3 from[2], const Vec3 dir[2], const bool ok[2]); // game-world hand aim rays
+uint32_t drainPropProbe(std::vector<std::string>& out);
 // Version 0.0.5 DAMAGE PROBE (damage_probe.hpp), read-only: the same enemies' hit points, each one's
 // BotHealth component (vtable 0x531b0a0, owner record +0x10, as the CONFIRMED HeroHealth; hit
 // points +0xd0, most +0xa0) found in the full scan and re-read with the 10 Hz refresh.

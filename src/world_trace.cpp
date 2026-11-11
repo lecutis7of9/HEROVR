@@ -129,6 +129,7 @@ struct Class {
     // boss's own health - counts too; cut7 matched only BotHealth's exact vtable); healthNamed: some class in its
     // hierarchy has "Health" in its name (the diagnostic logs it when a boss has no BotHealth).
     bool botHealth{}, healthNamed{};
+    bool propish{}; // 79.2 PROP PROBE: its own RTTI name has MeleeInteractable, Throwable or Yank in it
 };
 // A vtable's own class name and the bits of it and every class it derives from (MSVC x64 RTTI).
 Class classify(uintptr_t vtable) {
@@ -145,6 +146,7 @@ Class classify(uintptr_t vtable) {
         !read(imageBase + locator.hierarchy, &hierarchy, sizeof(hierarchy)) || !hierarchy.count ||
         hierarchy.count > 64)
         return c;
+    c.propish = std::strstr(c.name, "MeleeInteractable") || std::strstr(c.name, "Throwable") || std::strstr(c.name, "Yank");
     for (uint32_t i = 0; i < hierarchy.count; ++i) {
         uint32_t descriptor{}, type{};
         char name[nameChars]{};
@@ -186,6 +188,292 @@ void textOf(const uint64_t* words, char (&out)[textChars]) {
     }
 }
 void copyName(char (&to)[nameChars], const char* from) { strncpy_s(to, from ? from : "", _TRUNCATE); }
+// ---------------------------------------------------------------------------------------------------------------
+// 79.2 PROP PROBE (t2166 phase 2a): READ-ONLY. Finds Spider-Man 2's throwables (MeleeInteractable, "aka Throwable")
+// and the components the game's own web yank / throw use, in the component registry this thread already walks.
+// Nothing is written to the game, nothing is hooked, no event is sent. Every read is the SEH-guarded read() above;
+// a class is taken only when its vtable is the exact RVA below AND its RTTI name (read live) is the expected one.
+// Static evidence (Spider-Man2.exe 2.810.0.0, sha256 c9b912ef..., MSVC RTTI: type descriptor -> complete object
+// locator -> vtable; CONFIRMED statically, not yet seen live):
+//   MeleeInteractable 0x5357858, MeleeInteractableManager 0x53a7dd0, WebYankToHeroMotion 0x53a88b8,
+//   MeleeInteractableShotMotion 0x53a8600, MeleeInteractableShot 0x53a8220, MeleeInteractableYankedInjector 0x53a8838.
+// WebYankToHeroMotion::InitFlightParameters (0xb09f00, by its profiler string) reads the owning actor at +0x10 and
+// keeps its flight target at +0x310: the snapshot below covers 0x330 bytes of each motion component.
+namespace prop79 {
+struct Kind {
+    uint32_t rva;
+    const char* rtti;
+    const char* label;
+};
+constexpr Kind kindsKnown[] = {
+    {0x5357858, ".?AVMeleeInteractable@@", "MeleeInteractable"},
+    {0x53a7dd0, ".?AVMeleeInteractableManager@@", "MeleeInteractableManager"},
+    {0x53a88b8, ".?AVWebYankToHeroMotion@@", "WebYankToHeroMotion"},
+    {0x53a8600, ".?AVMeleeInteractableShotMotion@@", "MeleeInteractableShotMotion"},
+    {0x53a8220, ".?AVMeleeInteractableShot@@", "MeleeInteractableShot"},
+    {0x53a8838, ".?AVMeleeInteractableYankedInjector@@", "MeleeInteractableYankedInjector"},
+};
+constexpr unsigned kindCount = sizeof(kindsKnown) / sizeof(kindsKnown[0]);
+constexpr unsigned interactable = 0, manager = 1, yankMotion = 2, shotMotion = 3, shot = 4, injector = 5;
+constexpr unsigned snapWords = 0x330 / 8, mostProps = 512, mostMotions = 64, mostLines = 4000;
+struct Item {
+    uintptr_t component{}, record{};
+    unsigned kind{};
+    Vec3 at{};
+    bool placed{};
+    double movedLogAt = -100;
+    std::array<uint64_t, snapWords> words{};
+    bool snapped{};
+};
+std::atomic<bool> on{true}, bad{};
+std::mutex mtx;
+std::vector<Item> items;                                    // this scan's prop-side components (under lock)
+std::unordered_map<uintptr_t, unsigned> knownBefore;        // component -> kind, the scan before
+std::array<bool, kindCount> checked{};                      // RTTI name verified once per kind
+std::array<uint32_t, kindCount> counts{};
+std::vector<std::string> lines;                             // drained by game_xr
+Vec3 aimFrom[2]{}, aimDir[2]{};
+bool aimOk[2]{};
+uintptr_t aimPick[2]{};
+double aimLogAt[2]{-100, -100}, clockNow{}, summaryAt = -100, secondStart{};
+uint32_t linesThisSecond{}, linesTotal{}, scans{};
+Vec3 hero{};
+bool heroOk{};
+uint32_t otherNamed{};
+std::unordered_map<std::string, uint32_t> otherNames;     // other prop-ish RTTI names this scan (diagnostic)
+void line(const char* text) { // under mtx
+    if (clockNow - secondStart >= 1) {
+        secondStart = clockNow;
+        linesThisSecond = 0;
+    }
+    if (linesTotal >= mostLines || linesThisSecond >= 12)
+        return;
+    ++linesThisSecond;
+    if (++linesTotal == mostLines) {
+        lines.emplace_back("79.2 PROP PROBE: line cap reached (4000) - quiet for the rest of the session");
+        return;
+    }
+    lines.emplace_back(text);
+}
+} // namespace prop79
+bool propWanted() { return prop79::on.load(std::memory_order_relaxed) && !prop79::bad.load(std::memory_order_relaxed); }
+// One registry entry (the full scan): keep it when its vtable is one of the six, after its RTTI name matched once.
+void propObserve(std::vector<prop79::Item>& now, uintptr_t component, uintptr_t record, uintptr_t vtable, const char* name,
+                 bool propish) {
+    using namespace prop79;
+    const uintptr_t rva = vtable - imageBase;
+    for (unsigned k = 0; k < kindCount; ++k) {
+        if (rva != kindsKnown[k].rva)
+            continue;
+        if (!checked[k]) {
+            if (!name || std::strcmp(name, kindsKnown[k].rtti)) {
+                bad = true;
+                char t[220];
+                sprintf_s(t, "79.2 PROP PROBE: OFF - vtable 0x%llx is '%s', expected %s (not this exe build)",
+                          static_cast<unsigned long long>(rva), name ? name : "?", kindsKnown[k].rtti);
+                std::lock_guard<std::mutex> g(mtx);
+                line(t);
+                return;
+            }
+            checked[k] = true;
+        }
+        if (now.size() < (k == interactable ? mostProps : mostProps + mostMotions)) {
+            Item it;
+            it.component = component;
+            it.record = record;
+            it.kind = k;
+            now.push_back(it);
+        }
+        return;
+    }
+    if (propish && name && prop79::otherNames.size() < 64)
+        ++prop79::otherNames[name];
+}
+// After the full scan: positions, counts, appeared / gone, a summary line at most every 10 s.
+void propFinish(std::vector<prop79::Item>& now, Vec3 heroAt, bool heroKnown, float clockSeconds) {
+    using namespace prop79;
+    std::array<uint32_t, kindCount> c{};
+    std::unordered_map<uintptr_t, unsigned> known;
+    for (auto& it : now) {
+        ++c[it.kind];
+        known[it.component] = it.kind;
+        it.placed = position(it.record, it.at) && finite(it.at);
+    }
+    std::lock_guard<std::mutex> g(mtx);
+    clockNow = clockSeconds;
+    ++scans;
+    hero = heroAt;
+    heroOk = heroKnown;
+    // Keep the snapshots and move logs of components seen before.
+    std::unordered_map<uintptr_t, size_t> old;
+    for (size_t i = 0; i < items.size(); ++i)
+        old[items[i].component] = i;
+    for (auto& it : now)
+        if (auto o = old.find(it.component); o != old.end() && items[o->second].record == it.record) {
+            it.words = items[o->second].words;
+            it.snapped = items[o->second].snapped;
+            it.movedLogAt = items[o->second].movedLogAt;
+        }
+    char t[240];
+    if (scans > 1) { // the first scan is the baseline
+        for (const auto& it : now)
+            if (it.kind != interactable && !knownBefore.count(it.component)) {
+                const float m = it.placed && heroKnown ? length(it.at - heroAt) : -1.f;
+                sprintf_s(t, "79.2 PROP PROBE: %s APPEARED comp 0x%llx actor 0x%llx at %.1f %.1f %.1f (%.1f m from hero)",
+                          kindsKnown[it.kind].label, static_cast<unsigned long long>(it.component),
+                          static_cast<unsigned long long>(it.record), it.at.x, it.at.y, it.at.z, m);
+                line(t);
+            }
+        for (const auto& [component, kind] : knownBefore)
+            if (kind != interactable && !known.count(component)) {
+                sprintf_s(t, "79.2 PROP PROBE: %s GONE comp 0x%llx", kindsKnown[kind].label,
+                          static_cast<unsigned long long>(component));
+                line(t);
+            }
+    }
+    knownBefore = std::move(known);
+    counts = c;
+    items = std::move(now);
+    if (clockSeconds - summaryAt >= 10) {
+        summaryAt = clockSeconds;
+        const Item* nearest = nullptr;
+        float best = 1e9f;
+        uint32_t placed = 0;
+        for (const auto& it : items)
+            if (it.kind == interactable && it.placed) {
+                ++placed;
+                if (heroKnown && length(it.at - heroAt) < best) {
+                    best = length(it.at - heroAt);
+                    nearest = &it;
+                }
+            }
+        sprintf_s(t, "79.2 PROP PROBE scan %u: manager %s (%u), throwables %u (%u placed), yank motions %u, shot motions %u, "
+                     "shots %u, yank injectors %u; hero %s %.1f %.1f %.1f",
+                  scans, c[manager] ? "FOUND" : "not found", c[manager], c[interactable], placed, c[yankMotion],
+                  c[shotMotion], c[shot], c[injector], heroKnown ? "at" : "unknown", heroAt.x, heroAt.y, heroAt.z);
+        line(t);
+        if (nearest) {
+            sprintf_s(t, "79.2 PROP PROBE nearest throwable: actor 0x%llx at %.1f %.1f %.1f, %.1f m from hero",
+                      static_cast<unsigned long long>(nearest->record), nearest->at.x, nearest->at.y, nearest->at.z, best);
+            line(t);
+        }
+        if (!otherNames.empty()) {
+            std::string s = "79.2 PROP PROBE other prop classes:";
+            for (const auto& [n, k] : otherNames) {
+                if (s.size() > 200)
+                    break;
+                s += ' ';
+                s += n;
+                s += " x" + std::to_string(k);
+            }
+            line(s.c_str());
+        }
+    }
+    otherNames.clear();
+}
+// 10 Hz: the hands' nearest throwable, throwables that move (the game's own yank / throw), motion words that change.
+void propTick(float clockSeconds) {
+    using namespace prop79;
+    if (!propWanted())
+        return;
+    std::lock_guard<std::mutex> g(mtx);
+    const double dt = clockSeconds - clockNow;
+    clockNow = clockSeconds;
+    char t[240];
+    // Positions of the throwables nearest the hero (at most 64 a tick) and of the motion components' actors.
+    std::vector<size_t> order;
+    for (size_t i = 0; i < items.size(); ++i)
+        if (items[i].placed)
+            order.push_back(i);
+    if (heroOk)
+        std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+            return length(items[a].at - hero) < length(items[b].at - hero);
+        });
+    if (order.size() > 64)
+        order.resize(64);
+    for (size_t i : order) {
+        auto& it = items[i];
+        Vec3 at{};
+        if (!position(it.record, at) || !finite(at))
+            continue;
+        const float moved = length(at - it.at);
+        if (dt > .02 && dt < .5 && moved > .25f && clockSeconds - it.movedLogAt > .5) {
+            it.movedLogAt = clockSeconds;
+            sprintf_s(t, "79.2 PROP PROBE: %s actor 0x%llx MOVED %.2f m (%.1f m/s) to %.1f %.1f %.1f, %.1f m from hero",
+                      kindsKnown[it.kind].label, static_cast<unsigned long long>(it.record), moved,
+                      moved / static_cast<float>(dt), at.x, at.y, at.z, heroOk ? length(at - hero) : -1.f);
+            line(t);
+        }
+        it.at = at;
+    }
+    // Motion / shot / injector components: their first 0x330 bytes, changed words logged (up to 8 a line).
+    unsigned watchedNow = 0;
+    for (auto& it : items) {
+        if (it.kind == interactable || it.kind == manager || watchedNow >= 16)
+            continue;
+        if (heroOk && it.placed && length(it.at - hero) > 60)
+            continue;
+        ++watchedNow;
+        std::array<uint64_t, snapWords> w{};
+        if (!read(it.component, w.data(), sizeof(w)))
+            continue;
+        if (it.snapped && w != it.words) {
+            std::string s;
+            char head[120];
+            sprintf_s(head, "79.2 PROP PROBE: %s 0x%llx words:", kindsKnown[it.kind].label,
+                      static_cast<unsigned long long>(it.component));
+            s = head;
+            unsigned n = 0;
+            for (unsigned k = 1; k < snapWords && n < 8; ++k)
+                if (w[k] != it.words[k]) {
+                    char piece[64];
+                    sprintf_s(piece, " +%x %llx>%llx", k * 8, static_cast<unsigned long long>(it.words[k]),
+                              static_cast<unsigned long long>(w[k]));
+                    s += piece;
+                    ++n;
+                }
+            if (n)
+                line(s.c_str());
+        }
+        it.words = w;
+        it.snapped = true;
+    }
+    // Each hand's game-world aim ray: the throwable closest to it (within 2.5 m of the ray, 0.5-40 m along).
+    for (unsigned h = 0; h < 2; ++h) {
+        if (!aimOk[h])
+            continue;
+        const Item* pick = nullptr;
+        float bestOff = 2.5f, along = 0;
+        for (size_t i : order) {
+            const auto& it = items[i];
+            if (it.kind != interactable)
+                continue;
+            const Vec3 to = it.at - aimFrom[h];
+            const float a = dot(to, aimDir[h]);
+            if (a < .5f || a > 40)
+                continue;
+            const float off = length(to - aimDir[h] * a);
+            if (off < bestOff) {
+                bestOff = off;
+                along = a;
+                pick = &it;
+            }
+        }
+        const uintptr_t id = pick ? pick->record : 0;
+        if (id != aimPick[h] || (id && clockSeconds - aimLogAt[h] > 3)) {
+            aimPick[h] = id;
+            aimLogAt[h] = clockSeconds;
+            if (pick)
+                sprintf_s(t, "79.2 PROP PROBE aim %s: throwable actor 0x%llx at %.1f %.1f %.1f, %.1f m along the ray, %.2f m off it",
+                          h ? "R" : "L", static_cast<unsigned long long>(id), pick->at.x, pick->at.y, pick->at.z, along, bestOff);
+            else
+                sprintf_s(t, "79.2 PROP PROBE aim %s: no throwable within 2.5 m of the ray (hand at %.1f %.1f %.1f)",
+                          h ? "R" : "L", aimFrom[h].x, aimFrom[h].y, aimFrom[h].z);
+            line(t);
+        }
+    }
+}
+// ---------------------------------------------------------------------------------------------------------------
 
 struct Watched {
     uintptr_t record{};
@@ -687,6 +975,7 @@ void run() {
                 waypointPubRecord = 0;
             }
             if (!any && !enemiesWanted() && !promptsOn) {
+              if (!propWanted()) { // 79.2 PROP PROBE: on, it keeps the scan running
                 work.status = 0;
                 nearestEnemy.store(1e9f, std::memory_order_relaxed);
                 nearestPerson.store(1e9f, std::memory_order_relaxed);
@@ -694,6 +983,7 @@ void run() {
                 publish(work);
                 Sleep(250);
                 continue;
+              }
             }
             const auto start = std::chrono::steady_clock::now();
             uintptr_t table = pointer(imageBase + registryTable);
@@ -723,6 +1013,8 @@ void run() {
             nowActors.clear();
             nowArchetype.clear();
             uintptr_t hero{};
+            std::vector<prop79::Item> propNow; // 79.2 PROP PROBE
+            const bool propScan = propWanted();
             std::vector<std::pair<uintptr_t, uintptr_t>> spawnerOf; // record -> spawner vtable
             for (uint32_t i = 0; i < static_cast<uint32_t>(count) && running.load(); ++i) {
                 if (i && i % sliceEntries == 0)
@@ -764,6 +1056,9 @@ void run() {
                         nowOtherHealth[head.record] = entry.address;
                     }
                 }
+                if (propScan) // 79.2 PROP PROBE: read-only, exact vtable + RTTI name
+                    propObserve(propNow, entry.address, head.record, head.vtable,
+                                found->second.name[0] ? found->second.name : nullptr, found->second.propish);
                 const uint32_t bits = found->second.bits;
                 if (!bits)
                     continue;
@@ -796,6 +1091,8 @@ void run() {
             }
             Vec3 heroAt{};
             const bool heroKnown = hero && position(hero, heroAt);
+            if (propScan)
+                propFinish(propNow, heroAt, heroKnown, clock);
             const Vec3 eye = heroAt + Vec3{0, 1.6f, 0};
             const Vec3 look{lookX.load(), lookY.load(), lookZ.load()};
             const auto relative = [&](uintptr_t record, float& gaze) {
@@ -1291,6 +1588,7 @@ void run() {
                 Sleep(fast ? 33 : 100);
                 slept += fast ? .033f : .1f;
                 refreshEnemies(); // Update 38: 10 Hz
+                propTick(clock + slept); // 79.2 PROP PROBE: 10 Hz, read-only
                 if (promptsOn) { // HERO VR 0.0.77 PROMPT CARDS: the published ones' positions, the hero's
                     std::lock_guard<std::mutex> lock(promptLock);
                     for (uint32_t q = 0; q < promptPubCount; ++q) {
@@ -1390,6 +1688,30 @@ uint32_t drainPoiDump(std::vector<std::string>& out) {
 PromptStats promptStats() {
     std::lock_guard<std::mutex> lock(promptLock);
     return promptCounts;
+}
+// 79.2 PROP PROBE (read-only): on/off (live.txt prop_probe), the hands' game-world aim rays, the lines to log.
+void setPropProbe(bool on) { prop79::on.store(on, std::memory_order_relaxed); }
+bool propProbeOn() { return propWanted(); }
+void propAims(const Vec3 from[2], const Vec3 dir[2], const bool ok[2]) {
+    std::unique_lock<std::mutex> g(prop79::mtx, std::try_to_lock); // never waits on the probe's 10 Hz tick
+    if (!g.owns_lock())
+        return;
+    for (unsigned h = 0; h < 2; ++h) {
+        const Vec3 d = finite(dir[h]) ? normalized(dir[h]) : Vec3{};
+        prop79::aimOk[h] = ok[h] && finite(from[h]) && length(d) > .5f;
+        prop79::aimFrom[h] = from[h];
+        prop79::aimDir[h] = d;
+    }
+}
+uint32_t drainPropProbe(std::vector<std::string>& out) {
+    std::unique_lock<std::mutex> g(prop79::mtx, std::try_to_lock); // never waits on the probe's 10 Hz tick
+    if (!g.owns_lock())
+        return {};
+    const auto n = static_cast<uint32_t>(prop79::lines.size());
+    for (auto& l : prop79::lines)
+        out.push_back(std::move(l));
+    prop79::lines.clear();
+    return n;
 }
 void setEnemiesWanted(bool on) { enemiesWantedMs.store(on ? steadyMs() : 0, std::memory_order_relaxed); }
 float nearestEnemyMetres() { return running.load() ? nearestEnemy.load(std::memory_order_relaxed) : 1e9f; }

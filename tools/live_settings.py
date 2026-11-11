@@ -635,6 +635,10 @@ SETTINGS = {
                          "the game's web strike; 1 on: a grip aimed at an enemy is the game's web strike on the same "
                          "frame, a second grip within 0.24 s turns it into the two-hand grab and yank) - live, no "
                          "restart needed"),
+    # HERO VR 79.2 PROP PROBE (t2166, READ-ONLY diagnostic; world_trace.cpp prop79)
+    'prop_probe': ((0, 1), 'SpidyPropProbe', "PROP PROBE {} (0 on, the default: read-only - finds the game's "
+                   "throwables (bins, boxes) and its own web yank / throw, logs them as '79.2 PROP PROBE' lines, writes "
+                   "nothing to the game; 1 off) - live, no restart needed"),
     # HERO VR 0.0.78 cut21 PROMPT LAYER (include/spidy/prompt_layer.hpp), CANDIDATE
     'prompt_layer': ((0, 1), 'SpidyPromptLayer', "PROMPT LAYER {} (0 on, the default: in VR play the game's own button "
                      "prompts, waypoint and markers show as small cards where the game puts them, cut from its UI "
@@ -841,6 +845,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'prompt_layer': ('on', 'off'),  # HERO VR 0.0.78 cut21
                 'webline_gesture': ('on', 'off', 'anywhere'),  # HERO VR 0.0.79.1 web-mechanics test
                 'enemy_grip_split': ('off', 'on'),  # HERO VR 0.0.79.1 (t2145: opt-in)
+                'prop_probe': ('on', 'off'),  # HERO VR 79.2 PROP PROBE (read-only)
                 'world_light': ('game', 'game_soft', 'studio'),  # HERO VR 0.0.78 WORLD LIGHT
                 'world_shadow': ('on', 'vehicles', 'off'),  # HERO VR 0.0.78 WORLD LIGHT
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
@@ -1132,6 +1137,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'prompt_layer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut21
            'webline_gesture': {'on': 0, 'off': 1, 'anywhere': 2, 'air': 2, '0': 0, '1': 1, '2': 2},  # 0.0.79.1
            'enemy_grip_split': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.79.1 (t2145: opt-in)
+           'prop_probe': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 79.2 PROP PROBE (read-only)
            'world_light': {'game': 0, 'game_soft': 1, 'studio': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'world_shadow': {'on': 0, 'vehicles': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE

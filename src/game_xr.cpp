@@ -1487,6 +1487,10 @@ std::atomic<uint32_t> weblineGestureNow{spidy::webline_native::modeOn};
 // in the air is the game's web strike), 1 on (enemy_grip_split.hpp: aimed grip = native web strike on the press frame,
 // a second grip within 0.24 s upgrades it to the two-hand grab/pull).
 std::atomic<uint32_t> enemyGripSplitNow{0};
+// HERO VR 79.2 PROP PROBE (t2166, READ-ONLY; world_trace.cpp prop79): live.txt prop_probe - 0 on (the default), 1 off.
+// It finds the game's throwables and its own yank / throw components and logs them; it writes nothing to the game.
+std::atomic<uint32_t> propProbeNow{0};
+uint32_t propProbeWas = 99;
 bool promptLayerFrame{};
 cut16::BossGate bossGate16;
 uint32_t bossFight16 = 0; // a living boss read within cut16::bossFightMetres (3 s grace)
@@ -9357,6 +9361,35 @@ DWORD runBody() {
                                 char perfLine[256];
                                 if (frameTimes.tick(perfLine, sizeof(perfLine), diagLogsNow.load() == 1 ? 1u : 10u))
                                     consoleLine(perfLine);
+                            }
+                            { // 79.2 PROP PROBE (read-only): on/off, the hands' game-world aim rays, its lines.
+                                const uint32_t probe = propProbeNow.load();
+                                world_trace::setPropProbe(probe == 0);
+                                if (probe != propProbeWas) {
+                                    propProbeWas = probe;
+                                    const char* said = probe == 0
+                                        ? "79.2 PROP PROBE: on (read-only: finds throwables and the game's own yank, writes nothing; live.txt prop_probe = off to stop)"
+                                        : "79.2 PROP PROBE: off (live.txt prop_probe = off)";
+                                    consoleLine(said);
+                                    game_prompts::note(said);
+                                }
+                                if (probe == 0) {
+                                    Vec3 from[2]{}, dir[2]{};
+                                    bool ok[2]{};
+                                    for (unsigned h = 0; h < 2; ++h) {
+                                        const auto& worldHand = motion.swing.hands[h];
+                                        ok[h] = vrGameplay && worldHand.tracked;
+                                        from[h] = worldHand.aim.position;
+                                        dir[h] = worldHand.aim.orientation.rotate({0, 0, -1});
+                                    }
+                                    world_trace::propAims(from, dir, ok);
+                                    std::vector<std::string> probeLines;
+                                    if (world_trace::drainPropProbe(probeLines))
+                                        for (const auto& l : probeLines) {
+                                            consoleLine(l);
+                                            game_prompts::note(l.c_str());
+                                        }
+                                }
                             }
                             { // cut4 POI DUMP (diagnostic): the scan's POI component dumps, a line each.
                                 perf077::Scope timed(perf077::poiDrain);
@@ -18918,6 +18951,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptLayer(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeblineGesture(void* v) { return setLive(v, 0, 2, 5647, weblineGestureNow, asU32); }
 // HERO VR 0.0.79.1: live.txt enemy_grip_split, 0 off (the default: pre-9d58d65 combat), 1 on (strike-first split).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyEnemyGripSplit(void* v) { return setLive(v, 0, 1, 5648, enemyGripSplitNow, asU32); }
+// HERO VR 79.2 PROP PROBE (read-only): live.txt prop_probe - 0 on (default), 1 off.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPropProbe(void* v) { return setLive(v, 0, 1, 5649, propProbeNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
 }

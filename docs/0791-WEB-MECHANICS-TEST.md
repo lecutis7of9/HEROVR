@@ -121,3 +121,27 @@ running and whether Steam still marks the game as running (nothing is closed aut
 - The ZIP now carries `Models\` (123 files, the same ones v0.0.78's launcher ZIP ships under HV078\Models), and the
   DLL finds the mod folder from `HERO VR Launcher.cmd` (it only looked for `Launch Spidy VR.cmd` /
   `Spidy Launcher.exe`, so it searched beside the staged DLL in reports\stereo-modules\<sha>).
+
+## 79.2 PROP PROBE (t2166): read-only, default on
+
+Nothing about props changes in this build: throwing bins and boxes is still the game's own L1+R1. This build only
+WATCHES the game's throwables so the next build can hand them to your hands. It writes nothing to the game, adds no
+hook and sends no event. Turn it off with `prop_probe = off` in live.txt (live, no restart).
+
+What it does (a background thread, every read SEH-guarded): it looks in the game's component registry for these
+classes, each by its exact vtable AND its RTTI name read live (a mismatch turns the probe off and says so):
+MeleeInteractable (the game's throwable), MeleeInteractableManager, WebYankToHeroMotion, MeleeInteractableShotMotion,
+MeleeInteractableShot, MeleeInteractableYankedInjector. It logs, with the prefix `79.2 PROP PROBE`, at most 12 lines a
+second and 4000 a session:
+- every 10 s: manager found or not, throwables (placed), yank/shot components, the nearest throwable to you;
+- `aim L` / `aim R`: the throwable nearest each hand's aim ray (within 2.5 m of it, up to 40 m);
+- `... APPEARED` / `GONE`: the game's own yank / shot components coming and going (that is the game's yank);
+- `... MOVED`: a throwable near you moving (speed in m/s) - the game's own throw path;
+- `... words:` changed words inside a yank / shot component (the flight target, for the next build).
+
+Test (about 3 minutes):
+1. Start the game as usual. In the console look for `79.2 PROP PROBE: on`.
+2. Walk to a street with trash cans, bins or boxes. Stand still 15 s (a `scan` line shows the counts).
+3. Point your LEFT hand at a bin for 5 s, then your RIGHT hand at it for 5 s, then at a different prop.
+4. Do ONE normal environmental throw with the game's own L1+R1 on a bin. Wait 5 s.
+5. Collect reports and send them.

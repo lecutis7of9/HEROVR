@@ -254,6 +254,10 @@ enum Option : uint32_t {
     scopeZoom,
     // HERO VR 0.0.78 MAG EJECT: the gun hand's magazine release, B/Y (0, the default), A/X or STICK (the thumbstick click)
     magEject,
+    // ULTIMATE ALLIANCE EXPANSION (ua_expansion.hpp): ON (0, the default) the wrist's ULTIMATE ALLIANCE EXPANSION
+    // page takes him to the Marvel: Ultimate Alliance places converted from his own disc (Stark Tower first);
+    // OFF (1) their models are not loaded and the page's buttons say so. Turning it on needs a restart.
+    uaLocations,
     options
 };
 struct OptionInfo {
@@ -630,6 +634,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"punisher_arsenal", "PUNISHER ARSENAL", "ARSN", "ON: pump shotgun, suppressed pistol, scoped sniper, red-dot rifle; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"scope_zoom", "SCOPE ZOOM", "SZOOM", "How much the PUNISHER sniper's scope magnifies; no restart.", 4, {"4X", "6X", "8X", "2.5X"}},
     {"mag_eject", "MAG EJECT", "MEJ", "The gun hand's button that drops the pistol's or rifle's magazine; no restart.", 3, {"B/Y", "A/X", "STICK", nullptr}},
+    {"ua_locations", "UA LOCATIONS", "UA", "UA places from your own disc on the wrist's UA page, needs a restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 test 3 VAN PEDALS: value 0 WHEEL HAND (the default), 1 CLASSIC (0.0.72: either trigger is a pedal).
 inline bool vanWheelHandPedals(uint32_t value) { return value == 0; }
@@ -665,6 +670,8 @@ inline bool punisherArsenalOn(uint32_t value) { return value != 1; }
 // HERO VR 0.0.78 MAG EJECT: the button (0 B/Y - the upper face button, 1 A/X - the lower, 2 STICK - the thumbstick click).
 inline constexpr uint32_t magEjectUpper = 0, magEjectLower = 1, magEjectStick = 2;
 inline uint32_t magEjectButton(uint32_t value) { return value <= magEjectStick ? value : magEjectUpper; }
+// ULTIMATE ALLIANCE EXPANSION: UA LOCATIONS (0 ON, the default; 1 OFF).
+inline bool uaLocationsOn(uint32_t value) { return value != 1; }
 // 0.0.74 test 10 QUICK HOOK, GRAPPLE YANK, SURE GRAPPLE: 0 ON, the default; 1 OFF.
 inline bool quickHookOn(uint32_t value) { return value != 1; }
 inline bool grappleYankOn(uint32_t value) { return value != 1; }

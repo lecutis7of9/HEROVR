@@ -48,6 +48,7 @@
 #include "spidy/test_notice.hpp"
 #include "spidy/van_screen.hpp"
 #include "spidy/hideout074.hpp"
+#include "spidy/ua_expansion.hpp"
 #include "spidy/batcave074.hpp"
 #include "spidy/crime_gps074.hpp"
 #include "spidy/cave_quiet074.hpp"
@@ -1813,7 +1814,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 249, "controls count drifted"); // 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 251, "controls count drifted"); // UA EXPANSION: + STARK TOWER, UA LOCATIONS; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(offHolo(Control::addressFinder), "ADDRESS FINDER is still on the hologram"); // 0.0.76 ONE PAGE
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
         check(std::string(helpText(Control::addressFinder)).size() <= 80, "ADDRESS FINDER help is past two lines");
@@ -2157,7 +2158,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 249, "controls count drifted"); // 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 251, "controls count drifted"); // UA EXPANSION: + STARK TOWER, UA LOCATIONS; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -2566,13 +2567,14 @@ int main() {
                   valueText(Control::monitor, 30) == "30 FPS" && valueText(Control::supersample, 150) == "150%" &&
                       valueText(Control::supersample, 100) == "OFF",
               "a value prints wrong");
-        // Update 39.0.2: eight pages.
+        // Update 39.0.2: eight pages. ULTIMATE ALLIANCE EXPANSION: nine (its own page, the last).
         check(std::string(pageName(0)) == "STATUS" && std::string(pageName(powersPage)) == "POWERS" &&
                   std::string(pageName(vrPage)) == "VR SETTINGS" && std::string(pageName(combatPage)) == "COMBAT" &&
                   std::string(pageName(graphicsPage)) == "GRAPHICS" && std::string(pageName(colorPage)) == "COLOR" &&
                   std::string(pageName(controlsPage)) == "CONTROLS" && std::string(pageName(musicPage)) == "MUSIC" &&
-                  pages == 8 && powersPage == 1 && vrPage == 2 && combatPage == 3 && graphicsPage == 4 &&
-                  colorPage == 5 && controlsPage == 6 && musicPage == 7 && std::string(pageName(8)) == "STATUS",
+                  std::string(pageName(uaPage)) == "ULTIMATE ALLIANCE EXPANSION" &&
+                  pages == 9 && powersPage == 1 && vrPage == 2 && combatPage == 3 && graphicsPage == 4 &&
+                  colorPage == 5 && controlsPage == 6 && musicPage == 7 && uaPage == 8 && std::string(pageName(9)) == "STATUS",
               "the pages are wrong");
         // Every page draws sanely, with the pointer, odd values, a note and a
         // disabled control; the restart notice shows only once the next
@@ -2692,7 +2694,7 @@ int main() {
                           std::string(x.what) + " overlaps " + y.what);
                 }
             }
-            check(helpLines >= (page == 1 ? 4 : 5) || page == graphicsPage, // 0.0.76 ONE PAGE: GRAPHICS merged
+            check(helpLines >= (page == 1 ? 4 : page == uaPage ? 2 : 5) || page == graphicsPage, // 0.0.76 ONE PAGE: GRAPHICS merged; UA EXPANSION: two rows
                   "explanations are missing from a page");
         }
         const auto mirror = wrapText(mirrorHelp, helpHeight, helpWidth);
@@ -2774,18 +2776,20 @@ int main() {
         r = step(.066f, width.v, .9f, true, 1u << static_cast<unsigned>(Control::thickness));
         check(m.claims() && !r.changed && s.widthCm == before && m.page() == vrPage, "a disabled slider changed");
         step(0, 0, 0);
-        // Flip back past the first page: it wraps to the last (MUSIC), then CONTROLS ... down to COMBAT.
-        // Update 39.0.2: eight pages (STATUS, POWERS, VR SETTINGS, COMBAT, GRAPHICS, COLOR, CONTROLS, MUSIC);
-        // HERO VR 0.0.76 ONE PAGE: GRAPHICS passed by (merged into VR SETTINGS).
-        for (int i = 0; i < 6; ++i) {
+        // Flip back past the first page: it wraps to the last (ULTIMATE ALLIANCE EXPANSION), then MUSIC, CONTROLS ...
+        // down to COMBAT. Update 39.0.2: eight pages (STATUS, POWERS, VR SETTINGS, COMBAT, GRAPHICS, COLOR, CONTROLS,
+        // MUSIC); HERO VR 0.0.76 ONE PAGE: GRAPHICS passed by (merged into VR SETTINGS); UA EXPANSION: + its page.
+        for (int i = 0; i < 7; ++i) {
             step(-.06f, strip, .3f);
             step(-.06f, strip, .8f);
             step(-.06f, strip, 0);
             if (i == 2)
-                check(m.page() == wrist_hud::musicPage, "the previous arrow did not wrap to MUSIC");
+                check(m.page() == wrist_hud::uaPage, "the previous arrow did not wrap to ULTIMATE ALLIANCE EXPANSION");
             if (i == 3)
-                check(m.page() == wrist_hud::controlsPage, "the previous arrow did not reach CONTROLS");
+                check(m.page() == wrist_hud::musicPage, "the previous arrow did not reach MUSIC");
             if (i == 4)
+                check(m.page() == wrist_hud::controlsPage, "the previous arrow did not reach CONTROLS");
+            if (i == 5)
                 check(m.page() == wrist_hud::colorPage, "the previous arrow did not reach COLOR");
         }
         check(m.page() == combatPage, "the previous arrow did not pass GRAPHICS to COMBAT");
@@ -19272,7 +19276,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 163, "HERO VR 0.0.78: + PUNISHER ARSENAL, SCOPE ZOOM, MAG EJECT; 0.0.76 MP WORLD: + PLAYER 2 PLACE; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (9); 0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 164, "UA EXPANSION: + UA LOCATIONS; HERO VR 0.0.78: + PUNISHER ARSENAL, SCOPE ZOOM, MAG EJECT; 0.0.76 MP WORLD: + PLAYER 2 PLACE; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (9); 0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -19306,7 +19310,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 163, "HERO VR 0.0.78: + PUNISHER ARSENAL, SCOPE ZOOM, MAG EJECT; 0.0.76 MP WORLD: + PLAYER 2 PLACE; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (9); 0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; 0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 164, "UA EXPANSION: + UA LOCATIONS; HERO VR 0.0.78: + PUNISHER ARSENAL, SCOPE ZOOM, MAG EJECT; 0.0.76 MP WORLD: + PLAYER 2 PLACE; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (9); 0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; 0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -19638,7 +19642,7 @@ int main() {
                 }
             }
         }
-        check(placed == 199 /* 0.0.76 ONE PAGE: - 18 off the hologram (takenOff076); 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 201 /* UA EXPANSION: + STARK TOWER, UA LOCATIONS; 0.0.76 ONE PAGE: - 18 off the hologram (takenOff076); 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -27839,7 +27843,7 @@ int main() {
     test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
         namespace mm = spidy::mesh_model;
         check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slotSuitEnd == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23 &&
-                  mm::slots == mm::slotSuitEnd + 14 + 2 + 4 + 12 /* 0.0.75 MOTORCYCLE body + bars, 0.0.76 HARLEYS two pairs, 0.0.78 PUNISHER ARSENAL */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
+                  mm::slots == mm::slotSuitEnd + 14 + 2 + 4 + 12 + 1 /* 0.0.75 MOTORCYCLE body + bars, 0.0.76 HARLEYS two pairs, 0.0.78 PUNISHER ARSENAL, UA EXPANSION STARK TOWER */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
               "the suits follow the roster");
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;
@@ -34015,6 +34019,137 @@ int main() {
                   !mm::slotIsSuit(mm::slotHideoutBatcave),
               "slotIsHideout");
         check(hero007::modelSinkBudget >= 3 * size_t{mm::hideoutTriangles}, "the model sink holds a room");
+    });
+    test("ULTIMATE ALLIANCE EXPANSION: STARK TOWER's slot, switch, wrist page, gate, characters and the visit on foot", [] {
+        namespace mm = mesh_model;
+        namespace ua = ua_expansion;
+        namespace ho = hideout074;
+        // the slot: its own folder (the converter's), its cap, its switch (not HIDEOUTS'), the sink holds it
+        check(std::string(mm::slotFolders[mm::slotUaStarkTower]) == "UA/StarkTower" &&
+                  std::string(ua::folders[ua::starkTower]) == mm::slotFolders[mm::slotUaStarkTower] &&
+                  std::string(ho::folders[static_cast<int>(ho::Which::uaStarkTower)]) == mm::slotFolders[mm::slotUaStarkTower] &&
+                  ua::which[ua::starkTower] == ho::Which::uaStarkTower && std::string(ho::names[3]) == "STARK TOWER",
+              "the UA folders agree");
+        check(mm::slotIsUa(mm::slotUaStarkTower) && !mm::slotIsHideout(mm::slotUaStarkTower) && !mm::slotIsVehicle(mm::slotUaStarkTower) &&
+                  !mm::slotIsSuit(mm::slotUaStarkTower) && mm::slotShipped(mm::slotUaStarkTower) &&
+                  mm::slotDrawCap[mm::slotUaStarkTower] == mm::uaRoomTriangles && mm::uaRoomTriangles >= 138001 &&
+                  mm::uaRoomTriangles <= mm::vanTriangles,
+              "slotUaStarkTower: a whole map's cap, within what loadFolder keeps");
+        check(hero007::modelSinkBudget >= 3 * size_t{mm::uaRoomTriangles}, "the model sink holds a UA room");
+        // the switch: UA LOCATIONS, ON (0) the default, a restart to turn on, the same sentence as the module's
+        {
+            using namespace combat38;
+            check(std::string(optionInfo[uaLocations].key) == "ua_locations" && std::string(optionInfo[uaLocations].help) == ua::help &&
+                      optionInfo[uaLocations].count == 2 && std::string(optionInfo[uaLocations].values[0]) == "ON" &&
+                      std::string(optionInfo[uaLocations].values[1]) == "OFF" && uaLocationsOn(0) && !uaLocationsOn(1) && uaLocationsOn(7),
+                  "UA LOCATIONS: ON by default, OFF the switch-off");
+        }
+        // the wrist page: ULTIMATE ALLIANCE EXPANSION, the last, STARK TOWER and the switch always shown
+        {
+            using namespace wrist_hud;
+            check(std::string(pageName(uaPage)) == ua::pageTitle && uaPage == pages - 1, "its own page, the last");
+            check(placeOf(Control::uaStarkTower).page == uaPage && placeOf(Control::uaStarkTower).section == -1 &&
+                      placeOf(Control::uaLocations).page == uaPage && placeOf(Control::uaLocations).section == -1,
+                  "STARK TOWER and UA LOCATIONS on it");
+            check(controlSpot(uaPage, Control::uaStarkTower).found && controlSpot(uaPage, Control::uaLocations).found &&
+                      std::string(shortName(Control::uaStarkTower)) == "STARK" && std::string(helpText(Control::uaLocations)) == ua::help &&
+                      !std::string(helpText(Control::uaStarkTower)).empty(),
+                  "laid out, named and explained");
+            setOpenSection(uaPage, 0); // no sections: nothing opens (and no shift past 32 bits)
+            check(openSection(uaPage) == -1 && sectionCount(uaPage) == 0, "the page has no sections");
+            setOpenSection(vrPage, 2);
+            setOpenSection(uaPage, -1);
+            check(openSection(vrPage) == 2, "the UA page's nibble leaked into VR SETTINGS'");
+            resetSections();
+            // presses: STARK TOWER asks for the trip, UA LOCATIONS is its option's next value
+            Menu m;
+            Settings s;
+            m.setPage(uaPage);
+            const auto press = [&](Control c) {
+                const Spot at = controlSpot(uaPage, c);
+                Menu::Result all{};
+                for (const float t : {0.f, .3f, .8f, 0.f}) {
+                    Menu::Input in;
+                    in.active = true;
+                    in.pointer.hit = true;
+                    in.pointer.u = at.u;
+                    in.pointer.v = at.v;
+                    in.trigger = t;
+                    const auto r = m.update(in, s);
+                    all.uaStarkTower = all.uaStarkTower || r.uaStarkTower;
+                    if (r.combat38 >= 0)
+                        all.combat38 = r.combat38;
+                }
+                return all;
+            };
+            const auto rs = press(Control::uaStarkTower);
+            check(rs.uaStarkTower && rs.combat38 < 0, "STARK TOWER pressed asks for the trip");
+            const auto rl = press(Control::uaLocations);
+            check(!rl.uaStarkTower && rl.combat38 == combat38::uaLocations, "UA LOCATIONS pressed steps its option");
+        }
+        // the row and the gate
+        check(ua::rowOf(true, true, true, false) == ua::Row::ready && ua::rowOf(true, true, true, true) == ua::Row::inside &&
+                  ua::rowOf(false, true, true, false) == ua::Row::off && ua::rowOf(true, false, true, false) == ua::Row::missing &&
+                  ua::rowOf(true, true, false, false) == ua::Row::missing && std::string(ua::rowValue(ua::Row::ready)) == "ENTER" &&
+                  std::string(ua::rowValue(ua::Row::inside)) == "RETURN TO CITY" &&
+                  std::string(ua::rowValue(ua::Row::missing)) == "NOT CONVERTED",
+              "the page's row says what a press does");
+        ua::Gate g;
+        g.optionOn = g.modelOk = g.roomOk = g.texturesReady = g.headTracked = true;
+        check(ua::refuse(g) == nullptr, "on foot, ready: in");
+        auto with = [&](auto set) {
+            ua::Gate x = g;
+            set(x);
+            return ua::refuse(x) != nullptr;
+        };
+        check(with([](ua::Gate& x) { x.optionOn = false; }) && with([](ua::Gate& x) { x.modelOk = false; }) &&
+                  with([](ua::Gate& x) { x.roomOk = false; }) && with([](ua::Gate& x) { x.texturesReady = false; }) &&
+                  with([](ua::Gate& x) { x.flatScreen = true; }) && with([](ua::Gate& x) { x.headTracked = false; }) &&
+                  with([](ua::Gate& x) { x.inVehicle = true; }) && with([](ua::Gate& x) { x.hideoutActive = true; }) &&
+                  with([](ua::Gate& x) { x.airborne = true; }),
+              "every reason keeps him in the city");
+        // the characters' hooks
+        std::vector<ua::Npc> npcs;
+        std::string err;
+        check(ua::parseNpcs("HEROVR-UA-NPCS 1\n# id x y z yaw\nnpc nickfurynpc01 -2.183 0.000 5.165 90.0\r\n\nnpc talker01 -13.666 -2.596 14.638 88.7\n",
+                            npcs, err) &&
+                  npcs.size() == 2 && npcs[0].id == "nickfurynpc01" && std::abs(npcs[1].at.y + 2.596f) < 1e-4f &&
+                  std::abs(npcs[0].yawDeg - 90) < 1e-4f,
+              "npcs.txt read: " + err);
+        check(!ua::parseNpcs("nope", npcs, err) && npcs.empty() && !ua::parseNpcs("HEROVR-UA-NPCS 1\nnpc a 1 2\n", npcs, err) &&
+                  npcs.empty() && !ua::parseNpcs("HEROVR-UA-NPCS 1\nnpc a 1 nan 3 0\n", npcs, err) && npcs.empty(),
+              "a bad npcs.txt is refused, the list left empty");
+        check(ua::npcLabel("nickfurynpc01") == "NICK FURY" && ua::npcLabel("sp_wyattwingfoot01") == "WYATT WINGFOOT" &&
+                  ua::npcLabel("officeworkerfemale_b01") == "OFFICEWORKERFEMALE B" && ua::npcLabel("") == "CHARACTER",
+              "the characters' labels");
+        // the visit on foot: the room's floor eyeHeight under the eye, the spawn under it; B's hold and the ring leave
+        std::string t = "HEROVR-HIDEOUT 1\nname STARK TOWER\nspawn 0 0 0 -90\n";
+        t += "point return_to_city return_to_city 0 0 -1.5 0.6 RETURN TO CITY\nbounds -2 -2 2 2\nkilly -8\ngrid -2 -2 0.25 16 16\n";
+        for (int j = 0; j < 16; ++j) {
+            t += "row";
+            for (int i = 0; i < 16; ++i)
+                t += " 0";
+            t += "\n";
+        }
+        ho::Room room;
+        check(ho::parseRoom(t, room, err) && room.ok() && room.points.size() == 1 && room.points[0].action == ho::Action::toVehicle,
+              "a UA room reads as a hideout's: " + err);
+        const Vec3 head{120, 31.7f, -40};
+        ho::Visit v;
+        check(v.begin(ho::Which::uaStarkTower, room, head, Vec3{0, 0, -1}, head.y - ua::eyeHeight) && v.active() &&
+                  v.which() == ho::Which::uaStarkTower,
+              "into STARK TOWER on foot");
+        const Vec3 sw = v.place().world(room.spawn);
+        check(std::abs(sw.x - head.x) < 1e-4f && std::abs(sw.z - head.z) < 1e-4f && std::abs(sw.y - (head.y - ua::eyeHeight)) < 1e-4f,
+              "the spawn under the eye, eyeHeight down");
+        ho::In in;
+        in.dt = 1.f / 90;
+        in.head = head;
+        in.headForward = {0, 0, -1};
+        in.exit = true; // B held (or the wrist button)
+        check(v.step(in).leave, "B held: back to the city");
+        v.end();
+        check(!v.active(), "ended");
     });
     test("0.0.74 test 1 HIDEOUTS: room.txt read, walked (stick, walls, steps, turns), points, exits, safe on faults", [] {
         namespace ho = hideout074;

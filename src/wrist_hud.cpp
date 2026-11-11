@@ -36,6 +36,8 @@
 #include "spidy/soft_shapes.hpp"
 #include "spidy/tracking.hpp"
 #include "spidy/web_visual.hpp"
+#include "spidy/ua_expansion.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <initializer_list>
@@ -699,6 +701,10 @@ const char* labelOf(Control c) {
         return "DOUBLE HEALTH";
     case Control::bodyAnimations:
         return "BODY ANIMATIONS";
+    case Control::uaStarkTower: // ULTIMATE ALLIANCE EXPANSION
+        return "STARK TOWER";
+    case Control::uaLocations:
+        return "UA LOCATIONS";
     case Control::flyMode:
         return "FLY MODE";
     case Control::flyVignette:
@@ -1065,9 +1071,9 @@ int rowsIn(const SectionDef& d) {
 // The rows outside every section, per page (STATUS and the arrows: none).
 // HERO VR 0.0.76 ONE PAGE: the FPS rows (RESET) on VR SETTINGS; EYE SUPERSAMPLE off the hologram (live.txt vr_ss).
 constexpr Control alwaysShown[] = {C::invincible, C::doubleHealth, C::heroRoster, C::recalibrate, C::fpsReset,
-                                   C::colorFx,    C::colorFilter,  C::colorStrength};
+                                   C::colorFx,    C::colorFilter,  C::colorStrength, C::uaStarkTower, C::uaLocations};
 constexpr int alwaysShownPage[] = {powersPage, powersPage, powersPage, vrPage, vrPage,
-                                   colorPage,  colorPage,  colorPage};
+                                   colorPage,  colorPage,  colorPage,  uaPage, uaPage};
 static_assert(std::size(alwaysShown) == std::size(alwaysShownPage));
 bool isSliderRow(Control c) {
     switch (c) {
@@ -1094,7 +1100,9 @@ bool isCycleRow(Control c) {
            c == Control::musicVisualizer;
 }
 // The open sections, a nibble a page: 0xF the page's default, 0xE none, else the section.
-std::atomic<uint32_t> openSections{0xFFFFFFFFu};
+// ULTIMATE ALLIANCE EXPANSION: 64 bits (nine pages; 32 held eight).
+std::atomic<uint64_t> openSections{~uint64_t{0}};
+static_assert(pages * 4 <= 64, "a nibble a page");
 std::atomic<int> heroPlayed{0};
 } // namespace
 
@@ -1107,7 +1115,7 @@ int openSection(int page) {
     const int count = sectionCount(page);
     if (count == 0)
         return -1;
-    const uint32_t n = openSections.load(std::memory_order_relaxed) >> (4 * page) & 0xFu;
+    const uint64_t n = openSections.load(std::memory_order_relaxed) >> (4 * page) & 0xFu;
     if (n == 0xFu) // the default
         return page == colorPage    ? -1
                : page == powersPage ? 1 + std::clamp(heroPlayed.load(std::memory_order_relaxed), 0, 10)
@@ -1117,13 +1125,13 @@ int openSection(int page) {
 void setOpenSection(int page, int section) {
     if (page < 0 || page >= pages)
         return;
-    const uint32_t n = section >= 0 && section < sectionCount(page) ? static_cast<uint32_t>(section) : 0xEu;
-    uint32_t was = openSections.load(std::memory_order_relaxed);
-    while (!openSections.compare_exchange_weak(was, (was & ~(0xFu << (4 * page))) | n << (4 * page),
+    const uint64_t n = section >= 0 && section < sectionCount(page) ? static_cast<uint64_t>(section) : 0xEu;
+    uint64_t was = openSections.load(std::memory_order_relaxed);
+    while (!openSections.compare_exchange_weak(was, (was & ~(uint64_t{0xF} << (4 * page))) | n << (4 * page),
                                                std::memory_order_relaxed)) {
     }
 }
-void resetSections() { openSections.store(0xFFFFFFFFu, std::memory_order_relaxed); }
+void resetSections() { openSections.store(~uint64_t{0}, std::memory_order_relaxed); }
 void setActiveHero(int hero) { heroPlayed.store(hero >= 0 && hero <= 10 ? hero : 0, std::memory_order_relaxed); } // 0.0.7: 9 (CAPTAIN AMERICA)
 int activeHero() { return heroPlayed.load(std::memory_order_relaxed); }
 const char* activeHeroName(int hero) {
@@ -1401,6 +1409,20 @@ Layout build(int page, float k, int open) {
     case controlsPage:
         sections(0, 4);
         break;
+    case uaPage: {
+        // ULTIMATE ALLIANCE EXPANSION (ua_expansion.hpp): the places (STARK TOWER the first, a wide button: in, or
+        // back to the city), then the switch. Characters come with the next milestone (npcs.txt is read already).
+        heading("MARVEL: ULTIMATE ALLIANCE - ACT 1");
+        Item r = itemOf(Kind::wide, Control::uaStarkTower);
+        r.text = "STARK TOWER";
+        r.box = {Control::uaStarkTower, trackLeft, c - gapV - .024f * k, trackRight, c - gapV};
+        c = r.box.v0;
+        helpUnder(helpText(Control::uaStarkTower), r.help);
+        l.items.push_back(std::move(r));
+        row(Control::uaLocations);
+        footerItem("CHARACTERS: THE NEXT UPDATE");
+        break;
+    }
     default: { // musicPage
         // Update 19, from the top as in the concept: the song list, the
         // visualizer, the progress, the buttons, the volume.
@@ -2579,6 +2601,8 @@ std::string buttonValue(const View& view, Control c) {
            : c == Control::invincible   ? std::string(view.invincible ? "ON" : "OFF")
            : c == Control::doubleHealth ? std::string(view.doubleHealth ? "ON" : "OFF")
            : c == Control::bodyAnimations ? std::string(view.bodyAnimations ? "DYNAMIC" : "CLASSIC")
+           : c == Control::uaStarkTower ? std::string(ua_expansion::rowValue(static_cast<ua_expansion::Row>(view.uaStark)))
+           : c == Control::uaLocations  ? std::string(combat38::uaLocationsOn(view.combat38[combat38::uaLocations]) ? "ON" : "OFF")
            : c == Control::flyMode      ? std::string(extras385::fly::speedName(view.flyMode))
            : c == Control::flyVignette  ? std::string(view.flyVignette ? "ON" : "OFF")
            : c == Control::flyRoll      ? std::string(extras385::fly::rollName(view.flyRoll))
@@ -2704,7 +2728,10 @@ void content(const Painter& p, const Layout& l, const View& view) {
             fpsStats(p, it, view, k);
             break;
         case Kind::wide:
-            button(p, it.box, it.text, view, k);
+            if (it.control == Control::uaStarkTower) // ULTIMATE ALLIANCE EXPANSION: what a press does now
+                button(p, it.box, it.text + std::string(" - ") + buttonValue(view, it.control), view, k);
+            else
+                button(p, it.box, it.text, view, k);
             break;
         case Kind::slider:
             sliderRow(p, it, view);
@@ -3071,6 +3098,8 @@ const char* pageName(int page) {
         return "CONTROLS";
     case musicPage:
         return "MUSIC";
+    case uaPage:
+        return ua_expansion::pageTitle;
     default:
         return "STATUS";
     }
@@ -3475,6 +3504,10 @@ const char* helpText(Control c) {
         return extras385::double_health::help;
     case Control::bodyAnimations:
         return "DYNAMIC adds wall, swing and flip poses; CLASSIC does not.";
+    case Control::uaStarkTower:
+        return "Walk Stark Tower from Ultimate Alliance; RETURN TO CITY puts you back here.";
+    case Control::uaLocations:
+        return ua_expansion::help;
     case Control::flyMode:
         return extras385::fly::help;
     case Control::flyVignette:
@@ -3857,6 +3890,10 @@ const char* shortName(Control c) {
         return "2X HEALTH";
     case Control::bodyAnimations:
         return "BODY ANIM";
+    case Control::uaStarkTower:
+        return "STARK";
+    case Control::uaLocations:
+        return "UA";
     case Control::flyMode:
         return "FLY";
     case Control::flyVignette:
@@ -4574,6 +4611,12 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
                 break;
             case Control::bodyAnimations:
                 r.bodyAnimations = true;
+                break;
+            case Control::uaStarkTower: // ULTIMATE ALLIANCE EXPANSION: in, or back to the city
+                r.uaStarkTower = true;
+                break;
+            case Control::uaLocations: // its switch, as a COMBAT row's next value (needs a restart)
+                r.combat38 = combat38::uaLocations;
                 break;
             case Control::flyMode:
                 r.flyMode = true;

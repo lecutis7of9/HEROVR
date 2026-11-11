@@ -37,6 +37,7 @@
 #include "spidy/car_paint.hpp"
 #include "spidy/world_light.hpp" // HERO VR 0.0.78 WORLD LIGHT
 #include "spidy/hideout074.hpp"  // 0.0.74 test 1 HIDEOUTS
+#include "spidy/ua_expansion.hpp" // ULTIMATE ALLIANCE EXPANSION
 #include "spidy/batcave074.hpp"   // 0.0.74 test 2b BATCAVE
 #include "spidy/crime_gps074.hpp"  // 0.0.74 test 2b CRIME GPS
 #include "spidy/streamer_view.hpp"
@@ -1951,6 +1952,49 @@ void readHideoutRoom(uint32_t which) {
     hideoutRoomOk[which] = !text.empty() && hideout074::parseRoom(text, hideoutRooms[which], error) && hideoutRooms[which].ok();
     hideoutRoomError[which] = hideoutRoomOk[which] ? "" : (text.empty() ? "room.txt empty or unreadable" : "room.txt: " + error);
 }
+// ULTIMATE ALLIANCE EXPANSION (ua_expansion.hpp): Models\<folder>\<file> as text ("" missing or unreadable).
+std::wstring modelsPath(const char* folder, const wchar_t* file) {
+    std::wstring path = spidyHome() + L"\\Models\\";
+    for (const char* c = folder; *c; ++c)
+        path += *c == '/' ? L'\\' : static_cast<wchar_t>(*c);
+    return path + L"\\" + file;
+}
+std::string readModelsText(const char* folder, const wchar_t* file) {
+    const HANDLE f = CreateFileW(modelsPath(folder, file).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE)
+        return {};
+    std::string text;
+    LARGE_INTEGER size{};
+    if (GetFileSizeEx(f, &size) && size.QuadPart > 0 && size.QuadPart < 8 * 1024 * 1024) {
+        text.resize(static_cast<size_t>(size.QuadPart));
+        DWORD got = 0;
+        if (!ReadFile(f, text.data(), static_cast<DWORD>(text.size()), &got, nullptr))
+            got = 0;
+        text.resize(got);
+    }
+    CloseHandle(f);
+    return text;
+}
+// Each UA place's walk data (room.txt) and its characters (npcs.txt, the next milestone's hooks), read once at the
+// models' load; ok false: the page's button says NOT CONVERTED (he stays in the city).
+hideout074::Room uaRooms[ua_expansion::locations];
+bool uaRoomOk[ua_expansion::locations]{};
+std::string uaRoomError[ua_expansion::locations];
+std::vector<ua_expansion::Npc> uaNpcs[ua_expansion::locations];
+std::atomic<uint8_t> uaStarkRow{static_cast<uint8_t>(ua_expansion::Row::missing)}; // the wrist row (game thread's)
+void readUaPlace(uint32_t at) {
+    uaRoomOk[at] = false;
+    uaRooms[at] = {};
+    uaNpcs[at].clear();
+    const std::string text = readModelsText(ua_expansion::folders[at], L"room.txt");
+    std::string error;
+    uaRoomOk[at] = !text.empty() && hideout074::parseRoom(text, uaRooms[at], error) && uaRooms[at].ok();
+    uaRoomError[at] = uaRoomOk[at] ? "" : (text.empty() ? "no room.txt" : "room.txt: " + error);
+    const std::string npcs = readModelsText(ua_expansion::folders[at], L"npcs.txt");
+    std::string npcError;
+    if (!npcs.empty() && !ua_expansion::parseNpcs(npcs, uaNpcs[at], npcError))
+        consoleLine(std::string("UA EXPANSION: ") + ua_expansion::names[at] + " npcs.txt not read - " + npcError);
+}
 // 0.0.76 HARLEYS (bike075.hpp): each bike's layout.json (Models\Vehicle\Motorcycle\<Cap|Wolverine|.>), read once at
 // the models' load (before any summon); ok false: that bike is MODEL MISSING. ownMarked: the player's own bike's
 // override.txt is there (without it Models\Vehicle\Motorcycle itself is never read).
@@ -2314,6 +2358,21 @@ DWORD runBody() {
                     game_prompts::note((std::string("0.0.74 test 1 HIDEOUTS OFF: ") + mesh_model::slotFolders[slot] + " not loaded").c_str());
                     continue;
                 }
+                // ULTIMATE ALLIANCE EXPANSION: UA LOCATIONS OFF, or the place not converted (bring your own game: no
+                // MODEL MISSING nag for a place the player has not built) - not loaded.
+                if (mesh_model::slotIsUa(slot)) {
+                    const bool on = combat38::uaLocationsOn(c38(combat38::uaLocations));
+                    const bool there = on && GetFileAttributesW(modelsPath(mesh_model::slotFolders[slot], L"scene.glb").c_str()) !=
+                                                 INVALID_FILE_ATTRIBUTES;
+                    if (!there) {
+                        models.meshes[slot] = {};
+                        models.status[slot] = mesh_model::notTried;
+                        game_prompts::note((std::string("UA EXPANSION: ") + mesh_model::slotFolders[slot] +
+                                            (on ? " not converted (tools/ua/convert_ua.py)" : " not loaded (UA LOCATIONS OFF)"))
+                                               .c_str());
+                        continue;
+                    }
+                }
                 // 0.0.74 test 1 BATMOBILE OFF: none of its models loaded (turning it on needs a restart).
                 if (mesh_model::slotIsBatmobile(slot) && c38(combat38::batmobile) != 0) {
                     models.meshes[slot] = {};
@@ -2369,6 +2428,21 @@ DWORD runBody() {
                 }
                 consoleLine(std::string("HIDEOUTS: ") + hideout074::names[which] +
                             (hideoutRoomOk[which] ? " ready (CANDIDATE)" : " not offered - " + hideoutRoomError[which]));
+            }
+            // ULTIMATE ALLIANCE EXPANSION: each loaded place's walk data and characters.
+            for (uint32_t at = 0; at < ua_expansion::locations; ++at) {
+                uaRoomOk[at] = false;
+                if (!models.model(mesh_model::slotUaStarkTower + at))
+                    continue;
+                try {
+                    readUaPlace(at);
+                } catch (...) {
+                    uaRoomOk[at] = false;
+                    uaRoomError[at] = "could not be read";
+                }
+                consoleLine(std::string("UA EXPANSION: ") + ua_expansion::names[at] +
+                            (uaRoomOk[at] ? " ready (CANDIDATE), " + std::to_string(uaNpcs[at].size()) + " characters placed (not drawn yet)"
+                                          : " not offered - " + uaRoomError[at]));
             }
             // 0.0.76 HARLEYS: each bike's layout (its body model and layout, or that bike is MODEL MISSING)
             for (uint32_t which = 0; which < bike075::bikes; ++which) {
@@ -3076,6 +3150,15 @@ DWORD runBody() {
         bool caveQuietApplied{}; // 0.0.74 test 3 CAVE QUIET: the game's sound ducked
         float hideoutChairLift{}, hideoutSeconds{};
         Vec3 hideoutHintAt{}, hideoutHintFacing{0, 0, 1};
+        // ULTIMATE ALLIANCE EXPANSION (ua_expansion.hpp): the visit on foot from the wrist's page (its own Visit, so
+        // the van's hideout code never ends it), its B hold, wrist button, prompts, arrival hint and clock.
+        hideout074::Visit uaVisit;
+        bool uaWant{}, uaExitDone{}, uaPressWas{};
+        float uaExitHeld{}, uaSeconds{}, uaFloorY{};
+        int uaPointShown = -1;
+        double uaClockAt = -1;
+        batcave074::WristButton uaWrist;
+        Vec3 uaHintAt{}, uaHintFacing{0, 0, 1};
         // 0.0.74 test 2b CRIME GPS (crime_gps074.hpp): groups of enemies near the car as crimes (CANDIDATE), its clock.
         crime_gps074::Tracker crimeTracker;
         float crimeGpsClock{};
@@ -4253,7 +4336,8 @@ DWORD runBody() {
                         combat38::seatedToolsBlocked(c38(combat38::seatedTools)),
                         vanDriving || (vanCarry.carry && !vanCarry.alighting) || vanDriver.boarding || vanDriver.carried,
                         vehicleKind == kindBatmobile || vehicleKind == kindBike); // 0.0.75: the bike's rider too
-                    const bool seatedLock = carLock.tools, grappleLock = carLock.grapple;
+                    // ULTIMATE ALLIANCE EXPANSION: in a UA place no hero tool answers a hand either (he stands in the city).
+                    const bool seatedLock = carLock.tools || uaVisit.active(), grappleLock = carLock.grapple || uaVisit.active();
                     {   // Update 38.5 SYMBIOTE LOOK: both hands grab the chest, then pull outward - on or
                         // off (extras385::symbiote::ChestPull; the ULTIMATE's crossed arms never arm it).
                         gestures385::Input gi;
@@ -4881,6 +4965,8 @@ DWORD runBody() {
                                 // Update 38.5 EXTRAS (extras385.hpp)
                                 if (result.invincible)
                                     invincibleOn = !invincibleOn.load();
+                                if (result.uaStarkTower) // ULTIMATE ALLIANCE EXPANSION: in, or back (the game step below)
+                                    uaWant = true;
                                 if (result.doubleHealth) // 0.0.76 DOUBLE HEALTH
                                     doubleHealthOn = !doubleHealthOn.load();
                                 // HEROVR 0.0.79.1: the user's BODY ANIMATIONS setting
@@ -11108,10 +11194,10 @@ DWORD runBody() {
                                         // 0.0.74 test 3 CAVE QUIET (ON, the default): no engine and the city turned down
                                         // in the Batcave and the safehouse; both back on RETURN TO CITY.
                                         const bool caveQuietOption = spidy::cave_quiet::on(c38(combat38::caveQuiet));
-                                        const bool engineSounds = spidy::cave_quiet::engineSounds(vanDriving, caveQuietOption, hideoutVisit.active());
+                                        const bool engineSounds = spidy::cave_quiet::engineSounds(vanDriving, caveQuietOption, hideoutVisit.active() || uaVisit.active());
                                         sfx::loop(sfx::vanEngine, engineSounds);
                                         sfx::engineRpm(engineSounds ? vanCarry.rpm : 0.f);
-                                        if (const bool quietWant = spidy::cave_quiet::quiet(caveQuietOption, hideoutVisit.active());
+                                        if (const bool quietWant = spidy::cave_quiet::quiet(caveQuietOption, hideoutVisit.active() || uaVisit.active());
                                             quietWant != caveQuietApplied) {
                                             caveQuietApplied = quietWant;
                                             spidy::gameDuck(quietWant);
@@ -11123,6 +11209,124 @@ DWORD runBody() {
                                             vanSlamAt = -1;
                                             sfx::play(sfx::vanDoorSlam);
                                         }
+                                    }
+                                    // ULTIMATE ALLIANCE EXPANSION (ua_expansion.hpp, CANDIDATE: Windows only, untested in the
+                                    // headset): the wrist page's STARK TOWER - on foot, anywhere he stands - puts him in the place
+                                    // (hideout074's room, drawn by the mod over the hidden game). The game is sent a pad at rest and
+                                    // no hero tool answers a hand while he is there, so the hero stays where he was left; RETURN TO
+                                    // CITY (the gold ring, the wrist button, B held, or the page's button) and the game is back.
+                                    try {
+                                        const float uaDt = uaClockAt < 0 ? 0.f : static_cast<float>(std::clamp(combatClock - uaClockAt, 0.0, .1));
+                                        uaClockAt = combatClock;
+                                        const bool uaOptionOn = combat38::uaLocationsOn(c38(combat38::uaLocations));
+                                        const bool uaModel = mesh_model::library().model(mesh_model::slotUaStarkTower) != nullptr;
+                                        const bool uaAsked = uaWant;
+                                        uaWant = false;
+                                        bool uaLeave = false;
+                                        if (uaVisit.active() && (flatScreen || hideoutVisit.active() || !uaModel))
+                                            uaLeave = true; // never: nothing else starts while he is there
+                                        if (uaAsked && uaVisit.active())
+                                            uaLeave = true; // the page's button again: RETURN TO CITY
+                                        else if (uaAsked) {
+                                            ua_expansion::Gate gate;
+                                            gate.optionOn = uaOptionOn;
+                                            gate.modelOk = uaModel;
+                                            gate.roomOk = uaRoomOk[ua_expansion::starkTower];
+                                            gate.texturesReady = overlay.modelReady();
+                                            gate.flatScreen = flatScreen;
+                                            gate.headTracked = validTrackedPose(frame.head) && finite(motion.headPose.position);
+                                            gate.inVehicle = vanDriving || vanDriver.carried || vanDriver.boarding || vanCarry.carry;
+                                            gate.hideoutActive = hideoutVisit.active();
+                                            gate.airborne = game_swing::airborne(swingState, now.QuadPart, frequency.QuadPart);
+                                            const char* why = ua_expansion::refuse(gate);
+                                            const Vec3 head = motion.headPose.position;
+                                            const Vec3 look = motion.headPose.orientation.rotate({0, 0, -1});
+                                            uaFloorY = head.y - ua_expansion::eyeHeight;
+                                            if (!why && !uaVisit.begin(ua_expansion::which[ua_expansion::starkTower], uaRooms[ua_expansion::starkTower],
+                                                                       head, look, uaFloorY))
+                                                why = "the room could not be placed";
+                                            if (why) {
+                                                message(2, 0, (std::string("STARK TOWER: not now - ") + why).c_str());
+                                            } else {
+                                                uaExitHeld = 0;
+                                                uaExitDone = true; // B must be let go first
+                                                uaPressWas = true;
+                                                uaPointShown = -1;
+                                                uaSeconds = 0;
+                                                uaWrist = {};
+                                                // the arrival hint 1.6 m ahead at eye height, facing him (room space)
+                                                const auto& pl = uaVisit.place();
+                                                Vec3 f{look.x, 0, look.z};
+                                                const float fl = std::sqrt(f.x * f.x + f.z * f.z);
+                                                f = fl > 1e-3f ? Vec3{f.x / fl, 0, f.z / fl} : Vec3{0, 0, -1};
+                                                uaHintAt = pl.room(Vec3{head.x + f.x * 1.6f, head.y, head.z + f.z * 1.6f});
+                                                const Vec3 back = pl.room(head) - uaHintAt;
+                                                const float bl = std::sqrt(back.x * back.x + back.z * back.z);
+                                                uaHintFacing = bl > 1e-3f ? Vec3{back.x / bl, 0, back.z / bl} : Vec3{0, 0, 1};
+                                                if (!finite(uaHintAt))
+                                                    uaHintAt = {}, uaHintFacing = {0, 0, 1};
+                                                message(1, 0, "STARK TOWER (TEST) - walk: left stick, turn: right. RETURN TO CITY: the gold ring by "
+                                                              "Wyatt's Quinjet, the button over your left wrist (poke it), or hold B");
+                                                game_prompts::note(("UA EXPANSION: into STARK TOWER (CANDIDATE), " +
+                                                                    std::to_string(uaNpcs[ua_expansion::starkTower].size()) + " character spots")
+                                                                       .c_str());
+                                            }
+                                        }
+                                        if (uaVisit.active() && !uaLeave) {
+                                            hideout074::In hi;
+                                            hi.dt = uaDt;
+                                            hi.head = motion.headPose.position;
+                                            hi.headForward = motion.headPose.orientation.rotate({0, 0, -1});
+                                            uaSeconds += std::isfinite(uaDt) && uaDt > 0 && uaDt < 1 ? uaDt : 0.f;
+                                            hi.moveX = std::isfinite(frame.hands[0].stickX) ? frame.hands[0].stickX : 0.f;
+                                            hi.moveY = std::isfinite(frame.hands[0].stickY) ? frame.hands[0].stickY : 0.f;
+                                            hi.turnX = std::isfinite(frame.hands[1].stickX) ? frame.hands[1].stickX : 0.f;
+                                            const bool pressNow = (frame.buttons & buttonA) != 0 || frame.hands[0].trigger > .7f || frame.hands[1].trigger > .7f;
+                                            hi.press = pressNow && !uaPressWas;
+                                            uaPressWas = pressNow;
+                                            const bool bHeld = (frame.buttons & buttonB) != 0;
+                                            if (!bHeld)
+                                                uaExitDone = false, uaExitHeld = 0;
+                                            else if (!uaExitDone)
+                                                uaExitHeld += uaDt;
+                                            hi.exit = !uaExitDone && uaExitHeld >= ua_expansion::exitHold;
+                                            bool wristPoke = false;
+                                            try {
+                                                const bool tracked = frame.hands[0].valid && validTrackedPose(frame.hands[0].grip) && frame.hands[1].valid &&
+                                                                     validTrackedPose(frame.hands[1].grip);
+                                                wristPoke = uaWrist.step(true, motion.grips[0].position + Vec3{0, .10f, 0}, motion.grips[1].position, tracked);
+                                            } catch (...) {
+                                                wristPoke = false;
+                                            }
+                                            hi.exit = hi.exit || wristPoke;
+                                            hideout074::Out ho{};
+                                            try {
+                                                ho = uaVisit.step(hi);
+                                            } catch (...) {
+                                                ho.leave = true;
+                                            }
+                                            const hideout074::Room* room = uaVisit.room();
+                                            if (ho.point != uaPointShown) {
+                                                uaPointShown = ho.point;
+                                                if (room && ho.point >= 0 && static_cast<size_t>(ho.point) < room->points.size() &&
+                                                    !room->points[static_cast<size_t>(ho.point)].prompt.empty())
+                                                    message(1, 0, room->points[static_cast<size_t>(ho.point)].prompt.c_str());
+                                            }
+                                            if (ho.act == hideout074::Action::comingSoon)
+                                                message(1, 0, "COMING SOON");
+                                            uaLeave = ho.leave;
+                                        }
+                                        if (uaLeave && uaVisit.active()) {
+                                            uaVisit.end();
+                                            uaExitDone = true;
+                                            uaExitHeld = 0;
+                                            message(1, 0, "STARK TOWER: back in the city, where you left");
+                                            game_prompts::note("UA EXPANSION: back in the city");
+                                        }
+                                        uaStarkRow = static_cast<uint8_t>(ua_expansion::rowOf(uaOptionOn, uaModel, uaRoomOk[ua_expansion::starkTower],
+                                                                                              uaVisit.active()));
+                                    } catch (...) { // never: a fault and he is back in the city
+                                        uaVisit.end();
                                     }
                                     // Version 0.0.7 HERO PROFILES: BATMAN's batarangs, WOLVERINE's claws, SUPERMAN's
                                     // heat vision / cold breath, PUNISHER's guns (hero007_play.hpp). Every blow on
@@ -12950,6 +13154,13 @@ DWORD runBody() {
                         } else {
                             moveDiagMs = 0;
                         }
+                        // ULTIMATE ALLIANCE EXPANSION: in a UA place the game gets a pad at rest (he stands where he was
+                        // left; the sticks walk the room) - only START / BACK kept, as the van's seat keeps them.
+                        if (uaVisit.active()) {
+                            const uint16_t keep = static_cast<uint16_t>(pad.buttons & (game_pad::start | game_pad::back));
+                            pad = {};
+                            pad.buttons = keep;
+                        }
                         game_pad::submit(pad, 200);
                         // Update 38.5 Y IN THE AIR: read-only counts (no glide state is read; air_watch.hpp).
                         {
@@ -14392,6 +14603,44 @@ DWORD runBody() {
                                     consoleLine(std::string("THOR: step 3 hammer model ") + (saved.hero072.hammerModel ? "drawn" : "MISSING (none drawn)"));
                                 }
                             }
+                            // ULTIMATE ALLIANCE EXPANSION: a UA place is drawn as a hideout room is (its model in its black box,
+                            // the gold RETURN TO CITY ring, the arrival hint and the wrist button); the van below is not drawn
+                            // while he is there. One trip at a time: the van's hideout block never sees an active UA visit.
+                            if (uaVisit.active()) {
+                                saved.hideoutAway = true;
+                                saved.hideoutModel = mesh_model::library().model(mesh_model::slotUaStarkTower);
+                                saved.hideoutPlace = uaVisit.place();
+                                saved.hideoutFloor = uaFloorY;
+                                try {
+                                    auto& HV = saved.hideoutView;
+                                    HV = {};
+                                    HV.on = true;
+                                    HV.ua = true;
+                                    HV.place = uaVisit.place();
+                                    HV.seconds = uaSeconds;
+                                    if (const hideout074::Room* rm = uaVisit.room())
+                                        for (size_t k = 0; k < rm->points.size() && HV.marks < batcave074::View::mostMarks; ++k) {
+                                            const auto& pt = rm->points[k];
+                                            const int kind = pt.action == hideout074::Action::toVehicle    ? 0
+                                                             : pt.action == hideout074::Action::comingSoon ? 2
+                                                                                                           : -1;
+                                            if (kind < 0 || !finite(pt.at))
+                                                continue;
+                                            if (static_cast<int>(k) == uaPointShown)
+                                                HV.markLit = static_cast<int>(HV.marks);
+                                            HV.markAt[HV.marks] = pt.at;
+                                            HV.markKind[HV.marks++] = static_cast<uint8_t>(kind);
+                                        }
+                                    HV.hintAt = uaHintAt;
+                                    HV.hintFacing = uaHintFacing;
+                                    HV.hintFade = uaSeconds < 8.f ? 1.f : uaSeconds < 10.f ? (10.f - uaSeconds) * .5f : 0.f;
+                                    HV.wristOn = frame.hands[0].valid && validTrackedPose(frame.hands[0].grip) && finite(motion.grips[0].position);
+                                    HV.wristLit = uaWrist.lit();
+                                    HV.wristAt = motion.grips[0].position + Vec3{0, .10f, 0};
+                                } catch (...) {
+                                    saved.hideoutView = {};
+                                }
+                            }
                             // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL): the Vandura, its built cab and its wheel - each the
                             // model or nothing (MODEL MISSING on the wrist); drawn where the van is (world space).
                             // 0.0.74 test 1 BATMOBILE: BATMAN's picked car (latched at the summon), the shared cockpit at
@@ -14479,7 +14728,7 @@ DWORD runBody() {
                                     } catch (...) {
                                         saved.hideoutView = {};
                                     }
-                                } else if (body && van.state != van072::none && finite(van.frame.at) && std::isfinite(van.frame.yaw)) {
+                                } else if (!uaVisit.active() && body && van.state != van072::none && finite(van.frame.at) && std::isfinite(van.frame.yaw)) {
                                     auto& L = saved.hero072;
                                     L.van = L.any = true;
                                     L.vanModel = body;
@@ -17747,6 +17996,7 @@ DWORD runBody() {
                                             hud.invincible = invincibleOn.load(); // Update 38.5 EXTRAS
                                             hud.invincibleNa = invincibleNa.load() != 0;
                                             hud.doubleHealth = doubleHealthOn.load(); // 0.0.76 DOUBLE HEALTH
+                                            hud.uaStark = uaStarkRow.load(); // ULTIMATE ALLIANCE EXPANSION
                                             hud.bodyAnimations = values.legAnimations; // 0.0.79.1 wrist toggle
                                             hud.flyMode = flyModeNow.load();
                                             hud.flyVignette = flyVignetteOn.load();
@@ -19519,6 +19769,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyMpPlace(void* v) { return set
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherArsenal(void* v) { return setHero007(v, combat38::punisherArsenal, 5537); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyScopeZoom(void* v) { return setHero007(v, combat38::scopeZoom, 5538); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMagEject(void* v) { return setHero007(v, combat38::magEject, 5539); }
+// ULTIMATE ALLIANCE EXPANSION (ua_expansion.hpp): UA LOCATIONS ON (0, the default) / OFF (1); turning on needs a restart.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyUaLocations(void* v) { return setHero007(v, combat38::uaLocations, 5541); }
 // 0.0.74 test 10 THROW BY SWING (throw_swing.hpp): 0 ON (the default) / 1 OFF (the old aim)
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyThrowSwing(void* v) { return setHero007(v, combat38::throwSwing, 5534); }
 // 0.0.73 test 5: IRON MAN HERO HANDS, DAREDEVIL GRAPPLE AIM, WOLVERINE CLAW LOOK - ON (0) or OFF (1), live (live.txt

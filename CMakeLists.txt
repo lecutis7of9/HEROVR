@@ -67,6 +67,7 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/waypoint_mark.cpp
             src/van_screen.cpp
             src/hideout074.cpp
+            src/ua_expansion.cpp
             src/batcave074.cpp
             src/crime_gps074.cpp
             src/batmobile074.cpp

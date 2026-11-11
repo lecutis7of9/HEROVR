@@ -20,3 +20,9 @@ tools/launcher/out/
 
 # Local test logs (never shipped)
 test logs/
+
+# ULTIMATE ALLIANCE EXPANSION: bring your own game - the maps converted from the player's own MUA disc
+# (tools/ua/convert_ua.py) and the disc itself are never committed.
+/Models/UA/
+*.iso
+assetsfb.wad

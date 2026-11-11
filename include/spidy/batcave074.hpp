@@ -153,6 +153,7 @@ struct View {
     int markLit{-1};
     float seconds{};      // the pulse clock
     bool batcave{};       // the chair and the screen are the Batcave's
+    bool ua{};            // ULTIMATE ALLIANCE EXPANSION: a UA place (STARK TOWER's hint; no chair, no screen)
     // the arrival hint (room space), its fade (0 none)
     Vec3 hintAt{}, hintFacing{};
     float hintFade{};

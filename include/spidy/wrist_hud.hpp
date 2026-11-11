@@ -578,10 +578,14 @@ enum class Control : uint8_t {
     // 0.0.79.1 Dynamic Body lives on HEROVR's own wrist holo,
     // never on the SM1 game Settings tab.
     bodyAnimations,
+    // ULTIMATE ALLIANCE EXPANSION (ua_expansion.hpp): its page's STARK TOWER (a press: in, or back to the city;
+    // Result::uaStarkTower) and UA LOCATIONS (combat38::uaLocations; Result::combat38 as a COMBAT row's).
+    uaStarkTower,
+    uaLocations,
 };
-constexpr int controls = 249; // 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 PICTURE 72: - IMAGE, IMAGE STYLE, STREAMER MODE / SMOOTH / EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (0.0.72's picture); 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING (the uint8_t Control is full); 0.0.73: + COMING SOON; // 0.0.73 MPSUIT: + PLAYER 2 BODY; // 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; // 0.0.73 AA: + SHARPEN MATCH; // 0.0.73 test 6: + MP SOLO TEST (mp-solo-test merged); // 0.0.73 test 5: + HERO HANDS (IRON MAN), GRAPPLE AIM (DAREDEVIL), CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH (WOLVERINE); // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; // 0.0.73: + IMAGE; // 0.0.73 test 3: + VAN PEDALS; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
+constexpr int controls = 251; // UA EXPANSION: + STARK TOWER, UA LOCATIONS; // 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 PICTURE 72: - IMAGE, IMAGE STYLE, STREAMER MODE / SMOOTH / EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (0.0.72's picture); 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING (the uint8_t Control is full); 0.0.73: + COMING SOON; // 0.0.73 MPSUIT: + PLAYER 2 BODY; // 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; // 0.0.73 AA: + SHARPEN MATCH; // 0.0.73 test 6: + MP SOLO TEST (mp-solo-test merged); // 0.0.73 test 5: + HERO HANDS (IRON MAN), GRAPPLE AIM (DAREDEVIL), CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH (WOLVERINE); // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; // 0.0.73: + IMAGE; // 0.0.73 test 3: + VAN PEDALS; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
 // Version 0.0.72: + 40 combat rows, + 2 sections; build 6: + THOR HAMMER MODEL, THOR FLIGHT
-constexpr int combatControls = 163; // HERO VR 0.0.78: + PUNISHER ARSENAL, SCOPE ZOOM, MAG EJECT (live.txt only); 0.0.76 MP WORLD: + PLAYER 2 PLACE (live.txt only); 0.0.74 test 10 PICTURE 72: the nine 0.0.73 picture switches 0.0.72 never had taken out; 0.0.74 test 10: + GLIDE TILT (live.txt only); 0.0.74 test 10: + QUICK HOOK, GRAPPLE YANK, SURE GRAPPLE, BELT ZONES; 0.0.74 test 10: + ENTRY FACING, HIDEOUT HOLD; 0.0.74 test 10: + THROW BY SWING (live.txt only); 0.0.74 test 10: the 0.0.74 tests' picture / AA options taken out (the 0.0.73 picture again); 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING, BATMOBILE, BATMOBILE CHOICE; 0.0.73: + MP SOLO TEST, PLAYER 2 BODY, COMING SOON; // 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; // 0.0.73 AA: + SHARPEN MATCH; // 0.0.73 test 6: + MP SOLO TEST (mp-solo-test merged); // 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; // 0.0.73: + IMAGE; // 0.0.73 test 3: + VAN PEDALS; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // combat38::options (checked in wrist_hud.cpp); build 9: + SUIT BODY
+constexpr int combatControls = 164; // UA EXPANSION: + UA LOCATIONS (its row on the ULTIMATE ALLIANCE EXPANSION page, not a COMBAT row);  HERO VR 0.0.78: + PUNISHER ARSENAL, SCOPE ZOOM, MAG EJECT (live.txt only); 0.0.76 MP WORLD: + PLAYER 2 PLACE (live.txt only); 0.0.74 test 10 PICTURE 72: the nine 0.0.73 picture switches 0.0.72 never had taken out; 0.0.74 test 10: + GLIDE TILT (live.txt only); 0.0.74 test 10: + QUICK HOOK, GRAPPLE YANK, SURE GRAPPLE, BELT ZONES; 0.0.74 test 10: + ENTRY FACING, HIDEOUT HOLD; 0.0.74 test 10: + THROW BY SWING (live.txt only); 0.0.74 test 10: the 0.0.74 tests' picture / AA options taken out (the 0.0.73 picture again); 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING, BATMOBILE, BATMOBILE CHOICE; 0.0.73: + MP SOLO TEST, PLAYER 2 BODY, COMING SOON; // 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; // 0.0.73 AA: + SHARPEN MATCH; // 0.0.73 test 6: + MP SOLO TEST (mp-solo-test merged); // 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; // 0.0.73: + IMAGE; // 0.0.73 test 3: + VAN PEDALS; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // combat38::options (checked in wrist_hud.cpp); build 9: + SUIT BODY
 // 0.0.74 test 1: the options with a wrist row (the uint8_t Control is full; BATMOBILE and
 // BATMOBILE CHOICE live in the launcher's settings and the Batmobile's dash only).
 constexpr int combatRows = 139; // 0.0.74 test 10 PICTURE 72: - 9
@@ -610,7 +614,7 @@ static_assert(static_cast<int>(Control::colorStrength) >= maskedControls, "a liv
 static_assert(static_cast<int>(Control::foveaInner) >= maskedControls, "a live slider past the mask");
 static_assert(static_cast<int>(Control::heroTabSpider) >= maskedControls, "only presses past the mask");
 static_assert(static_cast<int>(Control::section0) >= maskedControls, "only presses past the mask");
-static_assert(static_cast<int>(Control::bodyAnimations) == controls - 1);
+static_assert(static_cast<int>(Control::uaLocations) == controls - 1);
 // Each the value of the live.txt key it is named for, as the mod runs now.
 struct Settings {
     float widthCm = 1.3f; // web_width
@@ -661,7 +665,8 @@ constexpr float minSpeed = 60, maxSpeed = 400, speedStep = 10;
 Range range(Control);
 // Update 39.0.2 (owner: "Not every hero needs its own page ... one 'powers' page that has flight,
 // invincibility and hero profiles with sub menus"): eight pages, the settings in sections.
-constexpr int pages = 8;
+// ULTIMATE ALLIANCE EXPANSION: nine (its own page, the last).
+constexpr int pages = 9;
 constexpr int statusPage = 0;
 constexpr int powersPage = 1;   // INVINCIBLE, FLYING and the HERO PROFILES (one section a hero)
 constexpr int vrPage = 2;       // VR SETTINGS: RECALIBRATE, body, webs, hologram, mirror, sound, tests
@@ -670,6 +675,7 @@ constexpr int graphicsPage = 4; // GRAPHICS: 0.0.76 ONE PAGE - merged into VR SE
 constexpr int colorPage = 5;    // COLOR / ATMOSPHERE (eye_color.hpp)
 constexpr int controlsPage = 6; // CONTROLS: how to play, gestures, remap, gamepad
 constexpr int musicPage = 7;
+constexpr int uaPage = 8; // ULTIMATE ALLIANCE EXPANSION (ua_expansion.hpp): STARK TOWER, UA LOCATIONS
 // Update 39.0.2: a page's sections, one open at a time (an accordion; a closed section's rows are
 // not laid out, so they are neither drawn nor pressed). What is open is kept for the session (not
 // in live.txt), shared by the input and the drawing side; until a section is pressed each page
@@ -1032,6 +1038,7 @@ struct View {
     bool invincible{}, invincibleNa{}, flyVignette{}, symbiote{}, padMode{}, padByPrompt{}, monitorArmed{};
     bool doubleHealth{}; // 0.0.76 DOUBLE HEALTH on
     bool bodyAnimations{}; // 0.0.79.1 Dynamic Body selected in VR SETTINGS
+    uint8_t uaStark{3};    // ULTIMATE ALLIANCE EXPANSION: STARK TOWER's row (ua_expansion::Row; NOT CONVERTED until told)
     uint32_t flyMode{};        // extras385::fly::Speed
     uint32_t flyRoll = 1;      // extras385::fly::RollMode (1 COMFORT, the default)
     bool flyAutoLevel = true;
@@ -1180,6 +1187,7 @@ class Menu {
         bool padMode{}, promptHandling{}, playOnMonitor{};
         bool gestureMoves{};                                        // Update 38.5: GESTURE MOVES pressed
         bool trainMove{};                                           // Version 0.0.2: TRAIN MOVE pressed
+        bool uaStarkTower{}; // ULTIMATE ALLIANCE EXPANSION: STARK TOWER pressed (in, or back to the city)
         bool heroRoster{};  // Build 8: ROSTER: HEROES AND SUITS pressed (open the roster page) - HERO MENU CLASSIC only
         // 0.0.73 test 3 HOLO ROSTER (fix 28): the heroes on the hologram asked for these (-1 none), the same
         // as the popup's PLAY AS and suit picks; rosterClosed: its CLOSE pressed.
@@ -1204,7 +1212,7 @@ class Menu {
     }
     // 0.0.74 test 10: the page whose rows show and work now - hostedPage while the roster lays one out, else page().
     int shownPage() const;
-    // Update 39.0.2: a page past the eight (an older layout's) is STATUS.
+    // Update 39.0.2: a page past the nine (an older layout's) is STATUS.
     // HERO VR 0.0.76 ONE PAGE: GRAPHICS (merged) opens VR SETTINGS.
     void setPage(int page) {
         page_ = page == graphicsPage ? vrPage : page >= 0 && page < pages ? page : 0;

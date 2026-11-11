@@ -562,9 +562,12 @@ bool append(std::vector<Vertex>& solid, std::vector<Vertex>& glow, const View& v
             Painter h{glow, pl.world(v.hintAt), cross(-d, Vec3{0, 1, 0}), {0, 1, 0}, d, std::min(1.f, v.hintFade)};
             h.quad(-.62f, -.25f, .62f, .25f, 0, face, .75f);
             h.frame(-.62f, -.25f, .62f, .25f, .008f, .001f, trim, .9f);
-            h.textCentre(v.batcave ? "THE BATCAVE" : "THE SAFEHOUSE", 0, .13f, .07f, ice);
+            h.textCentre(v.ua ? "STARK TOWER" : v.batcave ? "THE BATCAVE" : "THE SAFEHOUSE", 0, .13f, .07f, ice);
             h.textCentre("WALK: LEFT STICK   TURN: RIGHT STICK", 0, .03f, .04f, cyan);
-            h.textCentre(v.batcave ? "RETURN TO CITY: THE GLOWING BATMOBILE OR BLAST DOOR," : "RETURN TO CITY: THE GLOWING VAN,", 0, -.06f, .036f, gold);
+            h.textCentre(v.ua        ? "RETURN TO CITY: THE GOLD RING BY THE QUINJET,"
+                         : v.batcave ? "RETURN TO CITY: THE GLOWING BATMOBILE OR BLAST DOOR,"
+                                     : "RETURN TO CITY: THE GLOWING VAN,",
+                         0, -.06f, .036f, gold);
             h.textCentre("THE WRIST BUTTON, OR HOLD B", 0, -.13f, .036f, gold);
             if (v.batcave)
                 h.textCentre("BATCOMPUTER: THE BLUE RING ON THE PLATFORM", 0, -.21f, .03f, cyan);

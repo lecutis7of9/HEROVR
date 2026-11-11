@@ -23,10 +23,11 @@ namespace spidy::hideout074 {
 // The wrist option's one-sentence help (combat38 HIDEOUTS; ON is value 0, the default).
 inline constexpr const char* help = "Safehouse trips from the van dash, Batcave from the Batmobile, needs a restart.";
 
-enum class Which : uint8_t { none, safehouse, batcave };
-inline constexpr const char* names[3] = {"", "SAFEHOUSE", "BATCAVE"};
-// Under Models\ (mesh_model slots slotHideoutSafehouse, slotHideoutBatcave).
-inline constexpr const char* folders[3] = {"", "Hideout/Safehouse", "Hideout/Batcave"};
+// ULTIMATE ALLIANCE EXPANSION (ua_expansion.hpp): uaStarkTower, the same visit on foot from the wrist's own page.
+enum class Which : uint8_t { none, safehouse, batcave, uaStarkTower };
+inline constexpr const char* names[4] = {"", "SAFEHOUSE", "BATCAVE", "STARK TOWER"};
+// Under Models\ (mesh_model slots slotHideoutSafehouse, slotHideoutBatcave, slotUaStarkTower).
+inline constexpr const char* folders[4] = {"", "Hideout/Safehouse", "Hideout/Batcave", "UA/StarkTower"};
 
 // What a point does: back to the vehicle (the exits), or nothing yet (a "coming soon" point).
 // 0.0.74 test 2b: batcomputer (room.txt's "batcomputer"): sit in its chair and use it (batcave074.hpp).

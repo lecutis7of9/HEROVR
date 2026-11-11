@@ -3035,6 +3035,7 @@ int main() {
              2240.f/1504);
         near(native_view::requestScale(2000,1000,1,1),1000); // the side with more pixels per tangent
     });
+#ifdef _WIN32 // UA branch: JITTER LOG / HITCH HOLD headers are Windows-only (included under _WIN32 above)
     test("HERO VR 0.0.76 JITTER FIX: JITTER LOG keeps 200 frames per view; POSE CHECK layer and locate", [] {
         static jitter_log::Data d;
         std::atomic<uint32_t> reserved{0};
@@ -3083,6 +3084,7 @@ int main() {
         f.predictedDisplayTime = 4; f.seconds = step(.2f, true);
         check(rig.update(f, {10, 20, 30}, {0, 0, -1}, true).active, "HITCH HOLD: a held hitch left VR play");
     });
+#endif
     test("game rig uses one tracking sample for head hands and both eyes", [] {
         GameTrackingRig rig;auto f=trackedFrame();
         auto out=rig.update(f,{10,20,30},{0,0,-1},true);

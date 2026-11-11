@@ -63,14 +63,14 @@ The converter does the following:
 The page's button tells you why a press does nothing: **NOT CONVERTED** (run the converter, then restart) or
 **OFF** (`ua_locations` is off).
 
-## Characters (next milestone)
+## Characters (next update)
 
 `npcs.txt` lists every character spawner in the map, in room space, one per line:
 `npc <id> x y z yaw`, for example `npc nickfurynpc01 -2.183 0.000 5.165 90.0`. That makes 38 in the hub, including
 Nick Fury, Black Widow, Hank Pym, Wyatt Wingfoot and the S.H.I.E.L.D. agents.
 
 HERO VR already reads the file (`ua_expansion::parseNpcs` into `uaNpcs[]`) and reports the count. The next
-milestone will place the character models at those spots and add talking to them.
+update will place the character models at those spots and add talking to them.
 
 ## Known limits (CANDIDATE, untested in the headset)
 

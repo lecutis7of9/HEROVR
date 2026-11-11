@@ -10,7 +10,7 @@ Reads the player's own MUA1 PS2 stark1 package (igb-blender add-on, mua1_ps2 pro
               warm light panels. Metres, glTF Y-up, the engb player start at the origin.
   walk.glb    the walkable geometry only (no backdrop, no ceiling): make_hideout.py's `mesh` collision input.
   room.json   spawn, RETURN TO CITY point, playable bounds (make_hideout.py's description).
-  npcs.txt    hooks for the next milestone (characters): every NPC spawner of the engb, room space.
+  npcs.txt    hooks for the next update (characters): every NPC spawner of the engb, room space.
   report.txt  counts, bounds, what was moved.
 No game file is written; nothing here is shipped - the player builds it from their own disc.
 """
@@ -231,7 +231,7 @@ room = {
 }
 json.dump(room, open(os.path.join(a.out, 'room.json'), 'w'), indent=1)
 
-# ---- npcs.txt: the characters milestone's hooks (every spawner the engb places) ----
+# ---- npcs.txt: the characters update's hooks (every spawner the engb places) ----
 lines = ['HEROVR-UA-NPCS 1', '# id x y z yaw_deg  (room space: glTF metres, y up; yaw as room.txt spawn)']
 for n, i in sorted(insts.items()):
     if n.startswith('sp_'):

@@ -8,7 +8,7 @@
 // OWN MUA1 PS2 disc (tools/ua/convert_ua.py; nothing of the game is shipped) into Models\UA\<Place>. While he is
 // there the game is sent a pad at rest and no hero tool answers a hand, so the hero stands where he was left;
 // RETURN TO CITY (the gold ring, the wrist button, B held or the page's button again) puts him back exactly there.
-// npcs.txt beside the room lists where the place's characters stand (read now, drawn by the next milestone).
+// npcs.txt beside the room lists where the place's characters stand (read now, drawn by the next update).
 // Pure: no game reads, no addresses. Fail-safe: anything wrong and he never leaves the city (or is put back).
 #include "spidy/hideout074.hpp"
 #include "spidy/math.hpp"
@@ -55,7 +55,7 @@ const char* rowValue(Row row); // ENTER, RETURN TO CITY, OFF, NOT CONVERTED
 inline constexpr const char* missingHelp =
     "Not converted yet: run tools/ua/convert_ua.py on your own MUA disc (docs/UA-EXPANSION.md), then restart.";
 
-// The next milestone's hooks: where the place's characters stand (npcs.txt, written by the converter from the
+// The next update's hooks: where the place's characters stand (npcs.txt, written by the converter from the
 // map's own spawners). Room (glTF) space: metres, the room's floor at y 0 under the spawn; yaw in degrees the
 // spawn's sense (about +y from +x counter-clockwise).
 struct Npc {

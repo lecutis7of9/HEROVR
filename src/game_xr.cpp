@@ -1975,7 +1975,7 @@ std::string readModelsText(const char* folder, const wchar_t* file) {
     CloseHandle(f);
     return text;
 }
-// Each UA place's walk data (room.txt) and its characters (npcs.txt, the next milestone's hooks), read once at the
+// Each UA place's walk data (room.txt) and its characters (npcs.txt, the next update's hooks), read once at the
 // models' load; ok false: the page's button says NOT CONVERTED (he stays in the city).
 hideout074::Room uaRooms[ua_expansion::locations];
 bool uaRoomOk[ua_expansion::locations]{};

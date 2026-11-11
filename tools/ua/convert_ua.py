@@ -19,7 +19,7 @@ Writes into --out (exactly what HERO VR reads, Models/UA/StarkTower):
   scene.glb  the hub drawn in VR (baked look, raised skyline, a ceiling from the hub's own textures)
   room.txt   the walk grid, the spawn and the RETURN TO CITY point (tools/hideout074/make_hideout.py)
   room.json  the room's description (kept for reference)
-  npcs.txt   where the hub's characters stand (the next milestone's hooks; read, not drawn yet)
+  npcs.txt   where the hub's characters stand (the next update's hooks; read, not drawn yet)
   report.txt what the converter did
 and, with --previews, walk_overlay.png (the walk grid over the floor plan) and eye-level renders.
 Then start the game with ua_locations on (the default) and open the wrist's ULTIMATE ALLIANCE EXPANSION page.

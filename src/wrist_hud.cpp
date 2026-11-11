@@ -1411,7 +1411,7 @@ Layout build(int page, float k, int open) {
         break;
     case uaPage: {
         // ULTIMATE ALLIANCE EXPANSION (ua_expansion.hpp): the places (STARK TOWER the first, a wide button: in, or
-        // back to the city), then the switch. Characters come with the next milestone (npcs.txt is read already).
+        // back to the city), then the switch. Characters come with the next update (npcs.txt is read already).
         heading("MARVEL: ULTIMATE ALLIANCE - ACT 1");
         Item r = itemOf(Kind::wide, Control::uaStarkTower);
         r.text = "STARK TOWER";

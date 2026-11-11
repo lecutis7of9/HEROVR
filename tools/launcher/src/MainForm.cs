@@ -780,6 +780,13 @@ namespace Sm2VrLauncher
 
         void LaunchVr(List<string> extra)
         {
+            // t2150: never a second launch-game-vr.ps1 beside one still starting or running (every line twice,
+            // two sessions fighting over the game and its files). The script holds a mutex as well.
+            if (vr != null && vr.Running)
+            {
+                sessionLog.Line("VR is already starting or running: not started a second time.", Theme.Warn);
+                return;
+            }
             // Switch the staged original/Revamped DLL while Spider-Man 2 is
             // closed. Never hot-swap a DLL in an already-running game.
             if (rendererPicker != null && !Sm1Selected)
@@ -793,7 +800,11 @@ namespace Sm2VrLauncher
                     return;
                 }
                 sessionLog.Line(rendererInfo, Theme.Good);
+                // t2150: tell launch-game-vr.ps1 which mode was picked (the two mode DLLs can be identical in a
+                // test package, so it cannot tell them apart by hash). Inherited by the PowerShell it starts.
+                Environment.SetEnvironmentVariable("HEROVR_RENDERER_MODE", RendererModes.Normal(rendererPicker.Selection));
             }
+            else Environment.SetEnvironmentVariable("HEROVR_RENDERER_MODE", null);
             var args = LaunchOptions.Arguments(OptValue, scriptParams);
             args.AddRange(extra);
             string more = settings.Get("ExtraArgs", "").Trim();

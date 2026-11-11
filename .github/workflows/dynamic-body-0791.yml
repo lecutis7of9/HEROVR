@@ -119,6 +119,18 @@ jobs:
           $sampleDll = Join-Path $sampleRoot ('reports\render-memory-modules\' + ('a' * 64) + '\spidy_render_memory.dll')
           if ($sampleDll.Length -ge 230) { throw "Test ZIP nesting makes DLL staging too long: $($sampleDll.Length) chars" }
           "Sample nested staging path length: $($sampleDll.Length) chars" >> $env:GITHUB_STEP_SUMMARY
+          # t2150: VERSION in the package, and the single-instance / renderer-mode fixes in its starter script.
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
+          try {
+            $entries = @($archive.Entries | ForEach-Object { $_.FullName })
+            if (-not ($entries -contains "$name/VERSION")) { throw 'VERSION missing from the test ZIP' }
+            $script = $archive.GetEntry("$name/tools/launch-game-vr.ps1")
+            $reader = New-Object IO.StreamReader($script.Open()); $text = $reader.ReadToEnd(); $reader.Close()
+            foreach ($needed in @('Local\HEROVR-launch-game-vr', 'HEROVR_RENDERER_MODE', 'no 70% enable marker')) {
+              if (-not $text.Contains($needed)) { throw "launch-game-vr.ps1 in the ZIP lacks: $needed" }
+            }
+          } finally { $archive.Dispose() }
           python -B tools/check_bundled_python.py $zip --run
           if ($LASTEXITCODE) { throw 'Bundled Python check failed' }
           "$((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant())  $name-win64.zip" |

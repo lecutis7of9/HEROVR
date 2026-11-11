@@ -70,6 +70,8 @@ namespace Sm2VrLauncher
                     if (!File.Exists(marker)) File.WriteAllText(marker, "Private Revamped 70% native-eye temporal upscale");
                 }
                 else if (File.Exists(marker)) File.Delete(marker);
+                // t2150: the picked mode, for launch-game-vr.ps1 started outside this launcher too.
+                File.WriteAllText(Path.Combine(root, "reports", "renderer-mode.txt"), mode + Environment.NewLine);
                 // Fully stage and verify before replacing the active on-disk
                 // module; never delete the user's only copy on an error.
                 if (Hash(target) != digest)

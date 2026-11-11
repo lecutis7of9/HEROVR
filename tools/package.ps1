@@ -133,6 +133,9 @@ foreach ($starter in $probeStarters) {
     [IO.File]::WriteAllText((Join-Path $stage "tools\$starter"), $text, (New-Object Text.ASCIIEncoding))
 }
 Copy-Item -LiteralPath $versionFile -Destination $stage
+# t2150: the public version (VERSION, e.g. 0.0.79) too, or a session says "unknown (VERSION missing)".
+$publicVersion = Join-Path $root 'VERSION'
+if (Test-Path -LiteralPath $publicVersion) { Copy-Item -LiteralPath $publicVersion -Destination $stage }
 if ($TestNotes) {
     if (-not (Test-Path -LiteralPath $TestNotes)) { throw "Test notes missing: $TestNotes" }
     Copy-Item -LiteralPath $TestNotes -Destination (Join-Path $stage 'TEST-NOTES.txt')

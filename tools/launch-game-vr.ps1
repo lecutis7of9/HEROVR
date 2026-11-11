@@ -58,6 +58,18 @@ param(
     [switch]$CloseGame,  # 0.0.5 hotfix 3: the launcher asked; a running Spider-Man 2 is closed first, then VR starts
     [string]$XrRuntime
 )
+# t2150 SINGLE INSTANCE: a second launch-game-vr.ps1 while one is already
+# starting or running (a double PLAY VR, the launcher's retry, a starter
+# double-click) ran every step twice and fought the first over the game,
+# its settings and the staged modules. The first one holds this mutex for its
+# whole life (released when the process ends, also on a crash).
+$script:HeroVrLaunchMutex = New-Object System.Threading.Mutex($false, 'Local\HEROVR-launch-game-vr')
+$heroVrOwned = $false
+try { $heroVrOwned = $script:HeroVrLaunchMutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $heroVrOwned = $true }
+if (-not $heroVrOwned) {
+    [Console]::Error.WriteLine('ERROR: HERO VR is already starting or running from another window; this second start was stopped (nothing was changed).')
+    exit 2
+}
 # 0.0.62: a launcher older than build 9 (the 0.0.6.1 dev launcher) only resets its PLAY VR button when a session
 # cannot start (exit 2, 5, 6 or a crash), so the reason shows here in a window. Build 9 and later show it themselves
 # (they set SM2VR_LAUNCHER_BUILD).
@@ -216,19 +228,39 @@ foreach($name in @('spidy_headset_probe.exe','spidy_bridge.dll','spidy_render_pr
 $modeRoot = Join-Path $projectRoot 'build\windows-ninja\renderer-modes'
 $activeStereo = Join-Path $projectRoot 'build\windows-ninja\spidy_stereo_probe.dll'
 $revampedStereo = Join-Path $modeRoot 'revamped\spidy_stereo_probe.dll'
+$originalStereo = Join-Path $modeRoot 'original\spidy_stereo_probe.dll'
 if ((Test-Path -LiteralPath $revampedStereo) -and (Test-Path -LiteralPath $activeStereo)) {
+    # t2150: the 79.1 test packages ship ONE gameplay DLL for both modes, so
+    # "active DLL == revamped DLL" was always true and an ORIGINAL launch got
+    # the 70% marker re-staged right after the launcher had removed it. The
+    # mode now comes from the launcher (HEROVR_RENDERER_MODE, or the
+    # reports\renderer-mode.txt it writes); the digest only decides when the
+    # two mode DLLs really differ. Unknown with identical DLLs: Original.
     $activeDigest = (Get-FileHash -LiteralPath $activeStereo -Algorithm SHA256).Hash.ToLowerInvariant()
     $revampedDigest = (Get-FileHash -LiteralPath $revampedStereo -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($activeDigest -eq $revampedDigest) {
-        $stagedRenderer = Join-Path $projectRoot ("reports\stereo-modules\" + $activeDigest)
+    $originalDigest = if (Test-Path -LiteralPath $originalStereo) { (Get-FileHash -LiteralPath $originalStereo -Algorithm SHA256).Hash.ToLowerInvariant() } else { '' }
+    $rendererMode = "$env:HEROVR_RENDERER_MODE".Trim().ToLowerInvariant()
+    $modeFile = Join-Path $projectRoot 'reports\renderer-mode.txt'
+    if (-not $rendererMode -and (Test-Path -LiteralPath $modeFile)) {
+        $rendererMode = "$(Get-Content -LiteralPath $modeFile -TotalCount 1)".Trim().ToLowerInvariant()
+    }
+    if ($rendererMode -notin @('original', 'revamped')) {
+        $rendererMode = if ($activeDigest -eq $revampedDigest -and $revampedDigest -ne $originalDigest) { 'revamped' } else { 'original' }
+    }
+    $stagedRenderer = Join-Path $projectRoot ("reports\stereo-modules\" + $activeDigest)
+    $enableMarker = Join-Path $stagedRenderer 'herovr-own-taa-70.enable'
+    if ($rendererMode -eq 'revamped' -and $activeDigest -eq $revampedDigest) {
         New-Item -ItemType Directory -Path $stagedRenderer -Force | Out-Null
-        $enableMarker = Join-Path $stagedRenderer 'herovr-own-taa-70.enable'
         if (-not (Test-Path -LiteralPath $enableMarker)) {
             Set-Content -LiteralPath $enableMarker -Value 'Revamped 70% eye reconstruction' -Encoding ascii
         }
         Write-Host 'Renderer: PERFORMANCE module and staged 70% enable marker (live.txt VR AA preference still applies).' -ForegroundColor Green
     } else {
-        Write-Host 'Renderer: active DLL is not the staged Performance module; no 70% enable marker set.'
+        if (Test-Path -LiteralPath $enableMarker) {
+            try { Remove-Item -LiteralPath $enableMarker -Force -ErrorAction Stop }
+            catch { throw "The Performance 70% marker could not be removed for ORIGINAL ($enableMarker): $($_.Exception.Message)" }
+        }
+        Write-Host 'Renderer: ORIGINAL - no 70% enable marker (the 0.0.78 eye path).' -ForegroundColor Green
     }
 }
 # An update zip extracted into a folder of its own rather than over the mod ($portVersion is printed at the start).

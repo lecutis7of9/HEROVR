@@ -87,6 +87,13 @@ foreach ($mode in @('original', 'revamped')) {
     New-Item -ItemType Directory -Force -Path $target | Out-Null
     Copy-Item -LiteralPath $source -Destination (Join-Path $target 'spidy_stereo_probe.dll')
 }
+# Test packages launch through the HERO VR selector, not directly into the game.
+# Keep its executable beside the existing launcher settings path, and make the
+# top-level starter a clear entry point to renderer selection.
+$heroLauncher = Join-Path $root 'tools/launcher/SM2VRLauncher.exe'
+if (-not (Test-Path -LiteralPath $heroLauncher)) { throw 'Missing HERO VR launcher: build tools/launcher/build.ps1 first' }
+New-Item -ItemType Directory -Force -Path (Join-Path $stage 'tools/launcher') | Out-Null
+Copy-Item -LiteralPath $heroLauncher -Destination (Join-Path $stage 'tools/launcher/SM2VRLauncher.exe')
 # Spidy Launcher.exe: optional (the starter does not need it), in tools\ so "Launch Spidy VR.cmd" is the one file
 # to start at the folder's top. It finds the package from there (it looks up for tools\run_game_vr.py).
 $launcher = Join-Path $bin 'spidy_launcher.exe'
@@ -116,7 +123,7 @@ foreach ($script in @('launch-game-vr.ps1', 'package_manifest.py')) {
 }
 # The starter, with Windows line endings whatever this checkout has (cmd.exe misreads some others). Update 24:
 # only this one (the checkout's other .cmd files are for development).
-foreach ($starter in @('Launch Spidy VR.cmd')) {
+foreach ($starter in @('HERO VR Launcher.cmd')) {
     $text = [IO.File]::ReadAllText((Join-Path $root $starter)) -replace "`r?`n", "`r`n"
     [IO.File]::WriteAllText((Join-Path $stage $starter), $text, (New-Object Text.ASCIIEncoding))
 }
@@ -180,11 +187,11 @@ $folder | ForEach-Object { Write-Host "  self-test: $_" }
 if ($LASTEXITCODE -or @($folder)[-1] -ne 'ok') { throw 'The staged package folder fails the folder checks (above).' }
 # "Launch Spidy VR.cmd" is the only thing to start at the top, the README says so first,
 $starters = @(Get-ChildItem -LiteralPath $stage -File | Where-Object { $_.Extension -in @('.cmd', '.bat', '.exe', '.ps1', '.lnk') })
-if ($starters.Count -ne 1 -or $starters[0].Name -ne 'Launch Spidy VR.cmd') {
+if ($starters.Count -ne 1 -or $starters[0].Name -ne 'HERO VR Launcher.cmd') {
     throw "The package's top must hold only Launch Spidy VR.cmd to start; it has: $($starters.Name -join ', ')."
 }
 $readme = (Get-Content -LiteralPath (Join-Path $stage 'README.txt') -TotalCount 12) -join ' '
-if ($readme -notmatch [regex]::Escape('Unzip, start your VR app, double-click Launch Spidy VR.cmd')) {
+if ($readme -notmatch [regex]::Escape('Unzip, start your VR app, double-click HERO VR Launcher.cmd')) {
     throw 'README.txt does not start with "Unzip, start your VR app, double-click Launch Spidy VR.cmd".'
 }
 if ($readme -match 'Visual C\+\+ Redistributable') { throw 'README.txt still asks for the Visual C++ Redistributable.' }

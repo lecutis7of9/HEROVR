@@ -1,5 +1,6 @@
 #include "spidy/d3d12_renderer.hpp"
 #include "spidy/mesh_model.hpp"
+#include "spidy/ua_body_cut.hpp"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -1064,6 +1065,109 @@ float4 ps(Out i):SV_TARGET {
     hr(device_->CreateGraphicsPipelineState(&p, IID_PPV_ARGS(&occludedPipeline_)), "Create occluded model pipeline");
     occludedFormat_ = targetFormat;
 }
+HRESULT serializeBodyCutRoot(ComPtr<ID3DBlob>& signature, ComPtr<ID3DBlob>& error) noexcept {
+    // UA EXPANSION fix 3: the hero's cut (b0 the eye's view-projection, t0 the eye's scene depth at heap 1 or 2, b1
+    // the sizes, lenses, the eye and the feet).
+    D3D12_DESCRIPTOR_RANGE scene{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0};
+    D3D12_ROOT_PARAMETER parameters[3]{};
+    parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    parameters[0].Constants.Num32BitValues = 16;
+    parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    parameters[1].DescriptorTable = {1, &scene};
+    parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    parameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    parameters[2].Constants.ShaderRegister = 1;
+    parameters[2].Constants.Num32BitValues = 12;
+    parameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_ROOT_SIGNATURE_DESC rs{static_cast<UINT>(std::size(parameters)), parameters, 0, nullptr,
+                                D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT};
+    signature.Reset();
+    error.Reset();
+    return D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
+}
+void D3D12Renderer::prepareBodyCut(DXGI_FORMAT targetFormat) {
+    if (!bodyCutRoot_) {
+        ComPtr<ID3DBlob> signature, error;
+        hr(serializeBodyCutRoot(signature, error), "Serialize body cut root signature");
+        hr(device_->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
+                                        IID_PPV_ARGS(&bodyCutRoot_)),
+           "Create body cut root signature");
+    }
+    if (bodyCutPipeline_ && bodyCutFormat_ == targetFormat)
+        return;
+    // The proxy's pixel: the game's depth under it (reversed Z: 0 the sky, else n / d metres along the view axis, as
+    // the see-through models read it); the game's surface point on this pixel's ray (the eye + the ray to the proxy's
+    // point scaled from its view depth to the game's); kept only inside this proxy's capsule and above the feet. Kept:
+    // that surface's depth in the overlay's standard Z (no colour). Else nothing.
+    const char* shader = R"(
+cbuffer Eye : register(b0) { row_major float4x4 vp; };
+cbuffer Cut : register(b1) { float4 size; float4 lens; float4 eye; };
+Texture2D<float> scene : register(t0);
+struct In { float3 position:POSITION; float4 color:COLOR; float4 shape:TEXCOORD0; };
+struct Out { float4 position:SV_POSITION; float3 a:TEXCOORD1; float4 b:TEXCOORD2; float3 world:TEXCOORD3; float w:TEXCOORD4; };
+Out vs(In i) {
+    Out o; o.position=mul(vp,float4(i.position,1)); o.a=i.color.xyz; o.b=i.shape; o.world=i.position; o.w=o.position.w; return o;
+}
+float gameMetres(float d) { return lens.y > 0 ? lens.x * lens.y / (lens.x + d * (lens.y - lens.x)) : lens.x / d; }
+float4 ps(Out i, out float depth : SV_Depth) : SV_TARGET {
+    depth = 1;
+    const float2 uv = i.position.xy / size.xy;
+    const int2 at = int2(clamp(uv * size.zw, float2(0, 0), size.zw - 1));
+    const float d = scene.Load(int3(at, 0));
+    if (d <= 1e-7 || d > 1) discard;
+    const float m = gameMetres(d);
+    const float3 p = eye.xyz + (i.world - eye.xyz) * (m / max(i.w, 1e-4));
+    if (p.y < eye.w) discard;
+    const float3 ab = i.b.xyz - i.a;
+    const float t = saturate(dot(p - i.a, ab) / max(dot(ab, ab), 1e-8));
+    if (length(p - (i.a + ab * t)) > i.b.w) discard;
+    depth = saturate(lens.w * (1 - lens.z / max(m, lens.z)) / (lens.w - lens.z));
+    return float4(0, 0, 0, 0);
+}
+)";
+    ComPtr<ID3DBlob> vs, ps, error;
+    for (const char* stage : {"vs", "ps"}) {
+        error.Reset();
+        auto& out = stage[0] == 'v' ? vs : ps;
+        if (const HRESULT result = D3DCompile(shader, std::strlen(shader), "spidy_body_cut", nullptr, nullptr, stage,
+                                              stage[0] == 'v' ? "vs_5_0" : "ps_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0,
+                                              &out, &error);
+            FAILED(result) || !out)
+            throw std::runtime_error(std::string("Compile body cut ") + stage + " shader HRESULT=" +
+                                     std::to_string(static_cast<unsigned long>(result)) + ": " + compilerText(error.Get()));
+    }
+    D3D12_INPUT_ELEMENT_DESC layout[] = {
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+    };
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC p{};
+    p.pRootSignature = bodyCutRoot_.Get();
+    p.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+    p.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+    p.InputLayout = {layout, 3};
+    p.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    p.NumRenderTargets = 1;
+    p.RTVFormats[0] = targetFormat;
+    p.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+    p.SampleDesc.Count = 1;
+    p.SampleMask = UINT_MAX;
+    p.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    p.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // the eye may be inside a proxy: its far side then
+    p.RasterizerState.DepthClipEnable = FALSE;         // a proxy past the near plane still finds the hand under it
+    p.BlendState.RenderTarget[0].RenderTargetWriteMask = 0; // depth only: the game's picture stays
+    p.DepthStencilState.DepthEnable = TRUE;
+    p.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    p.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    p.DepthStencilState.FrontFace.StencilFailOp = p.DepthStencilState.FrontFace.StencilDepthFailOp =
+        p.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+    p.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+    p.DepthStencilState.BackFace = p.DepthStencilState.FrontFace;
+    bodyCutPipeline_.Reset();
+    hr(device_->CreateGraphicsPipelineState(&p, IID_PPV_ARGS(&bodyCutPipeline_)), "Create body cut pipeline");
+    bodyCutFormat_ = targetFormat;
+}
 void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<const Vertex> vertices,
                                 bool preserveColor, bool waitForCompletion,
                                 std::span<const Vertex> translucent, const Grade* grade,
@@ -1181,8 +1285,65 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
             occlude = false;
         }
     }
-    // One buffer: the depth-writing vertices, the art, the translucent ones, then the models.
-    const auto bytes = vertices.size_bytes() + art.size_bytes() + translucent.size_bytes() + textured.size_bytes();
+    // UA EXPANSION fix 3 (ua_body_cut.hpp): the hero's cut - its proxies (moved like the models), each eye's scene depth.
+    BodyCut cutNow = std::move(bodyCut_);
+    bodyCut_ = {};
+    std::span<const Vertex> cutProxies;
+    std::array<float, 3> cutEye[2]{};
+    if (!cutNow.proxies.empty() && bodyCutFault_.empty() && views.size() == 2 && modelReady() && modelHeap_ &&
+        modelHeap_->GetDesc().NumDescriptors >= modelHeapDescriptors && scene.eyes[0] && scene.eyes[1] && scene.width &&
+        scene.height && std::isfinite(scene.gameNear) && scene.gameNear > 0 && std::isfinite(cutNow.footY) &&
+        std::isfinite(scene.overlayNear) && scene.overlayNear > 0 && scene.overlayFar > scene.overlayNear) {
+        try {
+            bool sameSize = true;
+            for (const auto& eye : scene.eyes) {
+                const auto d = eye->GetDesc();
+                sameSize = sameSize && d.Format == DXGI_FORMAT_R32_TYPELESS && d.Width == scene.width &&
+                           d.Height == scene.height && d.MipLevels == 1 && d.DepthOrArraySize == 1;
+            }
+            if (sameSize) {
+                prepareBodyCut(format);
+                const auto stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                for (unsigned eye = 0; eye < 2; ++eye) {
+                    D3D12_SHADER_RESOURCE_VIEW_DESC sv{};
+                    sv.Format = DXGI_FORMAT_R32_FLOAT;
+                    sv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                    sv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    sv.Texture2D.MipLevels = 1;
+                    auto at = modelHeap_->GetCPUDescriptorHandleForHeapStart();
+                    at.ptr += (1 + eye) * stride;
+                    device_->CreateShaderResourceView(scene.eyes[eye].Get(), &sv, at);
+                }
+                bodyCutShifted_ = std::move(cutNow.proxies);
+                if (modelRelative) { // the models' origin: the capsules' ends too (color, shape.xyz)
+                    const float ox = static_cast<float>(modelOrigin[0]), oy = static_cast<float>(modelOrigin[1]),
+                                oz = static_cast<float>(modelOrigin[2]);
+                    for (Vertex& v : bodyCutShifted_) {
+                        v.position = Vec3{v.position.x - ox, v.position.y - oy, v.position.z - oz};
+                        v.color = Vec3{v.color.x - ox, v.color.y - oy, v.color.z - oz};
+                        v.shape.x -= ox, v.shape.y -= oy, v.shape.z -= oz;
+                    }
+                }
+                for (unsigned eye = 0; eye < 2; ++eye)
+                    cutEye[eye] = {cutNow.eyes[eye][0] - (modelRelative ? static_cast<float>(modelOrigin[0]) : 0.f),
+                                   cutNow.eyes[eye][1] - (modelRelative ? static_cast<float>(modelOrigin[1]) : 0.f),
+                                   cutNow.eyes[eye][2] - (modelRelative ? static_cast<float>(modelOrigin[2]) : 0.f)};
+                cutNow.footY += ua_body_cut::footLift - (modelRelative ? static_cast<float>(modelOrigin[1]) : 0.f);
+                cutProxies = bodyCutShifted_;
+                sceneKept_ = scene; // its depth images stay alive until this frame is done
+                ++bodyCutDrawn_;
+            }
+        } catch (const std::exception& error) {
+            bodyCutFault_ = std::string("Body cut off (") + error.what() + ")";
+            cutProxies = {};
+        } catch (...) {
+            bodyCutFault_ = "Body cut off";
+            cutProxies = {};
+        }
+    }
+    // One buffer: the depth-writing vertices, the art, the translucent ones, the models, then the hero's cut.
+    const auto bytes = vertices.size_bytes() + art.size_bytes() + translucent.size_bytes() + textured.size_bytes() +
+                       cutProxies.size_bytes();
     if (bytes > capacity_) {
         vertices_.Reset();
         // Build 5: capacity_ is set only once the new buffer exists. Before, a failed creation (out of
@@ -1218,6 +1379,10 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
         if (!textured.empty())
             std::memcpy(static_cast<char*>(data) + vertices.size_bytes() + art.size_bytes() + translucent.size_bytes(),
                         textured.data(), textured.size_bytes());
+        if (!cutProxies.empty())
+            std::memcpy(static_cast<char*>(data) + vertices.size_bytes() + art.size_bytes() + translucent.size_bytes() +
+                            textured.size_bytes(),
+                        cutProxies.data(), cutProxies.size_bytes());
         vertices_->Unmap(0, nullptr);
     }
     hr(allocator_->Reset(), "Reset allocator");
@@ -1278,6 +1443,25 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
             D3D12_RECT rect{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
             list_->RSSetViewports(1, &viewport);
             list_->RSSetScissorRects(1, &rect);
+            // UA EXPANSION fix 3: the hero's cut first - his depth where the game's picture is him (no colour).
+            if (!cutProxies.empty()) {
+                ID3D12DescriptorHeap* heaps[] = {modelHeap_.Get()};
+                list_->SetDescriptorHeaps(1, heaps);
+                list_->SetGraphicsRootSignature(bodyCutRoot_.Get());
+                list_->SetGraphicsRoot32BitConstants(0, 16, modelViewProjection[eye].data(), 0);
+                const auto stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                auto depthAt = modelHeap_->GetGPUDescriptorHandleForHeapStart();
+                depthAt.ptr += (1 + eye) * stride;
+                list_->SetGraphicsRootDescriptorTable(1, depthAt);
+                const float cut[12] = {static_cast<float>(width), static_cast<float>(height), static_cast<float>(scene.width),
+                                       static_cast<float>(scene.height), scene.gameNear, scene.gameFar, scene.overlayNear,
+                                       scene.overlayFar, cutEye[eye][0], cutEye[eye][1], cutEye[eye][2], cutNow.footY};
+                list_->SetGraphicsRoot32BitConstants(2, 12, cut, 0);
+                list_->SetPipelineState(bodyCutPipeline_.Get());
+                list_->DrawInstanced(static_cast<UINT>(cutProxies.size()), 1,
+                                     static_cast<UINT>(vertices.size() + art.size() + translucent.size() + textured.size()), 0);
+                list_->SetGraphicsRootSignature(root_.Get());
+            }
             list_->SetGraphicsRoot32BitConstants(0, 16, views[eye].viewProjection.data(), 0);
             if (!vertices.empty()) {
                 list_->SetPipelineState(pipeline_.Get());

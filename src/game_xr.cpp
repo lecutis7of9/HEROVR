@@ -39,6 +39,7 @@
 #include "spidy/hideout074.hpp"  // 0.0.74 test 1 HIDEOUTS
 #include "spidy/ua_expansion.hpp" // ULTIMATE ALLIANCE EXPANSION
 #include "spidy/ua_body.hpp"
+#include "spidy/ua_body_cut.hpp"
 #include "spidy/ua_cast.hpp"      // ULTIMATE ALLIANCE EXPANSION CHARACTERS
 #include "spidy/batcave074.hpp"   // 0.0.74 test 2b BATCAVE
 #include "spidy/crime_gps074.hpp"  // 0.0.74 test 2b CRIME GPS
@@ -14253,8 +14254,8 @@ DWORD runBody() {
                                                 std::abs(motion.flipTilt.w) < .9998f;
                         // Test build 10 ONE BODY: a worn suit shown in first person replaces the game's body (its arms too).
                         pose.flags = (flatScreen || (strictBody && !strictVerified) ||
-                                              !suit_wear::gameBodyDrawn(values.body || strictBody, hero_modes::gameBodyShown(heroNow()),
-                                                                        suitShownNow())
+                                              !suit_wear::gameBodyDrawn(values.body || strictBody || uaVisit.active(), // UA fix 3: the player's own hero in a UA place
+                                                                        hero_modes::gameBodyShown(heroNow()), suitShownNow())
                                           ? 0u
                                           : native_body::bodyOn) | // 0.0.72 BATMAN BODY, GAME BODY
                                      (mirrorShows ? 0u : native_body::hideHead) |
@@ -14439,7 +14440,7 @@ DWORD runBody() {
                     // UA EXPANSION fix 2 (ua_body::pick): in a UA place with no body drawn (no suit, no UA body), the gloves.
                     if (suit_wear::glovesShown(strictBody, hero_modes::gameBodyShown(heroNow()), flatScreen, native_body::drawn(),
                                                suitShownNow()) ||
-                        (uaVisit.active() && !flatScreen && !suitShownNow()))
+                        (uaVisit.active() && !flatScreen && !native_body::drawn() && !suitShownNow())) // UA fix 3: not over his own hands
                         for (unsigned i = 0; i < 2; ++i) {
                             saved.gloveOn[i] = frame.hands[i].valid && validTrackedPose(frame.hands[i].grip) ? 1.f : 0.f;
                             saved.gloveFist[i] = gloveFist[i];
@@ -16912,7 +16913,45 @@ DWORD runBody() {
                             ua_body::pick(uaHere, saved->flatScreen, wornReady,
                                           uaBodyReady.load() && suitsRigged.load() && mesh_model::library().model(mesh_model::slotUaBody),
                                           false);
-                        const uint32_t bodySlot = uaSource == ua_body::Source::uaBody ? mesh_model::slotUaBody : wornNow;
+                        // UA EXPANSION fix 3 (ua_body_cut.hpp): the player's OWN hero (the game's, posed by native_body)
+                        // instead of the UA body, shown through the room by the cut (below); the UA body only while the
+                        // game's is not drawn (its checks failed, a hero without one) or the cut never comes through.
+                        static uint64_t uaCutSeen = 0;
+                        static uint32_t uaCutMisses = 0;
+                        static bool uaCutRequested = false;
+                        if (uaCutRequested) { // the last frame's cut: drawn, or one more miss
+                            const uint64_t drawnNow = overlay.bodyCutDrawn();
+                            uaCutMisses = drawnNow > uaCutSeen ? 0u : std::min<uint32_t>(uaCutMisses + 1, 100000u);
+                            uaCutSeen = drawnNow;
+                        }
+                        constexpr uint32_t uaCutGiveUp = 240; // ~2.7 s at 90 Hz with no cut drawn: the UA body for the session
+                        const bool uaGameHero = uaSource == ua_body::Source::uaBody &&
+                                                ua_body_cut::gameHero(uaHere, saved->flatScreen, native_body::drawn(),
+                                                                      overlay.bodyCutFault().empty() && uaCutMisses < uaCutGiveUp);
+                        uaCutRequested = false;
+                        const uint32_t bodySlot = uaGameHero ? 0u : uaSource == ua_body::Source::uaBody ? mesh_model::slotUaBody : wornNow;
+                        if (uaGameHero && validTrackedPose(rendered.headPose)) {
+                            ua_body_cut::Player who;
+                            who.eye = rendered.headPose.position + travel;
+                            who.eyeForward = rendered.headPose.orientation.rotate(Vec3{0, 0, -1});
+                            who.footY = rendered.anchor.y + travel.y; // the game's ground: where his feet are
+                            for (unsigned i = 0; i < 2; ++i) {
+                                who.hand[i] = rendered.swing.hands[i].tracked && validTrackedPose(rendered.grips[i]);
+                                who.grip[i] = rendered.grips[i].position + travel;
+                            }
+                            ua_body_cut::Capsule caps[ua_body_cut::most];
+                            const int n = ua_body_cut::capsules(who, caps);
+                            D3D12Renderer::BodyCut cut;
+                            ua_body_cut::appendProxies(cut.proxies, caps, n);
+                            for (unsigned e = 0; e < 2; ++e)
+                                cut.eyes[e] = {rendered.eyes[made(e)][12] + travel.x, rendered.eyes[made(e)][13] + travel.y,
+                                               rendered.eyes[made(e)][14] + travel.z};
+                            cut.footY = who.footY;
+                            if (!cut.proxies.empty()) {
+                                overlay.setBodyCut(std::move(cut));
+                                uaCutRequested = true;
+                            }
+                        }
                         if (const uint32_t ws = bodySlot; !saved->flatScreen &&
                                                           (mesh_model::slotIsSuit(ws) || mesh_model::slotIsUaBody(ws)) &&
                                                           overlay.modelReady() && validTrackedPose(rendered.headPose)) {
@@ -17055,8 +17094,11 @@ DWORD runBody() {
                                     if (suitWorn && suitRig->hasCape)
                                         suit_wear::cape(*suitRig, mv, live, capeSpread, suitSkinned);
                                     // Test build 10 ONE BODY: drawn, it stands in for the game's body (suitShownAtMs).
+                                    // UA EXPANSION fix 3: the UA body never stands in for the game's (its stamp would keep
+                                    // the player's own hero off - the cut shows him whenever native_body draws him).
                                     if (suitWorn && mask &&
-                                        suit_wear::draw(modelVertices, hero007::modelSinkBudget, *suitMesh, *suitRig, suitSkinned, mask))
+                                        suit_wear::draw(modelVertices, hero007::modelSinkBudget, *suitMesh, *suitRig, suitSkinned, mask) &&
+                                        !mesh_model::slotIsUaBody(ws))
                                         suitShownAtMs.store(GetTickCount64(), std::memory_order_relaxed);
                                 }
                             } catch (...) {
@@ -18702,9 +18744,11 @@ DWORD runBody() {
                                 const uint32_t shadowMode = worldShadowNow.load();
                                 const bool sunShadow = sunLight.shadow > 0 && !modelVertices.empty() &&
                                                        (shadowMode == spidy::world_light::shadowOn || seeThroughCount != 0);
-                                native_gpu::sceneDepthInUse(seeThroughDepthNow.load() == 1 || seeThroughCount != 0 ||
+                                // UA EXPANSION fix 3: the hero's cut reads it too (in a UA place, the game's hero shown).
+                                const bool uaCutDepth = saved->hideoutAway && saved->hideoutView.ua;
+                                native_gpu::sceneDepthInUse(seeThroughDepthNow.load() == 1 || seeThroughCount != 0 || uaCutDepth ||
                                                             spidy::world_light::wantsDepthAlways(shadowMode, sunLight));
-                                if ((seeThroughCount || sunShadow) && !saved->stereoScreen &&
+                                if ((seeThroughCount || sunShadow || uaCutDepth) && !saved->stereoScreen &&
                                     eye_debug::eyeDebugSource(seeDebug, 0) == 0 &&
                                     eye_debug::eyeDebugSource(seeDebug, 1) == 1) {
                                     ++seeFrames;
@@ -18742,7 +18786,10 @@ DWORD runBody() {
                                                 std::to_string(seeFrames) + ", with depth " + std::to_string(seeGiven) +
                                                 ", drawn " + std::to_string(overlay.sceneDrawn()) + " / refused " +
                                                 std::to_string(overlay.sceneRefused()) +
-                                                (overlay.sceneFault().empty() ? std::string() : ", " + overlay.sceneFault()));
+                                                (overlay.sceneFault().empty() ? std::string() : ", " + overlay.sceneFault()) +
+                                                (uaCutDepth ? ", UA own-hero cut " + std::to_string(overlay.bodyCutDrawn()) +
+                                                                  (overlay.bodyCutFault().empty() ? std::string() : " (" + overlay.bodyCutFault() + ")")
+                                                            : std::string()));
                                 }
                             } catch (...) {
                                 overlay.setSceneDepth({});

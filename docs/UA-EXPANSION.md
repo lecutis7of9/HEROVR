@@ -129,6 +129,22 @@ looking at him.
   the same spot; about 2,400 faces).
 - **No body or hands:** see **Your body** above.
 
+## Fix 3 (after Stark Tower test 2): your own Spider-Man
+
+- **Your SM2 hero, not MUA's.** In a UA place the game keeps drawing its own hero (native_body poses him to the
+  headset and controllers; the eyes are in his head), and the room drawn over the game's picture used to hide him.
+  Now the overlay cuts the black box and the room where the game's own depth puts a surface inside a body-shaped
+  volume round you (capsules: torso, arms to the controllers, legs to the game's ground; no head) and above your feet
+  (`include/spidy/ua_body_cut.hpp`, `D3D12Renderer::setBodyCut`). Room furniture in front of you still covers him.
+- GAME BODY is switched on for the visit (whatever its setting); a worn HERO VR suit still wins, as outside.
+- **Fallback:** MUA Spider-Man (Models/UA/Body) only while the game's body is not drawn (its address checks failed,
+  a hero without one), or when the cut never comes through (no scene depth for ~3 s: the rest of the session).
+  The fallback no longer counts as a worn suit, so it never keeps the game's body off. The gloves only when neither shows.
+- **Flicker:** the IGB import marked every room material BLEND, so stray clear texels in solid furniture were cut as
+  holes. `tools/ua/ua_alpha.py` (run by the converter) writes materials with under 2 % clear texels OPAQUE (their
+  alpha ignored, no discard); the plants, leaves, water, glass and soft shadows keep their cut-outs.
+- The console's scene-depth line shows `UA own-hero cut N` (frames drawn) and any fault.
+
 ## Known limits (CANDIDATE, untested in the headset)
 
 - **Scale** is 0.0254 m per unit (an inch), set from the heroes' heights. It may need a small adjustment in the

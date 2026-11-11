@@ -21,7 +21,7 @@ class Wiring(unittest.TestCase):
     def test_models_relative_to_the_eye_in_rooms(self):
         self.assertIn('overlay.setModelOrigin(model_origin::of(viewer));', self.g)
         r = src('src/d3d12_renderer.cpp')
-        self.assertEqual(r.count('modelViewProjection[eye].data()'), 2)  # the model and the occluded pipelines
+        self.assertEqual(r.count('modelViewProjection[eye].data()'), 3)  # the model and the occluded pipelines, fix 3's body cut
         self.assertIn('model_origin::shift(textured, modelOrigin, modelShifted_);', r)
 
     def test_body_drawn_in_ua(self):
@@ -29,7 +29,7 @@ class Wiring(unittest.TestCase):
         self.assertIn('suitRig = mesh_model::slotIsUaBody(ws) ? &uaBodyRig : &suitRigs[ws - mesh_model::slotSuitFirst];', self.g)
         self.assertIn('t.feet = ua_body::feet(t.eye, saved->hideoutFloor + travel.y, ua_expansion::eyeHeight);', self.g)
         self.assertIn('ok = suit_wear::makeRig(*ub, uaBodyRig, "UA_Body");', self.g)
-        self.assertIn('(uaVisit.active() && !flatScreen && !suitShownNow())', self.g)  # the gloves when no body
+        self.assertIn('(uaVisit.active() && !flatScreen && !native_body::drawn() && !suitShownNow())', self.g)  # the gloves when no body (fix 3: nor his own)
         m = src('include/spidy/mesh_model.hpp')
         self.assertIn('"UA/StarkTower", "UA/StarkTower/Cast", "UA/Body"};', m)
 

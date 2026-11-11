@@ -209,10 +209,15 @@ def main():
         make_hideout.build('stark_tower', str(built / 'walk.glb'), str(built / 'room.json'), 'mesh', str(room))
         # the walk grid came from walk.glb (no backdrop, no ceiling, the glass kept as walls); the drawn room is scene.glb
         make_hideout.strip_lights(str(built / 'scene.glb'), str(out / 'scene.glb'))
+        # fix 3: the solid materials OPAQUE (no stray holes in the furniture; ua_alpha.py)
+        import ua_alpha
+        solid, cut = ua_alpha.solidify(str(out / 'scene.glb'))
         for name in ('room.txt', 'room.json'):
             shutil.copyfile(room / name, out / name)
         for name in ('npcs.txt', 'report.txt'):
             shutil.copyfile(built / name, out / name)
+        with open(out / 'report.txt', 'a') as f:
+            f.write(f'materials opaque {len(solid)}, cut-out {len(cut)}: {", ".join(cut)}\n')
 
         if not a.no_cast:
             build_cast(a, pkg / MAP, work, out, env)

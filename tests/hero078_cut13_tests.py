@@ -84,7 +84,7 @@ class RootSignatures(unittest.TestCase):
     def test_vertex_layout(self):
         # the three model-drawing layouts read POSITION @0, COLOR @12, TEXCOORD @28 of the 44-byte Vertex (no tangent)
         s = src('src/d3d12_renderer.cpp')
-        self.assertEqual(s.count('{"TEXCOORD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 28,'), 4)
+        self.assertEqual(s.count('{"TEXCOORD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 28,'), 5)  # UA fix 3: + the body cut
         self.assertNotIn('TANGENT', s)
         v = src('include/spidy/vertex.hpp')
         self.assertIn('Vec3 position, color;', v)

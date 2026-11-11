@@ -50,6 +50,7 @@
 #include "spidy/hideout074.hpp"
 #include "spidy/ua_expansion.hpp"
 #include "spidy/ua_body.hpp"
+#include "spidy/ua_body_cut.hpp"
 #include "spidy/ua_cast.hpp"
 #include "spidy/model_origin.hpp"
 #include "spidy/batcave074.hpp"
@@ -37848,6 +37849,63 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         ub::apply(d, t);
         check(t.curl[0] == 1.f && t.handleTiltDeg[1] == 0.f && std::abs(t.gripForward[1].z + 1) < 1e-5f && std::abs(t.gripUp[1].y - 1) < 1e-5f,
               "a power's drive: its palm frame (up = z x x) and its curl");
+    });
+    test("UA EXPANSION fix 3 OWN HERO: the body-shaped cut round the tracked player, its proxies, which body", [] {
+        namespace uc = ua_body_cut;
+        uc::Player p;
+        p.eye = {10, 101.7f, -5};
+        p.eyeForward = {0, -.3f, -1};
+        p.footY = 100.f;
+        p.hand[1] = true;
+        p.grip[1] = {10.35f, 101.1f, -5.4f};
+        uc::Capsule c[uc::most];
+        const int n = uc::capsules(p, c);
+        check(n > 10 && n <= uc::most, "a torso, two arms with hands, two legs with feet");
+        check(uc::inside(c, n, {10, 101.f, -5}, p.footY) && uc::inside(c, n, {10, 100.5f, -5}, p.footY),
+              "the chest and the hips are inside");
+        check(uc::inside(c, n, p.grip[1], p.footY) && uc::inside(c, n, p.grip[1] + Vec3{0, 0, -.06f}, p.footY),
+              "the tracked right hand (round the controller) is inside");
+        check(uc::inside(c, n, {10.2f, 100.95f, -5.f}, p.footY), "the untracked left arm hangs at his side");
+        check(!uc::inside(c, n, {10, 101.7f, -5}, p.footY) && !uc::inside(c, n, {10, 101.85f, -5}, p.footY),
+              "no head (the game shrinks it; the eyes are in it)");
+        check(!uc::inside(c, n, {10, 100.01f, -5}, p.footY) && !uc::inside(c, n, {10.05f, 99.5f, -5}, p.footY),
+              "nothing under his feet (the street below never shows)");
+        check(uc::inside(c, n, {9.9f, 100.1f, -5.1f}, p.footY), "the feet just above the ground show");
+        check(!uc::inside(c, n, {10, 101, -6.f}, p.footY) && !uc::inside(c, n, {11, 101, -5}, p.footY) &&
+                  !uc::inside(c, n, {10, 101, -4.4f}, p.footY),
+              "a wall or a car a metre off is not him");
+        std::vector<Vertex> v;
+        uc::appendProxies(v, c, n);
+        check(v.size() == size_t(n) * 36, "a box of 12 triangles round each capsule");
+        bool carried = true, encloses = true;
+        for (int i = 0; i < n; ++i) {
+            const Vertex& a = v[size_t(i) * 36];
+            carried = carried && length(a.color - c[i].a) < 1e-5f && std::abs(a.shape.x - c[i].b.x) < 1e-5f &&
+                      std::abs(a.shape.y - c[i].b.y) < 1e-5f && std::abs(a.shape.z - c[i].b.z) < 1e-5f &&
+                      std::abs(a.shape.w - c[i].r) < 1e-6f;
+            // every point of the capsule within its box: the box's corners span a and b plus r each way
+            Vec3 lo{1e9f, 1e9f, 1e9f}, hi{-1e9f, -1e9f, -1e9f};
+            for (int k = 0; k < 36; ++k) {
+                const Vec3 q = v[size_t(i) * 36 + k].position;
+                lo = {std::min(lo.x, q.x), std::min(lo.y, q.y), std::min(lo.z, q.z)};
+                hi = {std::max(hi.x, q.x), std::max(hi.y, q.y), std::max(hi.z, q.z)};
+            }
+            for (const Vec3 e : {c[i].a, c[i].b})
+                encloses = encloses && e.x - c[i].r >= lo.x - 1e-4f && e.x + c[i].r <= hi.x + 1e-4f &&
+                           e.y - c[i].r >= lo.y - 1e-4f && e.y + c[i].r <= hi.y + 1e-4f && e.z - c[i].r >= lo.z - 1e-4f &&
+                           e.z + c[i].r <= hi.z + 1e-4f;
+        }
+        check(carried && encloses, "each proxy corner carries its capsule (color a, shape b and r) and the box holds it");
+        uc::Player bad = p;
+        bad.footY = 105.f;
+        check(uc::capsules(bad, c) == 0, "eyes under the ground: no cut");
+        bad = p;
+        bad.eye.x = NAN;
+        check(uc::capsules(bad, c) == 0, "a bad pose: no cut");
+        check(uc::gameHero(true, false, true, true) && !uc::gameHero(true, false, false, true) &&
+                  !uc::gameHero(true, false, true, false) && !uc::gameHero(false, false, true, true) &&
+                  !uc::gameHero(true, true, true, true),
+              "his own hero when native_body draws him and the cut can come through; else the UA body");
     });
     test("ULTIMATE ALLIANCE EXPANSION CHARACTERS: cast.txt, talk.txt, who is there, whom he talks to, the talk, the draw", [] {
         namespace mm = mesh_model;

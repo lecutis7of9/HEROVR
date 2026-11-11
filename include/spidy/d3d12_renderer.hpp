@@ -22,6 +22,7 @@ inline constexpr unsigned modelHeapDescriptors = 3, artHeapDescriptors = 1;
 HRESULT serializeModelRoot(ComPtr<ID3DBlob>& signature, ComPtr<ID3DBlob>& error) noexcept;
 HRESULT serializeArtRoot(ComPtr<ID3DBlob>& signature, ComPtr<ID3DBlob>& error) noexcept;
 HRESULT serializeOccludedRoot(ComPtr<ID3DBlob>& signature, ComPtr<ID3DBlob>& error) noexcept;
+HRESULT serializeBodyCutRoot(ComPtr<ID3DBlob>& signature, ComPtr<ID3DBlob>& error) noexcept; // UA fix 3
 class D3D12Renderer {
   public:
     ~D3D12Renderer();
@@ -121,6 +122,25 @@ class D3D12Renderer {
     void setModelOrigin(std::array<double, 3> origin) noexcept {
         modelOrigin_ = origin;
         modelOriginSet_ = model_origin::usable(origin);
+    }
+    // UA EXPANSION fix 3 (ua_body_cut.hpp): for the next renderViews only (with the scene depth set), the game's own
+    // hero shown through: each proxy (ua_body_cut::appendProxies; world, as the models) drawn first, writing no
+    // colour and, where the game's surface under the pixel is inside its capsule and above footY, that surface's
+    // depth - so nothing behind the hero is drawn there and the game's picture (him) stays. `eyes`: each view's eye
+    // (world). Anything amiss (no scene depth, a shader fault): not drawn (the hub as before).
+    struct BodyCut {
+        std::vector<Vertex> proxies;
+        std::array<std::array<float, 3>, 2> eyes{};
+        float footY{};
+    };
+    void setBodyCut(BodyCut cut) noexcept {
+        bodyCut_ = std::move(cut);
+    }
+    std::uint64_t bodyCutDrawn() const {
+        return bodyCutDrawn_;
+    }
+    const std::string& bodyCutFault() const {
+        return bodyCutFault_;
     }
     // Empty, or why the occluded models' pass is off for the session.
     const std::string& sceneFault() const {
@@ -239,6 +259,7 @@ class D3D12Renderer {
     // 0.0.74 test 10 SEE-THROUGH: the occluded models' root signature and pipeline; and whether
     // `scene` fits these views and models.
     void prepareOccluded(DXGI_FORMAT targetFormat);
+    void prepareBodyCut(DXGI_FORMAT targetFormat);
     bool sceneFits(const SceneDepth& scene, std::span<const ViewTarget> views, std::size_t models) const;
     ComPtr<ID3D12Device> device_;
     ComPtr<ID3D12CommandQueue> queue_;
@@ -313,6 +334,14 @@ class D3D12Renderer {
     ComPtr<ID3D12RootSignature> occludedRoot_;
     ComPtr<ID3D12PipelineState> occludedPipeline_;
     DXGI_FORMAT occludedFormat_ = DXGI_FORMAT_UNKNOWN;
+    // UA EXPANSION fix 3: the hero's cut (setBodyCut), its pipeline and its state.
+    BodyCut bodyCut_;
+    std::vector<Vertex> bodyCutShifted_;
+    ComPtr<ID3D12RootSignature> bodyCutRoot_;
+    ComPtr<ID3D12PipelineState> bodyCutPipeline_;
+    DXGI_FORMAT bodyCutFormat_ = DXGI_FORMAT_UNKNOWN;
+    std::string bodyCutFault_;
+    std::uint64_t bodyCutDrawn_{};
     std::string sceneFault_;
     std::uint64_t sceneDrawn_{}, sceneRefused_{};
 };

@@ -52,6 +52,25 @@ def iso_extract_wad(iso_path, out_dir):
     return dst
 
 
+def iso_extract_file(iso_path, name, out_dir):
+    """Copy one file (by its name, any folder, any case: e.g. TOWN1_V.ENS) out of the ISO; None if absent."""
+    import pycdlib
+    iso = pycdlib.PyCdlib()
+    iso.open(str(iso_path))
+    try:
+        for dirname, _dirs, files in iso.walk(iso_path='/'):
+            for f in files:
+                if f.split(';')[0].lower() == name.lower():
+                    out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
+                    dst = out_dir / name
+                    with open(dst, 'wb') as fp:
+                        iso.get_file_from_iso_fp(fp, iso_path=f"{dirname.rstrip('/')}/{f}")
+                    return dst
+        return None
+    finally:
+        iso.close()
+
+
 def resolve_wad(src, work):
     src = Path(src)
     if src.suffix.lower() == '.iso':
@@ -74,19 +93,42 @@ class Wad:
             self.names = list(self.entries)
 
     def _scan(self):
+        """assetsfb.wad is zip-like but its end record is cut short, so zipfile refuses it. Sizes come from the
+        central directory (PK 1 2) when it is there: that also covers the entries whose local header defers its
+        sizes to a data descriptor (flag 8; four packages on the MUA1 PS2 disc, among them the characters'
+        default_0002_c.fb and permanentnotfinal.fb). Without one, the local headers are walked."""
         data = self.path.read_bytes()
-        pos = 0
-        while (pos := data.find(b'PK\x03\x04', pos)) >= 0:
-            (_sig, _ver, flag, method, _t, _d, _crc, csize, usize, nlen, xlen) = struct.unpack_from('<IHHHHHIIIHH', data, pos)
-            name = data[pos + 30:pos + 30 + nlen].decode('latin-1')
-            start = pos + 30 + nlen + xlen
-            if flag & 8 or (csize == 0 and usize == 0 and not name.endswith('/')):
-                print(f'warning: {name}: data descriptor / unknown size, skipped', file=sys.stderr)
-            elif not name.endswith('/'):
-                self.entries[name] = (start, method, csize, usize)
-            pos = start + max(csize, 0)
         self._data = data
-        print(f'(fallback scan: {len(self.entries)} entries)', file=sys.stderr)
+        central = 0
+        pos = 0
+        while (pos := data.find(b'PK\x01\x02', pos)) >= 0:
+            if pos + 46 > len(data):
+                break
+            (_sig, _made, _need, _flag, method, _t, _d, _crc, csize, usize, nlen, xlen, clen, _disk, _ia, _ea,
+             local) = struct.unpack_from('<IHHHHHHIIIHHHHHII', data, pos)
+            name = data[pos + 46:pos + 46 + nlen].decode('latin-1')
+            pos += 46 + nlen + xlen + clen
+            if local + 30 > len(data) or data[local:local + 4] != b'PK\x03\x04':
+                continue
+            lnlen, lxlen = struct.unpack_from('<HH', data, local + 26)
+            if data[local + 30:local + 30 + lnlen].decode('latin-1') != name:
+                continue
+            start = local + 30 + lnlen + lxlen
+            if not name.endswith('/') and start + csize <= len(data):
+                self.entries[name] = (start, method, csize, usize)
+                central += 1
+        if not central:
+            pos = 0
+            while (pos := data.find(b'PK\x03\x04', pos)) >= 0:
+                (_sig, _ver, flag, method, _t, _d, _crc, csize, usize, nlen, xlen) = struct.unpack_from('<IHHHHHIIIHH', data, pos)
+                name = data[pos + 30:pos + 30 + nlen].decode('latin-1')
+                start = pos + 30 + nlen + xlen
+                if flag & 8 or (csize == 0 and usize == 0 and not name.endswith('/')):
+                    print(f'warning: {name}: data descriptor / unknown size, skipped', file=sys.stderr)
+                elif not name.endswith('/'):
+                    self.entries[name] = (start, method, csize, usize)
+                pos = start + max(csize, 0)
+        print(f'(fallback scan: {len(self.entries)} entries, {central} from the central directory)', file=sys.stderr)
 
     def read(self, name):
         if self.zip:

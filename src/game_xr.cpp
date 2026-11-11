@@ -38,6 +38,7 @@
 #include "spidy/world_light.hpp" // HERO VR 0.0.78 WORLD LIGHT
 #include "spidy/hideout074.hpp"  // 0.0.74 test 1 HIDEOUTS
 #include "spidy/ua_expansion.hpp" // ULTIMATE ALLIANCE EXPANSION
+#include "spidy/ua_cast.hpp"      // ULTIMATE ALLIANCE EXPANSION CHARACTERS
 #include "spidy/batcave074.hpp"   // 0.0.74 test 2b BATCAVE
 #include "spidy/crime_gps074.hpp"  // 0.0.74 test 2b CRIME GPS
 #include "spidy/streamer_view.hpp"
@@ -1982,6 +1983,46 @@ bool uaRoomOk[ua_expansion::locations]{};
 std::string uaRoomError[ua_expansion::locations];
 std::vector<ua_expansion::Npc> uaNpcs[ua_expansion::locations];
 std::atomic<uint8_t> uaStarkRow{static_cast<uint8_t>(ua_expansion::Row::missing)}; // the wrist row (game thread's)
+// ULTIMATE ALLIANCE EXPANSION CHARACTERS (ua_cast.hpp): each place's cast.txt (who stands where, in which look) and
+// talk.txt (their conversations), read once at the models' load beside its Cast model; not ok: nobody drawn or talks.
+ua_cast::Cast uaCasts[ua_expansion::locations];
+bool uaCastOk[ua_expansion::locations]{};
+ua_cast::Talk uaTalks[ua_expansion::locations];
+bool uaTalkOk[ua_expansion::locations]{};
+std::string uaCastError[ua_expansion::locations];
+void readUaCast(uint32_t at) {
+    uaCastOk[at] = uaTalkOk[at] = false;
+    uaCasts[at] = {};
+    uaTalks[at] = {};
+    uaCastError[at].clear();
+    const mesh_model::Mesh* model = mesh_model::library().model(ua_expansion::castSlots[at]);
+    if (!model) {
+        uaCastError[at] = "no Cast model (converted before the characters? run tools/ua/convert_ua.py again)";
+        return;
+    }
+    std::string error;
+    const std::string cast = readModelsText(ua_expansion::folders[at], L"cast.txt");
+    uaCastOk[at] = !cast.empty() && ua_cast::parseCast(cast, uaCasts[at], error, model->triangles());
+    if (!uaCastOk[at])
+        uaCastError[at] = cast.empty() ? "no cast.txt" : "cast.txt: " + error;
+    const std::string talk = readModelsText(ua_expansion::folders[at], L"talk.txt");
+    uaTalkOk[at] = uaCastOk[at] && !talk.empty() && ua_cast::parseTalk(talk, uaTalks[at], error);
+    if (uaCastOk[at] && !uaTalkOk[at])
+        uaCastError[at] = talk.empty() ? "no talk.txt" : "talk.txt: " + error;
+}
+// A character's line: its clip (Voice\v<clip>.wav) by name among the voice player's files, played alone.
+void uaSay(music::Player* voice, music::Player::Status& status, int clip) {
+    if (!voice || clip < 0)
+        return;
+    voice->status(status);
+    char want[16];
+    std::snprintf(want, sizeof want, "v%04d", clip);
+    for (size_t k = 0; k < status.names.size(); ++k)
+        if (status.names[k].find(want) != std::string::npos) {
+            voice->play(static_cast<int>(k));
+            return;
+        }
+}
 void readUaPlace(uint32_t at) {
     uaRoomOk[at] = false;
     uaRooms[at] = {};
@@ -2440,8 +2481,18 @@ DWORD runBody() {
                     uaRoomOk[at] = false;
                     uaRoomError[at] = "could not be read";
                 }
+                try {
+                    readUaCast(at);
+                } catch (...) {
+                    uaCastOk[at] = uaTalkOk[at] = false;
+                    uaCastError[at] = "could not be read";
+                }
                 consoleLine(std::string("UA EXPANSION: ") + ua_expansion::names[at] +
-                            (uaRoomOk[at] ? " ready (CANDIDATE), " + std::to_string(uaNpcs[at].size()) + " characters placed (not drawn yet)"
+                            (uaRoomOk[at] ? " ready (CANDIDATE), " +
+                                                (uaCastOk[at] ? std::to_string(uaCasts[at].npcs.size()) + " characters, " +
+                                                                    (uaTalkOk[at] ? std::to_string(uaTalks[at].convs.size()) + " conversations"
+                                                                                  : "nobody talks - " + uaCastError[at])
+                                                              : "no characters - " + uaCastError[at])
                                           : " not offered - " + uaRoomError[at]));
             }
             // 0.0.76 HARLEYS: each bike's layout (its body model and layout, or that bike is MODEL MISSING)
@@ -3159,6 +3210,20 @@ DWORD runBody() {
         double uaClockAt = -1;
         batcave074::WristButton uaWrist;
         Vec3 uaHintAt{}, uaHintFacing{0, 0, 1};
+        // ULTIMATE ALLIANCE EXPANSION CHARACTERS (ua_cast.hpp): who is there this visit (one talker pair a visit), how
+        // each stands turned, their idle clock, whom he looks at / talks to, the talk, the panel as last drawn (its
+        // choices' hit test), the MISSIONS: COMING SOON card and the voices' own player (made at the first visit).
+        std::vector<uint32_t> uaShown;
+        std::vector<float> uaYaw;
+        float uaIdleClock{}, uaMissionsFade{};
+        Vec3 uaMissionsAt{};
+        ua_cast::Chat uaChat;
+        int uaChatNpc = -1, uaLookNpc = -1, uaStickWas = 0;
+        bool uaBWas{};
+        uint32_t uaVisitCount{};
+        batcave074::View uaPanelView;
+        std::unique_ptr<music::Player> uaVoice;
+        music::Player::Status uaVoiceStatus;
         // 0.0.74 test 2b CRIME GPS (crime_gps074.hpp): groups of enemies near the car as crimes (CANDIDATE), its clock.
         crime_gps074::Tracker crimeTracker;
         float crimeGpsClock{};
@@ -11254,6 +11319,34 @@ DWORD runBody() {
                                                 uaPointShown = -1;
                                                 uaSeconds = 0;
                                                 uaWrist = {};
+                                                // the characters: everyone always there and one talker pair (the map's
+                                                // rand_npcs.py), standing as placed; the voices' player made once
+                                                try {
+                                                    uaShown.clear();
+                                                    uaYaw.clear();
+                                                    uaChat.end();
+                                                    uaChatNpc = uaLookNpc = -1;
+                                                    uaMissionsFade = uaIdleClock = 0;
+                                                    uaBWas = true;
+                                                    const auto& cast = uaCasts[ua_expansion::starkTower];
+                                                    if (uaCastOk[ua_expansion::starkTower]) {
+                                                        const size_t pairs = cast.pairs.size();
+                                                        const uint32_t pair = pairs ? static_cast<uint32_t>((GetTickCount64() / 997 + uaVisitCount) % pairs) : 0;
+                                                        ++uaVisitCount;
+                                                        uaShown = ua_cast::shownFor(cast, pair);
+                                                        for (const auto& n : cast.npcs)
+                                                            uaYaw.push_back(n.yawDeg);
+                                                        if (!uaVoice && uaTalkOk[ua_expansion::starkTower]) {
+                                                            uaVoice = std::make_unique<music::Player>(
+                                                                modelsPath(ua_expansion::folders[ua_expansion::starkTower], L"Voice"));
+                                                            uaVoice->setOnce(true);
+                                                            uaVoice->setVolume(90.f);
+                                                        }
+                                                    }
+                                                } catch (...) {
+                                                    uaShown.clear();
+                                                    uaYaw.clear();
+                                                }
                                                 // the arrival hint 1.6 m ahead at eye height, facing him (room space)
                                                 const auto& pl = uaVisit.place();
                                                 Vec3 f{look.x, 0, look.z};
@@ -11299,6 +11392,105 @@ DWORD runBody() {
                                                 wristPoke = false;
                                             }
                                             hi.exit = hi.exit || wristPoke;
+                                            // ULTIMATE ALLIANCE EXPANSION CHARACTERS (ua_cast.hpp): look or point at one and A (or a
+                                            // trigger) talks to him - over the gold ring's A. While talking he stands still (the left
+                                            // stick and A / trigger pick, a pointing hand lights a choice), B ends the talk (never the
+                                            // trip) and the poke still goes home.
+                                            try {
+                                                const auto& cast = uaCasts[ua_expansion::starkTower];
+                                                const auto& pl = uaVisit.place();
+                                                uaIdleClock += hi.dt;
+                                                uaMissionsFade = std::max(0.f, uaMissionsFade - hi.dt * .25f);
+                                                const bool bFresh = bHeld && !uaBWas;
+                                                uaBWas = bHeld;
+                                                if (uaCastOk[ua_expansion::starkTower] && uaYaw.size() == cast.npcs.size()) {
+                                                    const Vec3 eyeR = pl.room(hi.head);
+                                                    const Vec3 lookR = Quat::yaw(-pl.yaw).rotate(hi.headForward);
+                                                    bool handOn = false;
+                                                    Vec3 handW{}, dirW{};
+                                                    for (const unsigned i : {1u, 0u}) {
+                                                        const auto& h = frame.hands[i];
+                                                        if (handOn || !h.valid || !validTrackedPose(h.grip) || !validTrackedPose(h.aim) ||
+                                                            !finite(motion.grips[i].position))
+                                                            continue;
+                                                        handW = motion.grips[i].position;
+                                                        dirW = (motion.grips[i].orientation * h.grip.orientation.conjugate()).rotate(h.aim.orientation.rotate({0, 0, -1}));
+                                                        handOn = finite(handW) && finite(dirW);
+                                                    }
+                                                    const float sy = hi.moveY;
+                                                    const int flick = sy > .7f ? -1 : sy < -.7f ? 1 : std::abs(sy) < .35f ? 0 : uaStickWas;
+                                                    const int move = flick != uaStickWas ? flick : 0;
+                                                    uaStickWas = flick;
+                                                    if (uaChat.active()) {
+                                                        ua_cast::ChatIn ci;
+                                                        ci.dt = hi.dt;
+                                                        ci.next = hi.press;
+                                                        ci.quit = bFresh;
+                                                        ci.move = move;
+                                                        ci.point = handOn ? batcave074::talkChoiceAt(uaPanelView, hi.head, handW, dirW) : -1;
+                                                        const ua_cast::ChatOut co = uaChat.step(ci);
+                                                        if (co.stopVoice && uaVoice)
+                                                            uaVoice->stop();
+                                                        if (co.voice >= 0)
+                                                            uaSay(uaVoice.get(), uaVoiceStatus, co.voice);
+                                                        if (co.ended) {
+                                                            if (co.missions) {
+                                                                Vec3 f{lookR.x, 0, lookR.z};
+                                                                const float fl = std::sqrt(f.x * f.x + f.z * f.z);
+                                                                f = fl > 1e-3f ? f * (1.f / fl) : Vec3{0, 0, -1};
+                                                                uaMissionsAt = eyeR + f * 1.3f;
+                                                                uaMissionsFade = 2.5f;
+                                                                message(1, 0, "MISSIONS: COMING SOON");
+                                                                game_prompts::note("UA EXPANSION: a mission picked - COMING SOON");
+                                                            }
+                                                            uaChatNpc = -1;
+                                                        }
+                                                        hi.press = false;
+                                                        hi.moveX = hi.moveY = 0;
+                                                        hi.exit = wristPoke;
+                                                        uaExitDone = true; // B in a talk ends the talk, not the trip
+                                                        uaExitHeld = 0;
+                                                    } else {
+                                                        // on the gold ring (Wyatt stands in it) a look does not pick him: A there
+                                                        // goes home; point at him to talk
+                                                        bool onRing = false;
+                                                        if (const hideout074::Room* rm = uaVisit.room())
+                                                            for (const auto& pt : rm->points) {
+                                                                const Vec3 f = uaVisit.roomFeet();
+                                                                const float ddx = pt.at.x - f.x, ddz = pt.at.z - f.z;
+                                                                onRing = onRing || (pt.action == hideout074::Action::toVehicle &&
+                                                                                    ddx * ddx + ddz * ddz <= pt.radius * pt.radius);
+                                                            }
+                                                        uaLookNpc = ua_cast::pick(cast, uaShown, uaVisit.roomFeet(), eyeR, onRing ? Vec3{} : lookR, handOn,
+                                                                                  handOn ? pl.room(handW) : Vec3{},
+                                                                                  handOn ? Quat::yaw(-pl.yaw).rotate(dirW) : Vec3{});
+                                                        if (uaLookNpc >= 0 && hi.press && uaTalkOk[ua_expansion::starkTower]) {
+                                                            const auto& talks = uaTalks[ua_expansion::starkTower];
+                                                            if (uaChat.begin(talks, talks.find(cast.npcs[static_cast<size_t>(uaLookNpc)].talk))) {
+                                                                uaChatNpc = uaLookNpc;
+                                                                uaSay(uaVoice.get(), uaVoiceStatus, uaChat.voiceNow());
+                                                                hi.press = false;
+                                                                uaExitDone = true;
+                                                                uaExitHeld = 0;
+                                                                game_prompts::note(("UA EXPANSION: talking to " + cast.npcs[static_cast<size_t>(uaLookNpc)].label).c_str());
+                                                            }
+                                                        }
+                                                    }
+                                                    // the standing ones turn to whom they talk to, and back
+                                                    for (const uint32_t i : uaShown) {
+                                                        const auto& n = cast.npcs[i];
+                                                        if (n.look >= cast.looks.size() || !cast.looks[n.look].turns)
+                                                            continue;
+                                                        const float home = n.yawDeg * 3.14159265f / 180.f;
+                                                        const Vec3 target = static_cast<int>(i) == uaChatNpc ? eyeR
+                                                                                                            : n.at + Vec3{std::cos(home), 0, -std::sin(home)};
+                                                        uaYaw[i] = ua_cast::turnToward(uaYaw[i], n.at, target, hi.dt);
+                                                    }
+                                                }
+                                            } catch (...) {
+                                                uaChat.end();
+                                                uaChatNpc = uaLookNpc = -1;
+                                            }
                                             hideout074::Out ho{};
                                             try {
                                                 ho = uaVisit.step(hi);
@@ -11317,6 +11509,11 @@ DWORD runBody() {
                                             uaLeave = ho.leave;
                                         }
                                         if (uaLeave && uaVisit.active()) {
+                                            uaChat.end();
+                                            uaChatNpc = uaLookNpc = -1;
+                                            uaMissionsFade = 0;
+                                            if (uaVoice)
+                                                uaVoice->stop();
                                             uaVisit.end();
                                             uaExitDone = true;
                                             uaExitHeld = 0;
@@ -14637,6 +14834,40 @@ DWORD runBody() {
                                     HV.wristOn = frame.hands[0].valid && validTrackedPose(frame.hands[0].grip) && finite(motion.grips[0].position);
                                     HV.wristLit = uaWrist.lit();
                                     HV.wristAt = motion.grips[0].position + Vec3{0, .10f, 0};
+                                    // ULTIMATE ALLIANCE EXPANSION CHARACTERS: the characters (posed, turned) and the talk
+                                    const auto& cast = uaCasts[ua_expansion::starkTower];
+                                    if (uaCastOk[ua_expansion::starkTower] && uaYaw.size() == cast.npcs.size()) {
+                                        saved.uaCastModel = mesh_model::library().model(ua_expansion::castSlots[ua_expansion::starkTower]);
+                                        saved.uaCast = &cast;
+                                        saved.uaPoses.reserve(uaShown.size());
+                                        for (const uint32_t i : uaShown)
+                                            saved.uaPoses.push_back({i, uaYaw[i], uaIdleClock + 1.37f * static_cast<float>(i)});
+                                        const Vec3 eyeR = uaVisit.place().room(motion.headPose.position);
+                                        auto chestOf = [&](int i) {
+                                            const auto& n = cast.npcs[static_cast<size_t>(i)];
+                                            const bool seated = n.look < cast.looks.size() && !cast.looks[n.look].turns;
+                                            return n.at + Vec3{0, seated ? .9f : ua_cast::chestHeight, 0};
+                                        };
+                                        if (uaChat.active() && uaChatNpc >= 0 && static_cast<size_t>(uaChatNpc) < cast.npcs.size()) {
+                                            const Vec3 chest = chestOf(uaChatNpc);
+                                            Vec3 d{eyeR.x - chest.x, 0, eyeR.z - chest.z};
+                                            const float dl = std::sqrt(d.x * d.x + d.z * d.z);
+                                            d = dl > 1e-3f ? d * (1.f / dl) : Vec3{0, 0, 1};
+                                            HV.talkOn = true;
+                                            HV.talkAt = chest + d * std::min(.55f, dl * .5f) + Vec3{0, -.3f, 0};
+                                            HV.talkSpeaker = uaChat.speaker();
+                                            HV.talkText = uaChat.text();
+                                            HV.talkChoices = uaChat.choosing() ? uaChat.choices() : std::vector<std::string>{};
+                                            HV.talkHot = uaChat.choosing() ? uaChat.hot() : -1;
+                                        } else if (uaLookNpc >= 0 && static_cast<size_t>(uaLookNpc) < cast.npcs.size()) {
+                                            HV.tagOn = true;
+                                            HV.tagAt = chestOf(uaLookNpc) + Vec3{0, .75f, 0};
+                                            HV.tagName = cast.npcs[static_cast<size_t>(uaLookNpc)].label;
+                                        }
+                                        HV.missionsFade = uaMissionsFade;
+                                        HV.missionsAt = uaMissionsAt;
+                                    }
+                                    uaPanelView = HV;
                                 } catch (...) {
                                     saved.hideoutView = {};
                                 }
@@ -15786,6 +16017,18 @@ DWORD runBody() {
                                 if (saved->hideoutModel && overlay.modelReady())
                                     drew = hideout074::appendRoom(modelVertices, *saved->hideoutModel, place, hero007::modelSinkBudget) &&
                                            hideout074::appendBackdrop(vertices, *saved->hideoutModel, place, viewer);
+                                // ULTIMATE ALLIANCE EXPANSION CHARACTERS: in the room's place; a fault or over the budget: the
+                                // room without them (never the fallback box)
+                                if (drew && saved->uaCastModel && saved->uaCast && !saved->uaPoses.empty()) {
+                                    const size_t castFrom = modelVertices.size();
+                                    try {
+                                        if (!ua_cast::append(modelVertices, *saved->uaCastModel, *saved->uaCast, saved->uaPoses, place,
+                                                             hero007::modelSinkBudget))
+                                            modelVertices.resize(castFrom);
+                                    } catch (...) {
+                                        modelVertices.resize(castFrom);
+                                    }
+                                }
                             } catch (...) {
                                 drew = false;
                             }

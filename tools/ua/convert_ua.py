@@ -10,6 +10,8 @@ writes the converted room into your HERO VR install. Nothing is sent anywhere; t
                                 --out "<HERO VR folder>/Models/UA/StarkTower"
                                 [--work <scratch dir>] [--previews]
 
+--no-cast skips the characters, their lines and voices.
+
 Needs: Python 3.10+ with numpy, pillow, pycdlib and raven-formats (pip install numpy pillow pycdlib raven-formats);
 Blender 4.4; Kaiko's
 igb-blender add-on (github.com/KaikoClanworth1/igb-blender, the folder holding its __init__.py). --wad instead
@@ -19,9 +21,17 @@ Writes into --out (exactly what HERO VR reads, Models/UA/StarkTower):
   scene.glb  the hub drawn in VR (baked look, raised skyline, a ceiling from the hub's own textures)
   room.txt   the walk grid, the spawn and the RETURN TO CITY point (tools/hideout074/make_hideout.py)
   room.json  the room's description (kept for reference)
-  npcs.txt   where the hub's characters stand (the next update's hooks; read, not drawn yet)
+  npcs.txt   every character spawner of the map (room space)
+  Cast/scene.glb  the hub's characters (Nick Fury, Black Widow, Hank Pym, the Vision, Wyatt Wingfoot and the
+             office workers) in their own skins, each posed through the map's own idle performance (EA_ZONE*,
+             a few frames of its loop), one texture atlas
+  cast.txt   who stands where, in which look, whom you can talk to (tools/ua/ua_cast.py)
+  talk.txt   their conversations from the disc: every line, reply and choice, start conditions, unlocks
+  Voice/     the lines' own voice clips (v0000.wav ...) from the hub's sound bank (SOUNDS/T/O/TOWN1_V.ENS;
+             with --wad and no --sounds: subtitles only)
   report.txt what the converter did
-and, with --previews, walk_overlay.png (the walk grid over the floor plan) and eye-level renders.
+and, with --previews, walk_overlay.png (the walk grid over the floor plan), eye-level renders, cast_hub.png (the
+hub with its characters) and cast_closeup.png (one character with a subtitle mock).
 Then start the game with ua_locations on (the default) and open the wrist's ULTIMATE ALLIANCE EXPANSION page.
 """
 import argparse, os, shutil, subprocess, sys, tempfile
@@ -66,6 +76,64 @@ def overlay(plan_png, walk_png, out_png):
     Image.fromarray(out.clip(0, 255).astype('uint8')).save(out_png)
 
 
+CAST_CAP = 140000  # triangles in Cast/scene.glb: mesh_model::uaCastTriangles (frames dropped to fit)
+HUB_BANK = 'TOWN1_V.ENS'  # Act 1's hub voices (SOUNDS/T/O): every stark1 conversation line
+
+
+def closeup_subtitle(out):
+    """cast_closeup.png: the close-up with the opening line he would say to Spider-Man, as a subtitle mock."""
+    import json
+    import ua_cast
+    info = json.loads((out / 'cast_preview.json').read_text())
+    speakers, convs = ua_cast.read_talk_txt(out / 'talk.txt')
+    conv = convs.get(info['talk'])
+    speaker, text = info['label'], ''
+    if conv:
+        _start, line = ua_cast.opening(conv)
+        if line in conv['lines']:
+            tok, _v, _s, text = conv['lines'][line]
+            speaker = speakers.get(tok, speaker) or speaker
+    ua_cast.subtitle_mock(out / 'cast_raw_closeup.png', out / 'cast_closeup.png', speaker, text or '...')
+    (out / 'cast_raw_closeup.png').unlink()
+
+
+def build_cast(a, pkg, work, out, env):
+    """The characters (Blender: build_cast.py), their atlas model, cast.txt, talk.txt and the voice clips."""
+    import json
+    import ua_cast
+    cast = ua_cast.plan_cast(pkg, 'maps/act1/stark/stark1', a.scale)
+    looks = ua_cast.looks_of(cast)
+    plan = {'scale': a.scale, 'looks': [{'name': l['name'], 'skin_igb': str(pkg / 'actors' / f"{l['skin']}.igb"),
+                                         'anim_igb': str(pkg / 'actors' / 'zone_stark1.igb'), 'anim': l['anim'],
+                                         'frames': 10 if l['principal'] else 6} for l in looks]}
+    (work / 'cast_plan.json').write_text(json.dumps(plan, indent=1))
+    built = work / 'cast'
+    run([a.blender, '-b', '--factory-startup', '--python', HERE / 'build_cast.py', '--', work / 'cast_plan.json', built], env)
+    looks = [ua_cast.load_built(l, built / f"{l['name']}.npz") for l in looks]
+    lines, tris, sheets = ua_cast.pack_cast(looks, out / 'Cast', CAST_CAP)
+    ua_cast.write_cast(out / 'cast.txt', lines, cast)
+    print(f'cast: {len(cast)} characters, {len(looks)} looks, {tris} triangles, {sheets} atlas page(s)')
+    talks = ua_cast.read_talks(pkg, sorted({c['talk'] for c in cast if c['talk']}))
+    bank = {}
+    ens = Path(a.sounds) if a.sounds else None
+    if ens is None and a.iso:
+        import ua_extract
+        ens = ua_extract.iso_extract_file(a.iso, HUB_BANK, work / 'sounds')
+    if ens and Path(ens).exists():
+        bank = ua_cast.voice_bank(ens, work / 'bank')
+    else:
+        print('no hub sound bank: the characters talk in subtitles only (give --sounds TOWN1_V.ENS)')
+    index, durations = ua_cast.write_voices(out / 'Voice', talks, bank)
+    stats = ua_cast.read_npcstat(pkg / 'data' / 'npcstat.engb.xml')
+    ua_cast.write_talk(out / 'talk.txt', talks, ua_cast.speaker_names(talks, stats), index, durations)
+    n = sum(len(t['lines']) for t in talks.values())
+    print(f'talk: {len(talks)} conversations, {n} lines, {len(index)} voice clips ({sum(durations.values()):.0f} s)')
+    with open(out / 'report.txt', 'a') as f:
+        f.write((built / 'cast_report.txt').read_text() if (built / 'cast_report.txt').exists() else '')
+        f.write(f'cast {len(cast)} characters, {tris} triangles, {sheets} atlas pages; talk {len(talks)} '
+                f'conversations, {n} lines, {len(index)} voice clips\n')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     src = ap.add_mutually_exclusive_group(required=True)
@@ -76,7 +144,10 @@ def main():
     ap.add_argument('--out', required=True, help='<HERO VR>/Models/UA/StarkTower')
     ap.add_argument('--work', help='scratch folder (kept; default: a temp folder, removed after)')
     ap.add_argument('--previews', action='store_true', help='also render walk_overlay.png and eye-level views into --out')
-    ap.add_argument('--scale', type=float, default=0.022, help='metres per game unit (default 0.022)')
+    ap.add_argument('--sounds', help="the disc's hub sound bank (TOWN1_V.ENS) when --wad is used (voices)")
+    ap.add_argument('--no-cast', action='store_true', help='leave out the characters and their conversations')
+    ap.add_argument('--scale', type=float, default=0.0254,
+                    help='metres per game unit (default 0.0254: Raven units are inches, a 72-unit hero ~ 1.83 m)')
     a = ap.parse_args()
 
     if not (Path(a.igb_blender) / '__init__.py').exists():
@@ -115,6 +186,9 @@ def main():
         for name in ('npcs.txt', 'report.txt'):
             shutil.copyfile(built / name, out / name)
 
+        if not a.no_cast:
+            build_cast(a, pkg / MAP, work, out, env)
+
         if a.previews:
             grid = next(l for l in (room / 'room.txt').read_text().splitlines() if l.startswith('grid '))
             x0, z0, cell, cols, rows = grid.split()[1:]
@@ -126,6 +200,10 @@ def main():
             run([a.blender, '-b', '--factory-startup', '--python', HERE / 'render_room_preview.py', '--',
                  out / 'scene.glb', str(out) + os.sep, 'eye_window:-20,1.7,0:180,4', 'eye_spawn:0,1.7,0:-90,2',
                  'look_up:0,1.7,0:-90,60:14'])
+            if not a.no_cast and (out / 'cast.txt').exists():
+                run([a.blender, '-b', '--factory-startup', '--python', HERE / 'render_cast_preview.py', '--',
+                     out, str(out) + os.sep], env)
+                closeup_subtitle(out)
         print(f'\nSTARK TOWER ready in {out}')
         print('Start HERO VR with ua_locations on (the default), then: wrist -> ULTIMATE ALLIANCE EXPANSION -> STARK TOWER.')
     finally:

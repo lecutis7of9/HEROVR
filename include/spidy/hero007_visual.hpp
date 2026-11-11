@@ -346,6 +346,7 @@ inline constexpr size_t modelSinkBudget = 3 * (10 * size_t{mesh_model::drawTrian
                                                2 * size_t{mesh_model::drawTriangles} +
                                                // 0.0.74 test 1: + the hideout room; UA EXPANSION: or a UA room (never both)
                                                std::max(size_t{mesh_model::hideoutTriangles}, size_t{mesh_model::uaRoomTriangles}) +
+                                               size_t{mesh_model::uaCastDrawnTriangles} + // UA EXPANSION: its characters (ua_cast::append)
                                                4 * size_t{mesh_model::suitHqTriangles}); // 0.0.78: the HQ Punisher worn (and mirrored) and two more on others
 
 // The vertex budget (each softBar 54, softTriangle 21, a 10-sided glob 90): the most one call may add.

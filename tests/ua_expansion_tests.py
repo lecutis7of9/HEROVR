@@ -40,7 +40,7 @@ class Wiring(unittest.TestCase):
         self.assertIn('if (mesh_model::slotIsUa(slot)) {', self.g)
         self.assertIn('modelsPath(mesh_model::slotFolders[slot], L"scene.glb")', self.g)
         self.assertIn('readUaPlace(at);', self.g)
-        self.assertIn('"UA/StarkTower"};', src('include/spidy/mesh_model.hpp'))
+        self.assertIn('"UA/StarkTower", "UA/StarkTower/Cast"};', src('include/spidy/mesh_model.hpp'))
 
     def test_the_wrist_page_starts_and_ends_it(self):
         self.assertIn('if (result.uaStarkTower) // ULTIMATE ALLIANCE EXPANSION', self.g)

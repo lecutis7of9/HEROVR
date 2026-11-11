@@ -53,6 +53,10 @@ inline constexpr uint32_t hideoutTriangles = 60000;
 // (tools/ua/convert_ua.py; the Stark Tower hub with its city backdrop and ceiling is about 138,000). Within
 // vanTriangles, the most loadFolder keeps; never drawn with a hideout (one trip at a time).
 inline constexpr uint32_t uaRoomTriangles = 150000;
+// ULTIMATE ALLIANCE EXPANSION characters (ua_cast.hpp): every look of the place's cast, each a few frames of its idle
+// (the converter halves the frames until they fit: Stark Tower's 11 looks are about 118,000). Stored, not drawn whole:
+// ua_cast::append draws one frame a character, about 14,000 a visit (ua_cast::drawBudget).
+inline constexpr uint32_t uaCastTriangles = 140000, uaCastDrawnTriangles = 30000;
 // 0.0.78 PUNISHER HQ (owner, t1889u: "keep the visual quality" of his 592,596-triangle Punisher): that suit's own
 // cap (Suit_punisher_1; every other suit keeps drawTriangles). tools/suits/convert_suit.py ships it at 80,000.
 inline constexpr uint32_t suitHqTriangles = 80000;
@@ -239,6 +243,10 @@ enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarre
                        // the player's own MUA1 PS2 disc - never shipped), room.txt and npcs.txt beside it. Loaded only when
                        // UA LOCATIONS is ON (game_xr). Missing: the wrist's STARK TOWER says how to convert it.
                        slotUaStarkTower = slotArsenal078End,
+                       // ULTIMATE ALLIANCE EXPANSION characters (ua_cast.hpp): Models\UA\StarkTower\Cast (the converter too:
+                       // the hub's characters in their own skins, cast.txt and talk.txt beside the room). Never decimated
+                       // (its triangle ranges are the frames). Loaded only with the room.
+                       slotUaStarkCast,
                        slots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
@@ -264,7 +272,7 @@ inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",   
                                                    "Punisher078/Pistol", "Punisher078/Pistol/Slide", "Punisher078/Pistol/Mag",
                                                    "Punisher078/Sniper", "Punisher078/Sniper/Bolt", "Punisher078/Sniper/Mag",
                                                    "Punisher078/Rifle", "Punisher078/Rifle/Handle", "Punisher078/Rifle/Mag",
-                                                   "UA/StarkTower"};
+                                                   "UA/StarkTower", "UA/StarkTower/Cast"};
 inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, hammerTriangles,
                                                 vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles, drawTriangles,
@@ -279,7 +287,7 @@ inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, dr
                                                 arsenalTriangles, arsenalPartTriangles, arsenalPartTriangles,
                                                 arsenalTriangles, arsenalPartTriangles, arsenalPartTriangles,
                                                 arsenalTriangles, arsenalPartTriangles, arsenalPartTriangles,
-                                                uaRoomTriangles};
+                                                uaRoomTriangles, uaCastTriangles};
 // HERO VR 0.0.78 PUNISHER ARSENAL: a gun's slot (hero007::Part078 p).
 inline constexpr bool slotIsArsenal078(uint32_t slot) { return slot >= slotArsenal078First && slot < slotArsenal078End; }
 // HERO VR 0.0.78 cut14: the arsenal's guns that ship - the pump (and its forend, shell) and the pistol (and its slide,
@@ -344,13 +352,16 @@ inline uint32_t suitSlot(const char* folder) {
 }
 inline constexpr bool slotIsHideout(uint32_t slot) { return slot == slotHideoutBatcave || slot == slotHideoutSafehouse; }
 // ULTIMATE ALLIANCE EXPANSION: the UA rooms (their own switch, UA LOCATIONS; not HIDEOUTS).
-inline constexpr bool slotIsUa(uint32_t slot) { return slot == slotUaStarkTower; }
+inline constexpr bool slotIsUa(uint32_t slot) { return slot == slotUaStarkTower || slot == slotUaStarkCast; }
+// Its characters (not a room: never walked, drawn by ua_cast::append).
+inline constexpr bool slotIsUaCast(uint32_t slot) { return slot == slotUaStarkCast; }
+static_assert(uaCastTriangles <= vanTriangles, "loadFolder keeps caps up to vanTriangles");
 static_assert(uaRoomTriangles <= vanTriangles, "loadFolder keeps caps up to vanTriangles");
 static_assert(slotDrawCap[slotSuitFirst + 16] == suitHqTriangles && suitFolders[16][5] == 'p' && suitFolders[16][14] == '1',
               "0.0.78: Suit_punisher_1 (suitFolders[16]) has the HQ cap");
 static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slotHideoutBatcave == 44 && slotBatmobileFirst == 46 &&
                   slotBatmobileWheel == 51 && slotBatmobileRoofFirst == 52 && slotBikeBody == 56 && slotBikeBars == 57 &&
-                  slotBikeCapBody == 58 && slotBikeWolverineBars == 61 && slotArsenal078First == 62 && slotUaStarkTower == 74 && slots == 75, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
+                  slotBikeCapBody == 58 && slotBikeWolverineBars == 61 && slotArsenal078First == 62 && slotUaStarkTower == 74 && slotUaStarkCast == 75 && slots == 76, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

@@ -14,6 +14,7 @@
 #include "van_screen.hpp"
 #include "hideout074.hpp"
 #include "batcave074.hpp"
+#include "ua_cast.hpp"
 
 #include <limits>
 
@@ -55,6 +56,11 @@ struct NativeEyeFrame {
     float hideoutFloor{};
     // 0.0.74 test 2b BATCAVE: the markers, the hint, the wrist button, the chair and the Batcomputer (on false: none).
     batcave074::View hideoutView{};
+    // ULTIMATE ALLIANCE EXPANSION CHARACTERS (ua_cast.hpp; none: no model or no poses): the place's cast model, its
+    // cast.txt (both kept for the session) and this frame's characters (who, turned how far, how far into his idle).
+    const mesh_model::Mesh* uaCastModel{};
+    const ua_cast::Cast* uaCast{};
+    std::vector<ua_cast::Pose> uaPoses;
     // Slow motion: the image's recolouring and the focus meter (none at rest).
     SlowMotionView slow{};
     // Update 36: the hero's share of his most hit points, for the wrist ring

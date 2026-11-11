@@ -170,7 +170,24 @@ struct View {
     int hotButton{-1};
     std::vector<std::string> lines; // the page's text (title first), built by pageLines
     std::vector<Vec3> mapDots;      // MAP: x, z on the map (-1..1), kind in y (0 crime, 1 tracked, 2 the car)
+    // ULTIMATE ALLIANCE EXPANSION CHARACTERS (ua_cast.hpp): the talk's panel (room space: its centre, turned to the
+    // eye) - who speaks, the line, the menu with its lit choice - the "A: TALK" tag over whom he looks at, and the
+    // MISSIONS: COMING SOON card (its fade, 0 none).
+    bool talkOn{};
+    Vec3 talkAt{};
+    std::string talkSpeaker, talkText;
+    std::vector<std::string> talkChoices;
+    int talkHot{-1};
+    bool tagOn{};
+    Vec3 tagAt{};
+    std::string tagName;
+    float missionsFade{};
+    Vec3 missionsAt{};
 };
+// The talk panel's size (metres): its width, its text's height, a choice row's pitch.
+inline constexpr float talkWidth = 1.1f, talkTextHeight = .042f, talkChoicePitch = .075f;
+// The choice a hand's ray (world) points at on the talk panel as `append` draws it for an eye at `viewer`; -1 none.
+int talkChoiceAt(const View& v, Vec3 viewer, Vec3 from, Vec3 dir);
 
 // The page's lines (title first) for `feed`.
 std::vector<std::string> pageLines(uint32_t page, uint32_t cursor, const Feed& feed);

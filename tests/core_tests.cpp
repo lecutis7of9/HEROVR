@@ -49,6 +49,7 @@
 #include "spidy/van_screen.hpp"
 #include "spidy/hideout074.hpp"
 #include "spidy/ua_expansion.hpp"
+#include "spidy/ua_cast.hpp"
 #include "spidy/batcave074.hpp"
 #include "spidy/crime_gps074.hpp"
 #include "spidy/cave_quiet074.hpp"
@@ -27843,7 +27844,7 @@ int main() {
     test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
         namespace mm = spidy::mesh_model;
         check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slotSuitEnd == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23 &&
-                  mm::slots == mm::slotSuitEnd + 14 + 2 + 4 + 12 + 1 /* 0.0.75 MOTORCYCLE body + bars, 0.0.76 HARLEYS two pairs, 0.0.78 PUNISHER ARSENAL, UA EXPANSION STARK TOWER */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
+                  mm::slots == mm::slotSuitEnd + 14 + 2 + 4 + 12 + 2 /* 0.0.75 MOTORCYCLE body + bars, 0.0.76 HARLEYS two pairs, 0.0.78 PUNISHER ARSENAL, UA EXPANSION STARK TOWER + its cast */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
               "the suits follow the roster");
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;
@@ -37717,6 +37718,182 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
               "no process id: the 5.2 s hold-up no longer ends VR");
         check(lw::lateMs(deadline + 5, deadline) == 5 && lw::lateMs(deadline - 5, deadline) == 0, "how late");
         check(lw::keepAliveMs == 5000 && lw::firstKeepAliveMs == 10000, "the keep-alive's lengths unchanged");
+    });
+    test("ULTIMATE ALLIANCE EXPANSION CHARACTERS: cast.txt, talk.txt, who is there, whom he talks to, the talk, the draw", [] {
+        namespace mm = mesh_model;
+        namespace uc = ua_cast;
+        // the slot: beside the room, never decimated, its own cap; the sink holds its drawn characters
+        check(std::string(mm::slotFolders[mm::slotUaStarkCast]) == "UA/StarkTower/Cast" && mm::slotIsUa(mm::slotUaStarkCast) &&
+                  mm::slotIsUaCast(mm::slotUaStarkCast) && !mm::slotIsUaCast(mm::slotUaStarkTower) && !mm::slotMayDecimate[mm::slotUaStarkCast] &&
+                  mm::slotDrawCap[mm::slotUaStarkCast] == mm::uaCastTriangles && mm::uaCastTriangles >= 118000 &&
+                  mm::uaCastTriangles <= mm::vanTriangles && mm::slotShipped(mm::slotUaStarkCast),
+              "slotUaStarkCast: its folder, cap and switch");
+        check(hero007::modelSinkBudget >= 3 * (size_t{mm::uaRoomTriangles} + size_t{uc::drawBudget}) && uc::drawBudget >= 15000,
+              "the model sink holds the room and its characters");
+        const std::string castText = "HEROVR-UA-CAST 1\n# comment\n"
+                                     "look 2101_zone9 0 1 2 2.00 1\n"
+                                     "look 14801_zone3 2 1 1 3.00 0\n"
+                                     "npc nickfurynpc01 2101_zone9 0 0 2 0.0 - 1_stark1_030 NICK FURY\n"
+                                     "npc blackwidow01 14801_zone3 1.5 0 2 180.0 - 1_stark1_040 BLACK WIDOW\n"
+                                     "npc talker01 2101_zone9 5 0 5 0 pair01 - OFFICE WORKER\n"
+                                     "npc talker02 2101_zone9 6 0 5 0 pair01 - OFFICE WORKER\n"
+                                     "npc talker03 2101_zone9 7 0 5 0 pair02 - OFFICE WORKER\n";
+        uc::Cast cast;
+        std::string error;
+        check(uc::parseCast(castText, cast, error, 3) && cast.looks.size() == 2 && cast.npcs.size() == 5 && cast.pairs.size() == 2 &&
+                  cast.npcs[0].label == "NICK FURY" && cast.npcs[0].talk == "1_stark1_030" && cast.npcs[2].group == "pair01" &&
+                  cast.npcs[1].look == 1 && !cast.looks[1].turns && cast.looks[0].frames == 2,
+              "cast.txt read: " + error);
+        check(!uc::parseCast(castText, cast, error, 2) && cast.npcs.empty() && !error.empty(), "a look past the model's triangles: refused");
+        check(!uc::parseCast("HEROVR-UA-CAST 1\nnpc a nolook 0 0 0 0 - - A\n", cast, error) && !uc::parseCast("junk\n", cast, error) &&
+                  !uc::parseCast("HEROVR-UA-CAST 1\nlook a 0 1 2 nan 1\nnpc a a 0 0 0 0 - - A\n", cast, error),
+              "a bad cast.txt: refused");
+        uc::parseCast(castText, cast, error, 3);
+        // who is there: everyone always there and one pair a visit
+        const auto shown = uc::shownFor(cast, 0);
+        check(shown == std::vector<uint32_t>{0, 1, 2, 3} && uc::shownFor(cast, 1) == std::vector<uint32_t>{0, 1, 4} &&
+                  uc::shownFor(cast, 9).size() == 2,
+              "one pair of talkers a visit");
+        // whom he talks to: looked at within reach, the nearest in angle; nobody behind him or too far
+        const Vec3 feet{0, 0, 0}, eye{0, 1.65f, 0};
+        check(uc::pick(cast, shown, feet, eye, Vec3{0, -.2f, 1}, false, {}, {}) == 0, "looking at Fury: Fury");
+        check(uc::pick(cast, shown, feet, eye, Vec3{0, 0, -1}, false, {}, {}) == -1, "looking away: nobody");
+        check(uc::pick(cast, shown, feet, eye, Vec3{0, 0, -1}, true, Vec3{.2f, 1.2f, 0}, Vec3{1.3f, -.3f, 2}) == 1,
+              "pointing at the seated Widow: her");
+        check(uc::pick(cast, shown, Vec3{0, 0, -4}, Vec3{0, 1.65f, -4}, Vec3{0, 0, 1}, false, {}, {}) == -1, "too far: nobody");
+        check(uc::pick(cast, {2, 3}, feet, eye, Vec3{5, -1, 5}, false, {}, {}) == -1, "the talkers have nothing to say");
+        check(uc::pick(cast, shown, feet, eye, Vec3{}, false, {}, {}) == -1 &&
+                  uc::pick(cast, shown, feet, eye, Vec3{}, true, Vec3{.2f, 1.2f, 0}, Vec3{1.3f, -.3f, 2}) == 1,
+              "no look (on the gold ring): only a pointing hand picks");
+        // talk.txt and a conversation as the game runs it
+        const std::string talkText =
+            "HEROVR-UA-TALK 1\n# test\nspeaker NICKFURY NICK FURY\nspeaker PLAYER SPIDER-MAN\nspeaker MENU\n"
+            "conv 1_stark1_030\nstart 0 1 hero:wolverine\nstart 1 1 not:wolverine\nstart 2 0 always\n"
+            "line 0 NICKFURY 0 2.0 Logan.\n"
+            "line 1 NICKFURY 3 2.0 Welcome aboard.\n"
+            "line 2 PLAYER -1 0.00 \n"
+            "line 3 NICKFURY 4 1.0 Hm.\n"
+            "line 4 MENU -1 2.0 Are you sure you wish to start the Omega Base mission?\n"
+            "resp 1 2 0 none 0 always %PLAYER%: Glad to be here.\n"
+            "resp 2 3 0 flag:1 0 always What is this place?\n"
+            "resp 2 4 0 none 0 always Take us to the Omega Base.\n"
+            "resp 2 -1 1 none 1 always Secret question.\n"
+            "resp 2 -1 1 none 0 hero:wolverine Logan only.\n"
+            "resp 2 -1 1 none 0 never Story only.\n"
+            "resp 2 -1 1 none 0 not:wolverine,ironman Goodbye.\n"
+            "resp 3 2 0 none 0 always %BLANK%\n"
+            "resp 4 -1 1 missions 0 always %YES%\n"
+            "resp 4 2 0 none 0 always %NO%\n"
+            "conv 1_stark1_040\nstart 0 0 never\nline 0 NICKFURY -1 1 X\n";
+        uc::Talk talk;
+        check(uc::parseTalk(talkText, talk, error) && talk.convs.size() == 2 && talk.find("1_stark1_030") == 0 &&
+                  talk.nameOf("NICKFURY") == "NICK FURY" && talk.nameOf("MENU").empty() && talk.convs[0].lines[2].text.empty() &&
+                  talk.convs[0].starts[1].cond == uc::Cond::heroNot && talk.convs[0].resps[1].act == uc::Act::flag &&
+                  talk.convs[0].resps[8].act == uc::Act::missions && talk.convs[0].resps[4].cond == uc::Cond::heroIs &&
+                  talk.convs[0].resps[3].needs == 1,
+              "talk.txt read: " + error);
+        check(!uc::parseTalk("HEROVR-UA-TALK 1\nconv a\nstart 5 0 always\nline 0 A -1 1 x\n", talk, error) &&
+                  !uc::parseTalk("HEROVR-UA-TALK 1\nline 0 A -1 1 x\n", talk, error) &&
+                  !uc::parseTalk("HEROVR-UA-TALK 1\nconv a\nline 1 A -1 1 x\n", talk, error),
+              "a bad talk.txt: refused");
+        uc::parseTalk(talkText, talk, error);
+        check(uc::shownText("%PLAYER%: Hi there") == "Hi there" && uc::shownText("%YES%") == "YES" && uc::shownText("%BLANK%").empty() &&
+                  uc::isBlank("%BLANK%") && uc::isPlayerSaid("%PLAYER%: x") && !uc::isPlayerSaid("Goodbye."),
+              "the responses' words");
+        uc::Chat chat;
+        check(!chat.begin(talk, 1) && !chat.begin(talk, 7), "a conversation nobody may start: not started");
+        check(chat.begin(talk, 0) && chat.speaker() == "NICK FURY" && chat.text() == "Welcome aboard." && !chat.choosing() &&
+                  chat.voiceNow() == 3,
+              "Spider-Man (not Wolverine): Fury's welcome");
+        uc::ChatIn in;
+        in.dt = .1f;
+        uc::ChatOut o = chat.step(in);
+        check(!o.ended && chat.text() == "Welcome aboard.", "said for its length");
+        in.next = true;
+        o = chat.step(in);
+        check(o.stopVoice && chat.choosing() && chat.choices() == std::vector<std::string>{"Glad to be here."}, "A: on to his reply");
+        o = chat.step(in);
+        check(chat.speaker() == "SPIDER-MAN" && chat.text() == "Glad to be here.", "Spider-Man says it");
+        o = chat.step(in);
+        check(chat.choosing() && chat.speaker().empty() &&
+                  chat.choices() == std::vector<std::string>{"What is this place?", "Take us to the Omega Base.", "Goodbye."},
+              "the menu (Wolverine's own reply, the story's and the follow-up hidden)");
+        in.next = false;
+        in.move = 1;
+        chat.step(in);
+        in.move = 0;
+        check(chat.hot() == 1, "the stick moves the lit choice");
+        in.point = 0;
+        chat.step(in);
+        in.point = -1;
+        check(chat.hot() == 0, "pointing lights a choice");
+        in.next = true;
+        o = chat.step(in);
+        check(o.voice == 4 && chat.text() == "Hm." && !chat.choosing(), "a question: his answer, voiced");
+        in.next = false;
+        in.dt = .5f;
+        for (int k = 0; k < 4; ++k)
+            o = chat.step(in);
+        check(chat.choosing() && chat.choices().size() == 4 && chat.choices()[2] == "Secret question.",
+              "his answer said, back to the menu (its flag now shows the follow-up, as the game's disallowResponseOnVar)");
+        in.move = 1;
+        chat.step(in);
+        in.move = 0;
+        in.dt = .1f;
+        in.next = true;
+        o = chat.step(in);
+        check(chat.text() == "Are you sure you wish to start the Omega Base mission?" && chat.speaker().empty(), "the mission: confirm");
+        o = chat.step(in);
+        check(chat.choices() == std::vector<std::string>{"YES", "NO"}, "yes / no");
+        o = chat.step(in);
+        check(o.ended && o.missions && !chat.active(), "YES: MISSIONS: COMING SOON, the talk over");
+        check(chat.begin(talk, 0) && chat.choosing(), "again: the run-once welcome spent, straight to the menu");
+        in = {};
+        in.quit = true;
+        o = chat.step(in);
+        check(o.ended && !o.missions && !chat.active(), "B: the talk over");
+        // turning to face him
+        check(std::abs(uc::turnToward(0, {0, 0, 0}, {0, 0, -5}, 1.f) - uc::turnDegreesPerSecond * .1f) < 1e-3f &&
+                  std::abs(uc::turnToward(89, {0, 0, 0}, {0, 0, -5}, .1f) - 90.f) < 1e-3f &&
+                  std::abs(uc::turnToward(170, {0, 0, 0}, {-.985f, 0, .174f}, .1f) - (-174.f)) < .1f,
+              "turns at most its rate, toward the target, the short way round");
+        const Vec3 ahead = Quat::yaw(uc::turnToward(0, {0, 0, 0}, {0, 0, 3}, 10.f) * 3.14159265f / 180.f).rotate({1, 0, 0});
+        check(ahead.z > 0, "the turn's sense is Quat::yaw's");
+        // the frames: even over the loop, the last blending into the first
+        uint32_t a, b;
+        float t;
+        uc::frameAt(cast.looks[0], .5f, a, b, t);
+        check(a == 0 && b == 1 && std::abs(t - .5f) < 1e-4f, "a quarter in: half way to frame 1");
+        uc::frameAt(cast.looks[0], 3.5f, a, b, t);
+        check(a == 1 && b == 0 && std::abs(t - .5f) < 1e-4f, "the loop wraps");
+        uc::frameAt(cast.looks[1], 99.f, a, b, t);
+        check(a == 0 && b == 0 && t == 0, "one frame: still");
+        // the draw: a blend of two frames, placed and turned; nothing past the budget
+        mm::Mesh m;
+        m.corners = {{0, 0, 0}, {1, 0, 0}, {0, 2, 0}, {0, 0, 0}, {1, 0, 0}, {0, 4, 0}, {0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+        m.colors = {{1, 1, 1}, {1, 1, 1}, {1, 1, 1}};
+        m.uvs = {0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1};
+        m.tints = {{1, 1, 1}, {1, 1, 1}, {1, 1, 1}};
+        m.image = {0, 0, 0};
+        m.images.resize(1);
+        m.images[0].layer = 7;
+        std::vector<Vertex> sink;
+        hideout074::Place pl;
+        pl.at = {10, 0, 0};
+        check(uc::append(sink, m, cast, {{0, 90.f, .5f}}, pl, 100) && sink.size() == 3, "one character, one triangle a frame");
+        check(std::abs(sink[2].position.y - 3.f) < 1e-4f && std::abs(sink[1].position.x - 10.f) < 1e-4f &&
+                  std::abs(sink[1].position.z - (2.f - 1.f)) < 1e-4f && sink[0].shape.z == 7.f,
+              "blended half way (y 3), turned 90 degrees (+x to -z), at its spot, textured from its layer");
+        check(!uc::append(sink, m, cast, {{0, 0, 0}}, pl, 5) && sink.size() == 3, "past the budget: nothing added");
+        check(!uc::append(sink, m, cast, {{9, 0, 0}}, pl, 100) && sink.size() == 3, "a bad character: nothing added");
+        // the subtitle's lines fit the panel
+        const auto rows = uc::wrap("With the helicarrier seriously damaged, we had to find a different base of operations. Tony Stark "
+                                   "offered the use of these facilities.",
+                                   .04f, .9f, 3);
+        bool fits = rows.size() >= 2 && rows.size() <= 3;
+        for (const auto& r : rows)
+            fits = fits && textWidth(r, .04f) <= .9f + 1e-4f;
+        check(fits, "the subtitle wrapped to the panel");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

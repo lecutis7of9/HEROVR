@@ -21,7 +21,7 @@ import bpy, bmesh, addon_utils, mathutils
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 ap = argparse.ArgumentParser()
 ap.add_argument('igb'); ap.add_argument('engb'); ap.add_argument('out')
-ap.add_argument('--scale', type=float, default=0.022)       # metres a unit: the 84-unit character box ~ 1.85 m
+ap.add_argument('--scale', type=float, default=0.0254)      # metres a unit: Raven's units are inches (a 72-unit hero ~ 1.83 m)
 ap.add_argument('--skyline-raise', type=float, default=520)  # units the city's buildings + ground go up
 ap.add_argument('--skyline-push', type=float, default=1.3)   # how much farther out (about the hub's middle)
 ap.add_argument('--sky-raise', type=float, default=900)      # the sky box (its painted city band) up

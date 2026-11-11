@@ -8,7 +8,7 @@
 // OWN MUA1 PS2 disc (tools/ua/convert_ua.py; nothing of the game is shipped) into Models\UA\<Place>. While he is
 // there the game is sent a pad at rest and no hero tool answers a hand, so the hero stands where he was left;
 // RETURN TO CITY (the gold ring, the wrist button, B held or the page's button again) puts him back exactly there.
-// npcs.txt beside the room lists where the place's characters stand (read now, drawn by the next update).
+// npcs.txt beside the room lists where the place's characters stand; ua_cast.hpp draws them and lets him talk to them.
 // Pure: no game reads, no addresses. Fail-safe: anything wrong and he never leaves the city (or is put back).
 #include "spidy/hideout074.hpp"
 #include "spidy/math.hpp"
@@ -28,6 +28,8 @@ inline constexpr const char* names[locations] = {"STARK TOWER"};
 // Under Models\ (mesh_model::slotUaStarkTower's folder, hideout074::folders' too).
 inline constexpr const char* folders[locations] = {"UA/StarkTower"};
 inline constexpr hideout074::Which which[locations] = {hideout074::Which::uaStarkTower};
+// Its characters (ua_cast.hpp): the cast model's slot (Models\UA\<Place>\Cast), cast.txt, talk.txt and Voice\.
+inline constexpr uint32_t castSlots[locations] = {mesh_model::slotUaStarkCast};
 
 // On foot the real floor is not read from the game: the room's floor goes this far under the eye as he leaves.
 inline constexpr float eyeHeight = 1.65f;
@@ -55,9 +57,9 @@ const char* rowValue(Row row); // ENTER, RETURN TO CITY, OFF, NOT CONVERTED
 inline constexpr const char* missingHelp =
     "Not converted yet: run tools/ua/convert_ua.py on your own MUA disc (docs/UA-EXPANSION.md), then restart.";
 
-// The next update's hooks: where the place's characters stand (npcs.txt, written by the converter from the
+// Where the place's characters stand (npcs.txt, written by the converter from the
 // map's own spawners). Room (glTF) space: metres, the room's floor at y 0 under the spawn; yaw in degrees the
-// spawn's sense (about +y from +x counter-clockwise).
+// spawn's sense (about +y from +x counter-clockwise). ua_cast.hpp's cast.txt adds their looks and conversations.
 struct Npc {
     std::string id; // the map's character id (e.g. "nickfurynpc01")
     Vec3 at{};

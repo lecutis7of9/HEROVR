@@ -4,6 +4,7 @@
 #include "spidy/batcave074.hpp"
 #include "spidy/finger_ray074.hpp"
 #include "spidy/overlay_text.hpp"
+#include "spidy/ua_cast.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -518,6 +519,65 @@ bool WristButton::step(bool on, Vec3 at, Vec3 tip, bool tracked) {
 
 // ---- the draw ----
 
+namespace {
+// The talk panel's rows (design units = metres, y up from the panel's centre), shared by the draw and the hit test.
+struct TalkLayout {
+    std::vector<std::string> text;
+    float top{}, bottom{}, speakerY{}, textY0{}, choiceY0{}, hintY{};
+    bool speaker{};
+};
+TalkLayout talkLayout(const View& v) {
+    TalkLayout L;
+    L.speaker = !v.talkSpeaker.empty();
+    std::string t = v.talkText;
+    L.text = ua_cast::wrap(t, talkTextHeight, talkWidth - .12f, 4);
+    float h = .05f; // margins
+    if (L.speaker)
+        h += .075f;
+    h += static_cast<float>(L.text.size()) * .062f;
+    h += static_cast<float>(v.talkChoices.size()) * talkChoicePitch + (v.talkChoices.empty() ? 0.f : .02f);
+    h += .06f; // the hint
+    L.top = h / 2;
+    L.bottom = -h / 2;
+    float y = L.top - .03f;
+    if (L.speaker) {
+        y -= .05f;
+        L.speakerY = y;
+        y -= .025f;
+    }
+    L.textY0 = y - talkTextHeight;
+    y -= static_cast<float>(L.text.size()) * .062f;
+    L.choiceY0 = y - (v.talkChoices.empty() ? 0.f : .02f) - .045f;
+    L.hintY = L.bottom + .025f;
+    return L;
+}
+Painter talkPainter(std::vector<Vertex>& out, const View& v, Vec3 viewer) { return facing(out, v.place.world(v.talkAt), viewer); }
+} // namespace
+
+int talkChoiceAt(const View& v, Vec3 viewer, Vec3 from, Vec3 dir) {
+    if (!v.on || !v.talkOn || v.talkChoices.empty() || !fine(from) || !fine(dir) || !fine(viewer))
+        return -1;
+    std::vector<Vertex> none;
+    const Painter p = talkPainter(none, v, viewer);
+    const float dn = dot(dir, p.n);
+    if (std::abs(dn) < 1e-5f)
+        return -1;
+    const float s = dot(p.c - from, p.n) / dn;
+    if (!(s > 0) || s > 20)
+        return -1;
+    const Vec3 hit = from + dir * s - p.c;
+    const float x = dot(hit, p.r), y = dot(hit, p.u);
+    if (std::abs(x) > talkWidth / 2)
+        return -1;
+    const TalkLayout L = talkLayout(v);
+    for (size_t k = 0; k < v.talkChoices.size(); ++k) {
+        const float base = L.choiceY0 - static_cast<float>(k) * talkChoicePitch;
+        if (y >= base - .02f && y < base - .02f + talkChoicePitch)
+            return static_cast<int>(k);
+    }
+    return -1;
+}
+
 bool append(std::vector<Vertex>& solid, std::vector<Vertex>& glow, const View& v, Vec3 viewer) {
     if (!v.on)
         return false;
@@ -679,6 +739,45 @@ bool append(std::vector<Vertex>& solid, std::vector<Vertex>& glow, const View& v
                     }
                 }
             }
+        }
+        // ULTIMATE ALLIANCE EXPANSION CHARACTERS: the "A: TALK" tag, the talk panel, MISSIONS: COMING SOON
+        if (v.tagOn && fine(v.tagAt) && !v.talkOn) {
+            Painter t = facing(glow, pl.world(v.tagAt), viewer);
+            const float w = std::max(textWidth(v.tagName, .055f), textWidth("A: TALK", .045f)) / 2 + .05f;
+            t.quad(-w, -.075f, w, .085f, -.002f, face, .6f);
+            t.frame(-w, -.075f, w, .085f, .004f, -.001f, trim, .8f);
+            t.textCentre(v.tagName, 0, .01f, .055f, ice, .002f);
+            t.textCentre("A: TALK", 0, -.06f, .045f, gold, .002f, .7f + .3f * pulse);
+        }
+        if (v.talkOn && fine(v.talkAt)) {
+            Painter p = talkPainter(glow, v, viewer);
+            const TalkLayout L = talkLayout(v);
+            const float x0 = -talkWidth / 2, x1 = talkWidth / 2, tx = x0 + .06f;
+            p.quad(x0, L.bottom, x1, L.top, -.003f, face, .82f);
+            p.frame(x0, L.bottom, x1, L.top, .006f, -.002f, trim, .95f);
+            if (L.speaker)
+                p.text(v.talkSpeaker, tx, L.speakerY, .05f, gold);
+            for (size_t k = 0; k < L.text.size(); ++k)
+                p.text(L.text[k], tx, L.textY0 - static_cast<float>(k) * .062f, talkTextHeight, ice);
+            for (size_t k = 0; k < v.talkChoices.size(); ++k) {
+                const bool hot = static_cast<int>(k) == v.talkHot;
+                const float y = L.choiceY0 - static_cast<float>(k) * talkChoicePitch;
+                const std::string row = (hot ? "> " : "  ") + v.talkChoices[k];
+                const float h = fittedHeight(row, .04f, talkWidth - .12f);
+                if (hot)
+                    p.quad(x0 + .03f, y - .02f, x1 - .03f, y + .055f, -.001f, trim, .55f);
+                p.text(row, tx, y, h, hot ? ice : cyan);
+            }
+            p.text(v.talkChoices.empty() ? "A: NEXT     B: END" : "STICK OR POINT, A / TRIGGER: CHOOSE     B: END", tx, L.hintY, .026f,
+                   grey);
+        }
+        if (v.missionsFade > .01f && fine(v.missionsAt)) {
+            Painter m = facing(glow, pl.world(v.missionsAt), viewer);
+            m.a = std::min(1.f, v.missionsFade);
+            m.quad(-.6f, -.16f, .6f, .16f, -.002f, face, .85f);
+            m.frame(-.6f, -.16f, .6f, .16f, .008f, -.001f, gold, .95f);
+            m.textCentre("MISSIONS: COMING SOON", 0, .02f, .075f, gold);
+            m.textCentre("THE OMEGA BASE AND THE REST OF ACT 1 COME IN A LATER UPDATE", 0, -.09f, .03f, ice);
         }
         if (!allFine(solid, s0) || !allFine(glow, g0)) {
             solid.resize(s0);

@@ -51,6 +51,8 @@ class Player {
     void seekBy(float seconds);
     void seekTo(float fraction); // 0..1 of the song
     void setVolume(float percent); // 0-100, gainOf's
+    // UA EXPANSION (ua_cast.hpp): the characters' voices - each clip played alone, silent at its end (no next song).
+    void setOnce(bool on);
     // The song to start from at the next toggle (launch: live.txt music_track), no sound.
     void select(int track);
   private:

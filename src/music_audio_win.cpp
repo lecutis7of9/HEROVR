@@ -90,6 +90,7 @@ struct Player::Impl {
     Status shown;
     TripleBuffer<Spectrum> spectra;
     std::atomic<float> gain{gainOf(defaultVolume)};
+    std::atomic<bool> once{}; // UA EXPANSION voices: a song played stops at its end (no next)
     std::array<Command, 64> ring{};
     std::atomic<uint32_t> head{}, tail{}; // the caller writes head, the player tail
     std::atomic<bool> quit{}, faulted{};
@@ -589,7 +590,7 @@ struct Player::Impl {
         // The song is over once the device has played what was sent.
         if (ended && pendingAt >= pending.size() && padding == 0) {
             const int count = static_cast<int>(list.size());
-            if (count)
+            if (count && !once.load())
                 start(nextTrack(track < 0 ? 0 : track, count), 1);
             else
                 stopAll();
@@ -705,6 +706,10 @@ void Player::rescan() {
 void Player::play(int track) {
     if (impl_)
         impl_->send(Kind::play, static_cast<float>(track));
+}
+void Player::setOnce(bool on) {
+    if (impl_)
+        impl_->once = on;
 }
 void Player::toggle() {
     if (impl_)

@@ -50,8 +50,11 @@ jobs:
           if ($LASTEXITCODE) { throw "Build/tests failed ($LASTEXITCODE)" }
       - name: Build selectable HERO VR launcher for test package
         run: |
-          ./tools/launcher/build.ps1 -Out 'SM2VRLauncher.exe'
-          if ($LASTEXITCODE -or -not (Test-Path -LiteralPath 'tools/launcher/SM2VRLauncher.exe')) { throw 'HERO VR launcher compilation failed' }
+          ./tools/launcher/build.ps1 -Out 'out/SM2VRLauncher.exe'
+          if ($LASTEXITCODE -or -not (Test-Path -LiteralPath 'tools/launcher/out/SM2VRLauncher.exe')) { throw 'HERO VR launcher compilation failed' }
+      - name: Stage launcher executable for package
+        run: |
+          Copy-Item -LiteralPath 'tools/launcher/out/SM2VRLauncher.exe' -Destination 'tools/launcher/SM2VRLauncher.exe' -Force
       - name: Stage current gameplay DLL for both rendering modes
         run: |
           $ErrorActionPreference = 'Stop'

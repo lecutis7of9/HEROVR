@@ -91,6 +91,8 @@
 #include "spidy/game_pad.hpp"
 #include "spidy/environment_yank.hpp"
 #include "spidy/enemy_grip_split.hpp"
+#include "spidy/webline_gesture.hpp" // 79.1 web-mechanics test: grip-stretch-release Web Line
+#include "spidy/webline_native.hpp"
 #include "spidy/arm_sprint.hpp" // HEROVR 79.1: left-stick + natural opposite-arm running
 #include "spidy/extras385.hpp"
 #include "spidy/gestures385.hpp"
@@ -1474,6 +1476,10 @@ std::atomic<uint32_t> uiDumpNow{ui_dump::dumpOff}, uiDumpAsk{}; // cut21: off by
 // as small cards where the game puts them in its view; never the whole layer), 1 off. promptLayerFrame: the VR loop's
 // own, whether it is wanted this frame.
 std::atomic<uint32_t> promptLayerNow{prompt_layer::layerOn};
+// HERO VR 0.0.79.1 web-mechanics test (webline_native.hpp): live.txt webline_gesture - 0 on (the default: grip on a
+// surface, stretch, release on another surface -> the game's own Web Line input, L2 + Y; only while standing, perched
+// or on a wall, so mid-air grip swings are untouched), 1 off, 2 anywhere (airborne too).
+std::atomic<uint32_t> weblineGestureNow{spidy::webline_native::modeOn};
 bool promptLayerFrame{};
 cut16::BossGate bossGate16;
 uint32_t bossFight16 = 0; // a living boss read within cut16::bossFightMetres (3 s grace)
@@ -2620,6 +2626,15 @@ DWORD WINAPI run(void*) {
         bool environmentThrowWas{};
         enemy_grip_split::Gesture enemyGripGesture;
         enemy_grip_split::Output enemyGripFrame{};
+        // 79.1 web-mechanics test: the grip-stretch-release Web Line gesture,
+        // one per hand (webline_gesture.hpp, the game adapter: anchors are the
+        // swing bridge's own aim rays), and the game's L2 + Y it turns into.
+        webline_gesture::Gesture weblineGestures[2]{webline_gesture::Gesture{35.f, 2.f, false},
+                                                  webline_gesture::Gesture{35.f, 2.f, false}};
+        webline_native::Driver weblineDriver;
+        webline_native::Pad weblinePad{};
+        uint32_t weblineClaimed{};
+        uint64_t weblineStarts{}, weblineCommits{}, weblineCancels{};
         game_swing::AimData aimed{};
         uint64_t pullsBefore{};
         // The right thumbstick pushed down is the game's D-pad down (heal),
@@ -6756,6 +6771,13 @@ DWORD WINAPI run(void*) {
                             message(3, code, text.c_str());
                         } else if (swingGate.started()) {
                             swingStarted = true;
+                            // 79.1 web-mechanics test: say plainly in the console what this build drives.
+                            consoleLine(weblineGestureNow.load() == webline_native::modeOff
+                                            ? "HERO VR 79.1 WEB TEST: webline gesture OFF (live.txt webline_gesture)"
+                                            : "HERO VR 79.1 WEB TEST: webline gesture ON -> the game's own Web Line input (L2 + Y)");
+                            consoleLine("HERO VR 79.1 WEB TEST: physical prop/enemy movement is NOT available on Spider-Man 2 "
+                                        "(native_bodies not ported): a prop grip + yank sends the game's own L1+R1 throw only "
+                                        "where the game offers it; two grips on an enemy use the existing grab web + yank");
                             // Fists and the web shooter take the swing's input samples;
                             // both are optional and, like the grab, can be switched on later.
                             applySettings();
@@ -6781,6 +6803,12 @@ DWORD WINAPI run(void*) {
                     if (!swingStarted) {
                         environmentGrip.reset();
                         environmentThrowWas = false;
+                        // 79.1 WEBLINE GESTURE: nothing held or sent without the swing bridge's aim rays.
+                        weblineGestures[0].reset();
+                        weblineGestures[1].reset();
+                        weblineDriver.reset();
+                        weblinePad = {};
+                        weblineClaimed = 0;
                     }
                     if (swingStarted) {
                         game_swing::Command input;
@@ -6827,7 +6855,7 @@ DWORD WINAPI run(void*) {
                                                 validTrackedPose(hand.aim);
                                 yi.free[i] = !swingState.webs[i].attached &&
                                              !grabWebs[i].on && !ropes[i].on &&
-                                             !u37.holdsGrip[i];
+                                             !u37.holdsGrip[i] && !weblineGestures[i].holding();
                                 yi.squeeze[i] = hand.squeeze;
                                 yi.hands[i] = hand.grip.position;
                                 yi.aim[i] = hand.aim.orientation.rotate({0, 0, -1});
@@ -6861,7 +6889,8 @@ DWORD WINAPI run(void*) {
                                               enemyGripFrame.hand == static_cast<int>(h);
                             const bool free = (!grabWebs[h].on || ours) && !ropes[h].on &&
                                               !u37.holdsGrip[h] && !grabPhases[h] &&
-                                              !swingState.webs[h].attached;
+                                              !swingState.webs[h].attached &&
+                                              !weblineGestures[h].holding();
                             eg.grips[h] = tracked && free && hand.squeeze > .6f;
                             const Vec3 aim = tracked
                                 ? combat38::aimOf(hand.grip, hand.aim, c38(combat38::aimAxis))
@@ -6882,6 +6911,75 @@ DWORD WINAPI run(void*) {
                             }
                         }
                         enemyGripFrame = enemyGripGesture.update(eg);
+                        // 79.1 WEBLINE GESTURE (webline_gesture.hpp + webline_native.hpp): grip with a hand
+                        // aimed at a surface a web holds on (the swing bridge's own aim ray for that hand,
+                        // SpidyAimSample AimKind::anchor - last frame's), keep holding and sweep to another
+                        // surface, release there: the game's own Web Line input (L2 held, then L2 + Y), the
+                        // route 79.1 already sends for a manual Web Line. The game decides whether and where
+                        // its line goes; the two anchors only gate the request. Lowest priority: a prompt's
+                        // environment grip and an enemy grip claim the hand first; a prop or character under
+                        // the aim is never an anchor; a hand whose web holds anything is occupied.
+                        {
+                            const uint32_t lineMode = weblineGestureNow.load();
+                            const bool lineAir = game_swing::airborne(swingState, now.QuadPart, frequency.QuadPart);
+                            const bool lineOn = sampleAim && input.focused &&
+                                webline_native::allowed(lineMode, lineAir) &&
+                                mapping == game_pad::Mapping::gameplay &&
+                                heroNow() == hero_modes::spiderMan && !calibrationInput &&
+                                !padLayer.latched() && !phone.open() && !gadgetWheel.open() &&
+                                !swingState.owned && !flyNow.flying && !webLineInput &&
+                                c38(combat38::ropeGrab) != 1;
+                            weblineClaimed = 0;
+                            bool lineActive = false, lineCommit = false, lineCancel = false;
+                            for (unsigned h = 0; h < 2; ++h) {
+                                const auto& hand = frame.hands[h];
+                                const bool tracked = hand.valid && validTrackedPose(hand.grip) &&
+                                                     validTrackedPose(hand.aim);
+                                webline_gesture::Input li{};
+                                li.enabled = lineOn && tracked;
+                                li.sampled = true;
+                                const float squeeze = std::isfinite(hand.squeeze) ? hand.squeeze : 0.f;
+                                li.grip = squeeze > (weblineGestures[h].holding() ? .3f : .6f);
+                                li.occupied = swingState.webs[h].attached || grabWebs[h].on || ropes[h].on ||
+                                              u37.holdsGrip[h] || grabPhases[h] ||
+                                              (environmentGripFrame.claimed & (1u << h)) ||
+                                              (enemyGripFrame.claimed & (1u << h)) ||
+                                              weblineGestures[h ^ 1u].active();
+                                li.hand = hand.grip.position;
+                                li.aim = hand.aim.orientation.rotate({0, 0, -1});
+                                const auto& sampled = aimed.hands[h];
+                                if (sampled.kind == static_cast<uint32_t>(game_swing::AimKind::anchor) &&
+                                    finite(sampled.point))
+                                    li.hit = RayHit{sampled.point, sampled.normal, 1, true};
+                                const auto lo = weblineGestures[h].update(li);
+                                if (lo.claimed)
+                                    weblineClaimed |= 1u << h;
+                                lineActive |= weblineGestures[h].active();
+                                if (lo.started) {
+                                    ++weblineStarts;
+                                    runtime.haptic(static_cast<int>(h), .3f);
+                                    game_prompts::note("79.1 WEBLINE: first anchor - hold grip, sweep, release on a second surface");
+                                }
+                                if (lo.commit) {
+                                    lineCommit = true;
+                                    ++weblineCommits;
+                                    runtime.haptic(static_cast<int>(h), .55f);
+                                    char note[200];
+                                    sprintf_s(note, "79.1 WEBLINE #%llu: second anchor %.1f m away -> native Web Line (L2 + Y)",
+                                              static_cast<unsigned long long>(weblineCommits),
+                                              length(lo.to - lo.from));
+                                    game_prompts::note(note);
+                                }
+                                if (lo.cancelled) {
+                                    lineCancel = true;
+                                    ++weblineCancels;
+                                    runtime.haptic(static_cast<int>(h), .12f);
+                                    game_prompts::note("79.1 WEBLINE: cancelled (no valid second surface, or the hand was needed)");
+                                }
+                            }
+                            weblinePad = weblineDriver.update(frame.seconds, lineOn || weblineDriver.busy(),
+                                                              lineActive, lineCommit, lineCancel && !lineCommit);
+                        }
                         if (enemyGripFrame.pullStarted && enemyGripFrame.hand >= 0) {
                             const unsigned h = static_cast<unsigned>(enemyGripFrame.hand);
                             for (uint32_t e = 0; e < grabEnemyCount; ++e) {
@@ -6911,7 +7009,8 @@ DWORD WINAPI run(void*) {
                                 const bool down = squeeze > (grabButtonWas[i] ? .3f : .6f);
                                 const bool press = down && !grabButtonWas[i] &&
                                     !(environmentGripFrame.claimed & (1u << i)) &&
-                                    !(enemyGripFrame.claimed & (1u << i));
+                                    !(enemyGripFrame.claimed & (1u << i)) &&
+                                    !(weblineClaimed & (1u << i));
                                 grabButtonWas[i] = down;
                                 grabSqueeze[i] = down ? 1.f : 0.f;
                                 // Update 38.3: 0 ASSIST (the 12-degree cone on the ground), 1 EXACT (38.2's
@@ -6983,7 +7082,8 @@ DWORD WINAPI run(void*) {
                                 }
                             }
                             const bool envOwns = (environmentGripFrame.claimed & (1u << i)) != 0 ||
-                                                 (enemyGripFrame.claimed & (1u << i)) != 0;
+                                                 (enemyGripFrame.claimed & (1u << i)) != 0 ||
+                                                 (weblineClaimed & (1u << i)) != 0;
                             const bool nativeAimOwns = i == 0 && webLineInput;
                             input.hands[i] = {hand.aim, hand.gripRelativeToHead, hand.tracked,
                                               envOwns || nativeAimOwns ? 0.f : hand.trigger,
@@ -8350,7 +8450,8 @@ DWORD WINAPI run(void*) {
                         const bool nativeWebLineAim = webLineInput && steering && !layerOn;
                         walk.interact = interactStep.pressed() || airWebZipY ||
                             (nativeWebLineAim && (origins.play() & buttonY) &&
-                             !(named & game_pad::NamedPress::controlY));
+                             !(named & game_pad::NamedPress::controlY)) ||
+                            (weblinePad.y && steering && !layerOn); // 79.1 WEBLINE GESTURE commit
                         yCardSentFrames += yCardNear && walk.interact;
                         { // CUT5 CINE PROMPT: each Y press near the scene's offer, and whether the game's Y went out.
                             const bool yDown = (origins.play() & buttonY) != 0;
@@ -8558,7 +8659,9 @@ DWORD WINAPI run(void*) {
                         const bool slow = gameTime.installed && gameTime.own < game_pad::ZipPress::slowBelow;
                         const auto zipKeys = zipPress.update(frame.seconds, zipUp, sticking, slow);
                         walk.zip = zipKeys.zip;
-                        walk.aim = zipKeys.aim || nativeWebLineAim; // L2 also primes the game's own Web Line
+                        walk.aim = zipKeys.aim || nativeWebLineAim || // L2 also primes the game's own Web Line
+                                   (weblinePad.aim && steering && !layerOn); // 79.1 WEBLINE GESTURE (held, then + Y)
+                        weblinePad = {}; // used once: a frame that skips the gesture's update sends nothing stale
                         if ((walk.heal && !healing) || (walk.zip && !zipping))
                             runtime.haptic(1, .2f);
                         if (walk.heal && !healing) {
@@ -18644,6 +18747,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossGate(void* v) { return se
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyUiDump(void* v) { return setLive(v, 0, 1, 5645, uiDumpNow, asU32); }
 // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): live.txt prompt_layer, 0 on, 1 off.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptLayer(void* v) { return setLive(v, 0, 1, 5646, promptLayerNow, asU32); }
+// HERO VR 0.0.79.1 web-mechanics test: live.txt webline_gesture, 0 on, 1 off, 2 anywhere (webline_native::Mode).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeblineGesture(void* v) { return setLive(v, 0, 2, 5647, weblineGestureNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
 }

@@ -11,7 +11,8 @@
 # the defaults live in the code), sources.
 param(
     [switch]$KeepFolder,   # keep the staged folder (build\package\...) to look through
-    [string]$Name          # the zip's and its folder's name; default SM2-VR-<PORT-VERSION>-win64 (release.yml passes its own)
+    [string]$Name,         # the zip's and its folder's name; default SM2-VR-<PORT-VERSION>-win64 (release.yml passes its own)
+    [string]$TestNotes     # optional: a private test's notes, packed as TEST-NOTES.txt at the top (releases pass none)
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -132,6 +133,10 @@ foreach ($starter in $probeStarters) {
     [IO.File]::WriteAllText((Join-Path $stage "tools\$starter"), $text, (New-Object Text.ASCIIEncoding))
 }
 Copy-Item -LiteralPath $versionFile -Destination $stage
+if ($TestNotes) {
+    if (-not (Test-Path -LiteralPath $TestNotes)) { throw "Test notes missing: $TestNotes" }
+    Copy-Item -LiteralPath $TestNotes -Destination (Join-Path $stage 'TEST-NOTES.txt')
+}
 Copy-Item -LiteralPath (Join-Path $root 'SHARING.md') -Destination (Join-Path $stage 'README.txt')
 # The test ZIP opens the renderer selector first; adapt the packaged readme
 # without modifying the public release's SHARING.md.

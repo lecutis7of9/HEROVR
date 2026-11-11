@@ -625,6 +625,11 @@ SETTINGS = {
                 "reach, the boss's Y moment - the game's frame and its UI layers are saved as pictures to "
                 "%APPDATA%\\Spidy\\ui-dump, to find where its button prompts are, each save can hitch the game up "
                 "to 2 s; 1 off, the default since cut21) - live, no restart needed"),
+    # HERO VR 0.0.79.1 web-mechanics test (include/spidy/webline_native.hpp)
+    'webline_gesture': ((0, 2), 'SpidyWeblineGesture', "WEBLINE GESTURE {} (0 on, the default: grip with a hand "
+                        "aimed at a surface, keep holding and sweep to another surface, let go there: the game's own "
+                        "Web Line input, L2 + Y - only while standing, perched or on a wall, so grip swings in the "
+                        "air are untouched; 1 off; 2 anywhere, in the air too) - live, no restart needed"),
     # HERO VR 0.0.78 cut21 PROMPT LAYER (include/spidy/prompt_layer.hpp), CANDIDATE
     'prompt_layer': ((0, 1), 'SpidyPromptLayer', "PROMPT LAYER {} (0 on, the default: in VR play the game's own button "
                      "prompts, waypoint and markers show as small cards where the game puts them, cut from its UI "
@@ -829,6 +834,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'boss_gate': ('on', 'off'),  # HERO VR 0.0.78 cut16
                 'ui_dump': ('on', 'off'),  # HERO VR 0.0.78 cut18
                 'prompt_layer': ('on', 'off'),  # HERO VR 0.0.78 cut21
+                'webline_gesture': ('on', 'off', 'anywhere'),  # HERO VR 0.0.79.1 web-mechanics test
                 'world_light': ('game', 'game_soft', 'studio'),  # HERO VR 0.0.78 WORLD LIGHT
                 'world_shadow': ('on', 'vehicles', 'off'),  # HERO VR 0.0.78 WORLD LIGHT
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
@@ -1118,6 +1124,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'boss_gate': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut16
            'ui_dump': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut18
            'prompt_layer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut21
+           'webline_gesture': {'on': 0, 'off': 1, 'anywhere': 2, 'air': 2, '0': 0, '1': 1, '2': 2},  # 0.0.79.1
            'world_light': {'game': 0, 'game_soft': 1, 'studio': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'world_shadow': {'on': 0, 'vehicles': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE

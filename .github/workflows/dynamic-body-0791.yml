@@ -7,6 +7,7 @@ on:
     branches:
       - feature/0791-dynamic-leg-animation
       - feature/0791-renderer-gameplay-parity
+      - experiment/0791-web-mechanics-test
   workflow_dispatch:
 
 permissions:
@@ -71,8 +72,16 @@ jobs:
           if ($LASTEXITCODE) { throw "Build/tests failed ($LASTEXITCODE)" }
       - name: Build selectable HERO VR launcher for test package
         run: |
-          ./tools/launcher/build.ps1 -Out 'out/SM2VRLauncher.exe'
-          if ($LASTEXITCODE -or -not (Test-Path -LiteralPath 'tools/launcher/out/SM2VRLauncher.exe')) { throw 'HERO VR launcher compilation failed' }
+          # build.ps1 does Set-Location to its own folder, which changes this
+          # step's location too: the old relative Test-Path then looked in
+          # tools/launcher/tools/launcher/out and failed after a good build.
+          $repo = $env:GITHUB_WORKSPACE
+          & (Join-Path $repo 'tools/launcher/build.ps1') -Out 'out/SM2VRLauncher.exe'
+          $built = $?
+          Set-Location -LiteralPath $repo
+          $exe = Join-Path $repo 'tools/launcher/out/SM2VRLauncher.exe'
+          if (-not $built -or -not (Test-Path -LiteralPath $exe)) { throw "HERO VR launcher compilation failed ($exe)" }
+          "Launcher: $((Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash)" >> $env:GITHUB_STEP_SUMMARY
       - name: Stage launcher executable for package
         run: |
           Copy-Item -LiteralPath 'tools/launcher/out/SM2VRLauncher.exe' -Destination 'tools/launcher/SM2VRLauncher.exe' -Force
@@ -89,11 +98,12 @@ jobs:
             $hash = (Get-FileHash -LiteralPath (Join-Path $dir 'spidy_stereo_probe.dll') -Algorithm SHA256).Hash
             if ($hash -ne (Get-FileHash -LiteralPath $compiled -Algorithm SHA256).Hash) { throw "$mode gameplay DLL differs from current build" }
           }
+          "Gameplay DLL SHA256 (original = revamped = build): $((Get-FileHash -LiteralPath $compiled -Algorithm SHA256).Hash)" >> $env:GITHUB_STEP_SUMMARY
           "Both modes: same current gameplay DLL; launcher selects Original game AA or Revamped own 70% temporal AA through live.txt and staged marker." >> $env:GITHUB_STEP_SUMMARY
       - name: Package isolated test mod (never uploads to Releases)
         run: |
           $name = 'HERO-VR-79.1-DUAL-TEST'
-          ./tools/package.ps1 -Name $name
+          ./tools/package.ps1 -Name $name -TestNotes 'docs/0791-WEB-MECHANICS-TEST.md'
           if ($LASTEXITCODE) { throw "Packaging failed ($LASTEXITCODE)" }
           $zip = "dist/$name-win64.zip"
           if (-not (Test-Path -LiteralPath $zip)) { throw "No mod test ZIP: $zip" }

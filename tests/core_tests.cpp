@@ -36911,7 +36911,7 @@ int main() {
             check(s1::ownHistory(0x100, 0x100, 0x900, 0x200) && !s1::ownHistory(0x100, 0x100, 0x100, 0x200) &&
                       !s1::ownHistory(0x100, 0x100, 0x900, 0x100) && !s1::ownHistory(0x100, 0x180, 0x900, 0x200) &&
                       !s1::ownHistory(0, 0, 0x900, 0x200) && s1::ownHistory(0x100, 0x100, 0, 0) &&
-                      s1::mainSetGlobal == 0xc15d7d8 && s1::version == 2,
+                      s1::mainSetGlobal == 0xc15d7d8 && s1::version == 3 && offsetof(spidy::sm1style::Data, allCalls) == 248,
                   "EYE HISTORY CHECK: ownHistory");
         }
         // 0.0.76 POSE CHECK: an eye's rendered camera against its submitted pose, in degrees and millimetres.

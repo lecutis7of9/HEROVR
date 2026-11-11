@@ -133,6 +133,13 @@ foreach ($starter in $probeStarters) {
 }
 Copy-Item -LiteralPath $versionFile -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'SHARING.md') -Destination (Join-Path $stage 'README.txt')
+# The test ZIP opens the renderer selector first; adapt the packaged readme
+# without modifying the public release's SHARING.md.
+$readmePath = Join-Path $stage 'README.txt'
+$readmeText = [IO.File]::ReadAllText($readmePath)
+$readmeText = $readmeText.Replace('Launch Spidy VR.cmd', 'HERO VR Launcher.cmd')
+[IO.File]::WriteAllText($readmePath, $readmeText)
+
 # Zip tools skip empty folders, and a note says what the folder is for (only songs are played from it).
 # 0.0.74 test 10 MUSIC KEPT: the songs' own folder is Documents\HERO VR\Music (kept through every update); this one
 # is still read, and its songs are copied there once at the next start.

@@ -266,3 +266,18 @@ From the 79.6 test (0e1aae5): "feet far back from the wall, waist up vanishes, t
 5. **Slow-walk jitter.** LOW / MED / FULL walk a circle of 32 steps a turn (amplitude 0.10 / 0.22 / 0.44 px), the same phase for both eyes, so a TemporalAa job one frame behind is off by at most 0.196 of the amplitude. Per level counters (`jitter_levels` in the report): the job's lag (0 / 1 / 2 / 3+ frames) per eye and the left-right difference.
 
 Unproven: all five need a headset. The body wall frame and the stand-off distances are guesses from the 79.6 numbers.
+
+## 79.8 (includes everything in 79.7): CLASSIC PICTURE
+
+Request: "just make me a build with the current public classic render pipeline in effect that just has the gameplay changes". Every gameplay change of
+79.1-79.7 stays. The render-path defaults are the public v0.0.78 release's (4c2b276):
+
+- **`vr_aa = ours`** (HEROVR's own per-eye TAA with its own jitter, the eyes at 100%) is what both launcher modes write. 79.0-79.7's ORIGINAL wrote
+  `vr_aa = game` (the game's TAA, SM1STYLE) into live.txt at every PLAY VR; it writes `ours` now. PERFORMANCE is the same path plus the 70% marker.
+- **One-time live.txt migration** (`live_settings.migrate_798_render`, marker line in live.txt): `vr_aa = game` becomes `ours`; `vr_jitter off` (the 79.2b/79.3
+  test value; with `ours` it holds the lens still, so the own TAA gets no jitter) becomes `med`, which is "on" under `ours` (low / med / full are the same there).
+  `keep`, `smaa` and a value set after the marker are left alone.
+- **Launcher picker** is put on ORIGINAL once (the old default was PERFORMANCE); its default without a saved choice is ORIGINAL. PERFORMANCE stays one click away.
+- Unchanged from 0.0.78 and checked by diff: `vr_render native`, `sm1style on` (only used with `vr_aa = game`), `--mip-bias` 0.5 (`apply_vr_aa` sets the game's
+  bias for ours), `--building-reach`, the Update 37/38 defaults (`shared_lod`, `eye_lod`, ...), the `native_eye_gpu.cpp` ours path at 100%.
+- The game-TAA SM1STYLE eye-jitter code (79.4-79.7 levels, slow walk) is still in the DLL; it runs only with `vr_aa = game`.

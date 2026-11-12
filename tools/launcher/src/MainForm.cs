@@ -276,9 +276,17 @@ namespace Sm2VrLauncher
 
         void BuildRendererModePicker()
         {
+            // 79.8 CLASSIC PICTURE: the first start of this build puts the picker on ORIGINAL (the v0.0.78 picture, own
+            // TAA at 100%) once, whatever an older test build saved; PERFORMANCE stays one click away and stays chosen.
+            if (settings.Get("renderer_798_classic", "") != "1")
+            {
+                settings.Set(RendererModes.Key, RendererModes.Original);
+                settings.Set("renderer_798_classic", "1");
+                settings.Save();
+            }
             rendererPicker = new RendererModePicker
             {
-                Selection = RendererModes.Normal(settings.Get(RendererModes.Key, RendererModes.Revamped))
+                Selection = RendererModes.Normal(settings.Get(RendererModes.Key, RendererModes.Original))
             };
             Controls.Add(rendererPicker);
             PositionRendererModePicker();
@@ -287,7 +295,7 @@ namespace Sm2VrLauncher
             {
                 if (job != Job.None)
                 {
-                    rendererPicker.Selection = RendererModes.Normal(settings.Get(RendererModes.Key, RendererModes.Revamped));
+                    rendererPicker.Selection = RendererModes.Normal(settings.Get(RendererModes.Key, RendererModes.Original));
                     return;
                 }
                 settings.Set(RendererModes.Key, rendererPicker.Selection);

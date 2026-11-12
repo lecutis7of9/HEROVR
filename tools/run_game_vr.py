@@ -3240,6 +3240,9 @@ def session(a, startup, session_off=()):
         migrated_794 = live_settings.migrate_794_jitter(ROOT/'live.txt')  # 79.4: EYE JITTER's level, med once
         if migrated_794:
             print(migrated_794, flush=True)
+        migrated_798 = live_settings.migrate_798_render(ROOT/'live.txt')  # 79.8: vr_aa ours / vr_jitter on, once
+        if migrated_798:
+            print(migrated_798, flush=True)
         # 0.0.7 MIRROR PERSIST FIX: what is made when VR starts (MIRROR VIEW TEST) is set before the start.
         for name, value in live_settings.vr_start_settings(ROOT/'live.txt').items():
             _, export, text = live_settings.SETTINGS[name]

@@ -2560,6 +2560,8 @@ DWORD runBody() {
             modelsAdopted = true;
         };
         consoleLine(std::string("79.5 BUILD TAG: ") + SpidyBuildTag + " (this line is in the DLL that is running; a console without it is an older build)");
+        consoleLine("HERO VR 79.8 TEST (includes 79.7): CLASSIC PICTURE: the picture is the public v0.0.78 one (VR AA = ours, HEROVR's own per-eye TAA with its "
+                    "own jitter, the eyes at 100%, EYE JITTER on) and every gameplay change of 79.1-79.7 stays; the game-TAA SM1STYLE path is a test, not the default");
         consoleLine("HERO VR 79.7 TEST (includes 79.6): GAME WALL ANIMS no longer turns the view 180 degrees on the left stick (the level view stays level, "
                     "the stick climbs the wall's up, a yaw jump over 60 deg in a frame is put back and logged); feet pressed to the wall and the head 0.3 m off it "
                     "on the game's crawl; hand climb reaches 0.7 m; the Web Line marker is a 40 px disc / red cross with a preview line; EYE JITTER walks a slow "

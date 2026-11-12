@@ -87,13 +87,12 @@ namespace Sm2VrLauncher
                 }
                 // The new 70% path is selected only with VR AA = ours and this
                 // staged marker. Retain every other user's visual preference.
-                // Switching modes also switches the engine-AA selection:
-                // Original keeps the faster legacy route (the game's TAA in
-                // each eye, SM1STYLE; the user's choice in t2165: "the FPS was
-                // better lets keep it just fix the shaking" - the shake fix is
-                // the eyes' jitter size in stereo_probe.cpp eyeJitter).
-                // Revamped enables the own 70%-to-100% temporal reconstruction.
-                string aa = mode == Revamped ? "ours" : "game";
+                // 79.8 CLASSIC PICTURE: both modes use HEROVR's own per-eye TAA (vr_aa = ours), exactly as the public
+                // v0.0.78 shipped it. Original = that at the eyes' full size (no 70% marker); Performance = the same
+                // path plus the 70% marker's temporal upscale. 79.0-79.7 wrote vr_aa = game (the game's TAA, SM1STYLE)
+                // for Original; that is no longer written, and live.txt's old value is set to ours once
+                // (tools/live_settings.py migrate_798_render).
+                string aa = "ours";
                 if (!LiveFile.Set(root, "vr_aa", aa) ||
                     !LiveFile.Set(root, "vr_render", "native") ||
                     !LiveFile.Set(root, "sm1style", "on"))

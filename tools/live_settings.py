@@ -2198,6 +2198,52 @@ def migrate_794_jitter(path):
 HEADER += MIGRATED_794_JITTER + '\n'
 
 
+# 79.8 CLASSIC PICTURE: the public v0.0.78 picture is vr_aa = ours (HEROVR's own per-eye TAA, its own jitter) with EYE
+# JITTER on. 79.0-79.7's Original mode wrote vr_aa = game (the game's TAA, SM1STYLE) and the 79.2b-79.3 tests left
+# vr_jitter off (which, with ours, holds the lens still, so the own TAA gets no jitter). Both are set back once; a value
+# chosen after the marker stays. Other values (keep, smaa; low / med / full, which are the same under ours) are kept.
+VR_AA_DEFAULT_798 = 'ours'
+MIGRATED_798_RENDER = ('# 79.8: the picture is the v0.0.78 one (vr_aa = ours, EYE JITTER on); an older test build\'s vr_aa = game '
+                       'and vr_jitter off were set back once (migrated; a value chosen after this line stays)')
+
+
+def migrate_798_render(path):
+    """79.8, once: an existing live.txt without the MIGRATED_798_RENDER marker whose vr_aa is game (or the older legacy)
+    gets vr_aa = ours, and whose vr_jitter is off gets med (on, in the v0.0.78 path); the marker is added either way.
+    No live.txt: nothing (ours / med are the defaults; HEADER carries the marker). The line to show, or None."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_798_RENDER in text:
+        return None
+    try:
+        values = parse(text)[0]
+        updates, said = {}, []
+        if str(values.get('vr_aa', '')).strip().lower() in ('game', 'legacy'):
+            updates['vr_aa'] = VR_AA_DEFAULT_798
+            said.append(f"vr_aa {values.get('vr_aa')} set once to {VR_AA_DEFAULT_798}")
+        if str(values.get('vr_jitter', '')).strip().lower() == 'off':
+            updates['vr_jitter'] = JITTER_DEFAULT_794
+            said.append(f'vr_jitter off set once to {JITTER_DEFAULT_794}')
+        if updates:
+            text = write_back(text, updates)
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_798_RENDER + '\n')
+    except (OSError, ValueError):
+        return None
+    if not said:
+        return None
+    return 'live.txt: ' + ', '.join(said) + ', the v0.0.78 picture (change them in live.txt or the hologram and they stay).'
+
+
+HEADER += MIGRATED_798_RENDER + '\n'
+
+
 # 0.0.73 lights (the owner after test 4: "street lights still flicker and headlights still ghosting"; his
 # video: the bulbs and light pools are steady, the lens-flare streaks and bloom halos round street and
 # traffic lights strobe, worse panning; car lights leave ghost trails). Test 4 started EYE BLOOM COPY

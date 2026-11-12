@@ -241,6 +241,42 @@ if($packaged) {
 # Update 24: Spidy's modules have Microsoft's C++ runtime built in (/MT), so no Visual C++ Redistributable is
 # needed. tools\player_check.py (run by run_game_vr.py before anything is written) still asks for it, plainly,
 # when an older build's modules import it, and checks the folder, the game and its version.
+# 79.5 STALE FOLDER CHECK (t2192): 79.4's session ran the 79.3 modules - the report's xr_hash was ee300e76..., not 938a84c8... -
+# from a folder the new ZIP never replaced, and nothing in the folder said so (every test ZIP has the same artifact, ZIP and
+# folder name, and the reports say the same version). BUILD-MANIFEST.txt (package.ps1) holds the sha256 of every module this
+# package ships; a file that differs means the folder is a mix of two builds, which this refuses, loudly, before the game
+# starts. The staged gameplay DLL (build\windows-ninja\spidy_stereo_probe.dll) is not compared: the renderer-modes copies
+# are, and the staging below puts the right one in place.
+$buildManifest = Join-Path $projectRoot 'BUILD-MANIFEST.txt'
+$buildIdFile = Join-Path $projectRoot 'BUILD-ID.txt'
+if (Test-Path -LiteralPath $buildManifest) {
+    $manifestWrong = New-Object System.Collections.Generic.List[string]
+    $manifestChecked = 0
+    try {
+        foreach ($line in [IO.File]::ReadAllLines($buildManifest)) {
+            if ($line.StartsWith('#') -or -not $line.Trim()) { continue }
+            $want = $line.Substring(0, 64)
+            $relative = $line.Substring(66).Trim()
+            if ($relative -eq 'build\windows-ninja\spidy_stereo_probe.dll') { continue }
+            $fileHere = Join-Path $projectRoot $relative
+            if (-not (Test-Path -LiteralPath $fileHere)) { $manifestWrong.Add("$relative (missing)"); continue }
+            $manifestChecked++
+            if ((Get-FileHash -LiteralPath $fileHere -Algorithm SHA256).Hash.ToLowerInvariant() -ne $want) { $manifestWrong.Add("$relative (a different build)") }
+        }
+    } catch { Write-Host "BUILD CHECK: could not read the manifest ($($_.Exception.Message)); not checked." -ForegroundColor Yellow; $manifestWrong.Clear() }
+    $buildName = if (Test-Path -LiteralPath $buildIdFile) { "$(Get-Content -LiteralPath $buildIdFile -TotalCount 1)" } else { '(no BUILD-ID.txt)' }
+    if ($manifestWrong.Count) {
+        Write-Host ('=' * 78) -ForegroundColor Red
+        Write-Host "BUILD CHECK FAILED: this folder is NOT one whole build ($buildName)." -ForegroundColor Red
+        Write-Host "These files differ from the ZIP this folder was unzipped from: $($manifestWrong -join '; ')" -ForegroundColor Red
+        Write-Host 'The game was NOT started. Unzip the new ZIP into a NEW EMPTY folder (do not extract over an old one, do not Skip files), and start the launcher from that folder.' -ForegroundColor Red
+        Write-Host ('=' * 78) -ForegroundColor Red
+        throw "BUILD CHECK FAILED: $($manifestWrong.Count) file(s) differ from BUILD-MANIFEST.txt ($buildName)."
+    }
+    Write-Host "BUILD CHECK: $manifestChecked files match BUILD-MANIFEST.txt ($buildName)." -ForegroundColor Green
+} else {
+    Write-Host 'BUILD CHECK: no BUILD-MANIFEST.txt in this folder, so it is an older build than 79.5 (or the file was lost). Check the BUILD: line below against the build you meant to run.' -ForegroundColor Yellow
+}
 foreach($name in @('spidy_headset_probe.exe','spidy_bridge.dll','spidy_render_probe.dll',
                    'spidy_ray_bridge.dll','spidy_movement_bridge.dll','spidy_stereo_probe.dll',
                    'spidy_render_memory.dll')) {
@@ -281,6 +317,19 @@ if ((Test-Path -LiteralPath $bisectDll) -and (Test-Path -LiteralPath $activeSter
     } else {
         Write-Host "Gameplay DLL: 79.1 web-mechanics test ($wantHash...). Bisect fallback: tools\BISECT-toggle-base-DLL.cmd" -ForegroundColor Green
     }
+}
+# 79.5 BUILD TAG: what the staged gameplay DLL is, read from the file (the same line run_game_vr.py prints and the report keeps).
+if (Test-Path -LiteralPath $activeStereo) {
+    try {
+        $dllBytes = [IO.File]::ReadAllBytes($activeStereo)
+        $dllText = [Text.Encoding]::GetEncoding(28591).GetString($dllBytes)
+        $tagMatch = [regex]::Match($dllText, 'HEROVR-BUILD-TAG ([0-9][0-9.]*) ([0-9]+) ([0-9A-Za-z._-]{1,40})')
+        if ($tagMatch.Success) {
+            Write-Host ("BUILD: HERO VR {0} TEST {1} commit {2} (gameplay DLL sha256 {3}...)" -f $tagMatch.Groups[1].Value, $tagMatch.Groups[2].Value, $tagMatch.Groups[3].Value, (Get-FileHash -LiteralPath $activeStereo -Algorithm SHA256).Hash.Substring(0, 12)) -ForegroundColor Cyan
+        } else {
+            Write-Host 'BUILD: this gameplay DLL carries NO build tag: it is an older build than 79.5. If you meant to run a newer test, unzip the new ZIP into a NEW EMPTY folder.' -ForegroundColor Yellow
+        }
+    } catch { Write-Host "BUILD: could not read the gameplay DLL's tag ($($_.Exception.Message))." -ForegroundColor Yellow }
 }
 if ((Test-Path -LiteralPath $revampedStereo) -and (Test-Path -LiteralPath $activeStereo)) {
     # t2150: the 79.1 test packages ship ONE gameplay DLL for both modes, so

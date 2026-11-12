@@ -712,6 +712,10 @@ DWORD WINAPI SpidyVrJitter(void* off);  // 0.0.76 FAR SHAKE: vr_jitter, 0 on, 1 
 DWORD WINAPI SpidyVrJitterLevel(void* level); // 79.4: 0 off, 1 low, 2 med, 3 full, 4 e5d2746; bit 8: from the hologram
 uint32_t SpidyVrJitterLevelNow();
 extern spidy::jitter_check::Data SpidyJitterCheckData; // 79.4 JITTER CHECK (stereo_probe.cpp)
+// 79.5 BUILD TAG: the string tools/build_tag.py reads out of the DLL FILE ('HEROVR-BUILD-TAG <version> <test number> <commit>'),
+// so the launcher, the console and the report name the build that runs without trusting any other file in the folder
+// (79.4's session ran the 79.3 DLL from a folder that was never updated, and nothing said so).
+extern "C" __declspec(dllexport) char SpidyBuildTag[] = "HEROVR-BUILD-TAG " SPIDY_TEST_VERSION " " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT;
 uint32_t SpidyVrJitterNow();            // bit 0 vr_jitter off, bit 1 vr_game_jitter off
 DWORD WINAPI SpidyShadowCamera(void* mode); // Update 31
 DWORD WINAPI SpidyFarShadows(void* mode); // Update 35: far_shadows::Mode, 3 the next, 4 off (slow)
@@ -2545,7 +2549,8 @@ DWORD runBody() {
             consoleLine(line);
             modelsAdopted = true;
         };
-        consoleLine("HERO VR 79.4 TEST: EYE JITTER is a level (VR SETTINGS > GRAPHICS > EYE JITTER: OFF / LOW 0.10 px / MED 0.22 px / "
+        consoleLine(std::string("79.5 BUILD TAG: ") + SpidyBuildTag + " (this line is in the DLL that is running; a console without it is an older build)");
+        consoleLine("HERO VR 79.5 TEST (includes 79.4): EYE JITTER is a level (VR SETTINGS > GRAPHICS > EYE JITTER: OFF / LOW 0.10 px / MED 0.22 px / "
                     "FULL 0.44 px, MED the default; live.txt vr_jitter), with a 10 s '79.4 JITTER CHECK' line in this console");
         consoleLine("MODELS (79.3 LAZY): not read at start - plain SPIDER-MAN needs none; read when another hero, the roster, "
                     "a vehicle / hideout hero or PLAYER 2's props first need them");
@@ -2739,7 +2744,12 @@ DWORD runBody() {
         webline_native::Driver weblineDriver;
         webline_native::Pad weblinePad{};
         uint32_t weblineClaimed{};
-        uint64_t weblineStarts{}, weblineCommits{}, weblineCancels{};
+        uint64_t weblineStarts{}, weblineCommits{}, weblineCancels{}, weblineLatched{};
+        // 79.5: each hand's second-anchor marker while its gesture holds a grip (0 none, 1 valid green, 2 not valid red)
+        // and the valid tick's edge; weblineCancelWhy counts the cancels by reason (webline_gesture::Reason).
+        WeblineMark weblineMarks[2]{};
+        bool weblineWasValid[2]{};
+        uint64_t weblineCancelWhy[8]{};
         // t2161: a grip that did not start the gesture says why (rate-limited, 79.1 WEBLINE REFUSED).
         bool weblineGripWas[2]{};
         double weblineClock{}, weblineRefusedAt = -100.0; // frame.seconds is the frame's step, so a clock of its own
@@ -6985,6 +6995,8 @@ DWORD runBody() {
                         weblineGestures[0].reset();
                         weblineGestures[1].reset();
                         weblineDriver.reset();
+                        weblineMarks[0] = weblineMarks[1] = {};
+                        weblineWasValid[0] = weblineWasValid[1] = false;
                         weblinePad = {};
                         weblineClaimed = 0;
                     }
@@ -7124,6 +7136,7 @@ DWORD runBody() {
                                 webline_gesture::Input li{};
                                 li.enabled = lineOn && tracked;
                                 li.sampled = true;
+                                li.seconds = frame.seconds; // 79.5: the release latch's clock
                                 const float squeeze = std::isfinite(hand.squeeze) ? hand.squeeze : 0.f;
                                 li.grip = squeeze > (weblineGestures[h].holding() ? .3f : .6f);
                                 li.occupied = swingState.webs[h].attached || grabWebs[h].on || ropes[h].on ||
@@ -7193,6 +7206,17 @@ DWORD runBody() {
                                 if (lo.claimed)
                                     weblineClaimed |= 1u << h;
                                 lineActive |= weblineGestures[h].active();
+                                // 79.5 AIM MARKER: while this hand's gesture holds its grip, the marker at the second spot
+                                // is green (a valid second anchor: release now) or red (not valid: the cancel's reason
+                                // is the note on release); one short tick on the way to valid.
+                                weblineMarks[h] = {};
+                                if (weblineGestures[h].active() && lo.hasTarget) {
+                                    weblineMarks[h].state = lo.valid ? 1 : 2;
+                                    weblineMarks[h].point = lo.target;
+                                }
+                                if (weblineGestures[h].active() && lo.valid && !weblineWasValid[h])
+                                    runtime.haptic(static_cast<int>(h), .18f);
+                                weblineWasValid[h] = weblineGestures[h].active() && lo.valid;
                                 if (lo.started) {
                                     ++weblineStarts;
                                     runtime.haptic(static_cast<int>(h), .3f);
@@ -7203,10 +7227,12 @@ DWORD runBody() {
                                     lineCommit = true;
                                     ++weblineCommits;
                                     runtime.haptic(static_cast<int>(h), .55f);
-                                    char note[200];
-                                    sprintf_s(note, "79.1 WEBLINE #%llu: second anchor %.1f m away -> native Web Line (L2 + Y)",
+                                    char note[240];
+                                    weblineLatched += lo.latched;
+                                    sprintf_s(note, "79.1 WEBLINE #%llu: second anchor %.1f m away -> native Web Line (L2 + Y)%s",
                                               static_cast<unsigned long long>(weblineCommits),
-                                              length(lo.to - lo.from));
+                                              length(lo.to - lo.from),
+                                              lo.latched ? " [79.5 release latch: the last valid anchor within 0.3 s]" : "");
                                     game_prompts::note(note);
                                     consoleLine(note);
                                 }
@@ -7214,8 +7240,14 @@ DWORD runBody() {
                                     lineCancel = true;
                                     ++weblineCancels;
                                     runtime.haptic(static_cast<int>(h), .12f);
-                                    game_prompts::note("79.1 WEBLINE: cancelled (no valid second surface, or the hand was needed)");
-                                    consoleLine("79.1 WEBLINE: cancelled (no valid second surface, or the hand was needed)");
+                                    ++weblineCancelWhy[static_cast<unsigned>(lo.reason) & 7u];
+                                    char cancelNote[260];
+                                    sprintf_s(cancelNote, "79.5 WEBLINE: cancelled #%llu - %s", static_cast<unsigned long long>(weblineCancels),
+                                              lo.reason != webline_gesture::Reason::none
+                                                  ? webline_gesture::reasonText(lo.reason)
+                                                  : "the hand was needed for something else");
+                                    game_prompts::note(cancelNote);
+                                    consoleLine(cancelNote);
                                 }
                             }
                             weblinePad = weblineDriver.update(frame.seconds, lineOn || weblineDriver.busy(),
@@ -8882,14 +8914,10 @@ DWORD runBody() {
                         const auto& turning = frame.hands[1];
                         // Not a push the game names a D-pad way for (NamedPress).
                         // HOVER FLIGHT: mid-flight the right stick's up / down is the climb - no heal or zip from it.
-                        // Airborne FLIPS now uses the right stick. Its up
-                        // cannot also zip and its down cannot heal mid-flip.
-                        // Y supplies the direct game web strike in the air.
-                        const bool flipStickOwns = values.flips && inFlight && !motion.standing &&
-                                                   !fly076Flying;
+                        // 79.5: FLIPS are on the LEFT stick again (79.4's right-stick flips collided with the right
+                        // stick's zip-to-point up and heal down in the air), so the right stick is never the flip's.
                         const bool sticking =
                             steering && !calibrationInput && !layerOn && !fly076Flying && !abilityX &&
-                            !flipStickOwns &&
                             !(named & (game_pad::NamedPress::stickUp | game_pad::NamedPress::stickLeft |
                                        game_pad::NamedPress::stickRight));
                         // Update 37: heal_hold_ms, how long a push is held before it counts.
@@ -8903,7 +8931,7 @@ DWORD runBody() {
                         // stick's down for camo (abilityX), nor a hover flight's climb; a push the game names a
                         // D-pad way for (NamedPress) heals too when it is held down.
                         const bool healLive = steering && !calibrationInput && !layerOn && !fly076Flying && !abilityX;
-                        if (healStick.update(frame.seconds, healLive && healOn.load() && !flipStickOwns,
+                        if (healStick.update(frame.seconds, healLive && healOn.load(),
                                              turning.stickX, turning.stickY,
                                              static_cast<float>(healHoldMs.load()) / 1000.f)) {
                             if (!walk.heal && healStick.sends && !healing)
@@ -15016,6 +15044,7 @@ DWORD runBody() {
                         saved.webs[i] = swingState.webs[i];
                         saved.webTimes[i] = webTimes[i];
                         saved.aims[i] = aims.hands[i];
+                        saved.weblineMarks[i] = weblineMarks[i];
                         saved.offers[i] = pointing[i] ? *pointing[i] : offer_pointing::Pointed{};
                     }
                     saved.webSlots = {webRopes.slot(0), webRopes.slot(1)};
@@ -16289,6 +16318,22 @@ DWORD runBody() {
                                 steady.aim(normalized(input.aim.orientation.rotate({0, 0, -1})),
                                            trackingTurn(rendered.swing));
                             const float reach = length(aim.point - input.aim.position);
+                            // 79.5 WEBLINE AIM MARKER: while this hand's Web Line gesture holds its grip, the spot its
+                            // aim would take as the SECOND anchor: a green ring when the release will lay the line
+                            // (valid), a red cross when it will not (too close, not a surface, out of reach).
+                            if (const auto& wm = saved->weblineMarks[hand]; wm.state && finite(wm.point)) {
+                                AimMarker marker;
+                                marker.squeeze = input.grip;
+                                marker.hand = hand;
+                                marker.kind = wm.state == 1 ? AimMark::target : AimMark::blocked;
+                                marker.point = wm.point;
+                                marker.radius = .35f;
+                                marker.tinted = true;
+                                marker.tint = wm.state == 1 ? Vec3{.12f, 1.f, .25f} : Vec3{1.f, .08f, .08f};
+                                steady.markers(&marker, origin, direction, marks);
+                                ++markersDrawn;
+                                continue;
+                            }
                             AimMarker marker;
                             marker.squeeze = input.grip;
                             marker.hand = hand;

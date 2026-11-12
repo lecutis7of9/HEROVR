@@ -82,8 +82,8 @@ VR-driven head or arms.
 3. Check that both hands still aim and web independently, the headset does not
    bob, spin or follow canned head animations, and the legs do not snap when
    you stop or resume moving.
-4. While airborne, use the **right stick** for FLIPS (the left stick stays
-   movement) and REALISTIC FLIPS if enabled. Watch for a
+4. While airborne, use the **left stick** for FLIPS (79.5: back on the left stick; the
+   right stick zips up / heals down again) and REALISTIC FLIPS if enabled. Watch for a
    clear knee tuck and torso curl midway through the turn, then a smooth
    extension at the end. The headset and hands should continue tracking.
 5. Test the game's **native crawl** (native legs should retain their pose),

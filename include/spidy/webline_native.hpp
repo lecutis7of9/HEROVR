@@ -9,8 +9,8 @@
 // the request; they are NOT handed to the game.
 //
 // Timeline: while a gesture is held, L2 is held (the game's aim primes, as a
-// player holding the left trigger would). A commit keeps L2 for `settle`, then
-// holds Y with L2 for `pulse`, then L2 alone for `tail`, then releases. A
+// player holding the left trigger would). A commit keeps L2 for `settle` (0.04 s), then
+// holds Y with L2 for `pulse` (0.10 s), then L2 alone for `tail` (0.04 s), then releases. A
 // cancel, or the gesture being switched off, releases L2 at once with no Y.
 #include <algorithm>
 #include <cmath>
@@ -29,7 +29,9 @@ struct Pad {
 };
 class Driver {
   public:
-    static constexpr float settle = .08f, pulse = .12f, tail = .06f;
+    // 79.5: trimmed from .08 / .12 / .06 (0.26 s) - L2 is already held for the whole gesture, so the
+    // release only needs a short settle before the Y pulse.
+    static constexpr float settle = .04f, pulse = .10f, tail = .04f;
     // active: a gesture holds a grip now. commit / cancel: this frame's
     // gesture ending. enabled false drops everything at once.
     Pad update(float seconds, bool enabled, bool active, bool commit, bool cancel) {

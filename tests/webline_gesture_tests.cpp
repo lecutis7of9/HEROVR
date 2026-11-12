@@ -104,6 +104,60 @@ int main(){
         in.grip=true; game.update(in); game.reset();
         CHECK(!game.holding());
     }
+    // ---- 79.5: the release latch, the marker's target/reason, the cancel reasons ----
+    {
+        webline_gesture::Gesture game(35.f, 2.f, false);
+        webline_gesture::Input in{};
+        const float dt = 1.f / 90.f;
+        in.enabled=true; in.sampled=true; in.hand={0,1.5f,0}; in.aim={0,0,-1}; in.seconds=dt;
+        const RayHit wallA{{0,3,-8},{0,0,1},1,true}, wallB{{6,3,-8},{0,0,1},1,true};
+        auto start=[&]{ in.grip=true; in.hit=wallA; auto o=game.update(in); CHECK(o.started); return o; };
+        auto o=start();
+        // Marker data: a valid second spot is a target and valid; a too-close one is a target and not valid.
+        in.hit=wallB; o=game.update(in);
+        CHECK(o.hasTarget && o.valid && o.preview && o.reason==webline_gesture::Reason::none);
+        in.hit=RayHit{{1,3,-8},{0,0,1},1,true}; o=game.update(in);
+        CHECK(o.hasTarget && !o.valid && !o.preview && o.reason==webline_gesture::Reason::tooClose);
+        in.hit.reset(); o=game.update(in);
+        CHECK(!o.hasTarget && !o.valid && o.reason==webline_gesture::Reason::noSurface);
+        in.hit=RayHit{{0,1,-3},{0,0,1},1,false}; o=game.update(in);
+        CHECK(!o.hasTarget && o.reason==webline_gesture::Reason::notFixed);
+        in.hit=RayHit{{0,3,-80},{0,0,1},1,true}; o=game.update(in);
+        CHECK(!o.hasTarget && o.reason==webline_gesture::Reason::tooFar);
+        in.grip=false; in.hit.reset(); game.update(in);
+        // The release jerk: a valid second anchor, then 2 frames (0.022 s) of nothing, then release: COMMIT, latched.
+        start();
+        in.hit=wallB; game.update(in);
+        in.hit.reset(); game.update(in); game.update(in);
+        in.grip=false; o=game.update(in);
+        CHECK(o.commit && o.latched && !o.cancelled && std::fabs(o.to.x-6)<1e-4f && !game.holding());
+        // Release on a valid spot is not latched.
+        start(); in.hit=wallB; game.update(in);
+        in.grip=false; o=game.update(in);
+        CHECK(o.commit && !o.latched);
+        // Too long since the last valid anchor (0.5 s): cancel, with the reason.
+        start(); in.hit=wallB; game.update(in);
+        in.hit.reset(); for(int k=0;k<45;++k) game.update(in);
+        in.grip=false; o=game.update(in);
+        CHECK(o.cancelled && !o.commit && o.reason==webline_gesture::Reason::noSurface);
+        // No latch without a frame time (seconds 0), and never from a gesture that had no valid anchor.
+        in.seconds=0;
+        start(); in.hit=wallB; game.update(in);
+        in.hit.reset(); in.grip=false; o=game.update(in);
+        CHECK(o.cancelled && !o.commit);
+        in.seconds=dt;
+        start(); in.hit.reset(); game.update(in);
+        in.grip=false; o=game.update(in);
+        CHECK(o.cancelled && !o.commit);
+        // A latched anchor is dropped when the gesture is cancelled by other means, and does not leak into the next gesture.
+        start(); in.hit=wallB; game.update(in);
+        in.occupied=true; game.update(in); in.occupied=false;
+        in.grip=false; game.update(in);
+        start(); in.hit.reset(); game.update(in);
+        in.grip=false; o=game.update(in);
+        CHECK(o.cancelled && !o.commit);
+        static_assert(webline_native::Driver::settle + webline_native::Driver::pulse + webline_native::Driver::tail < .2f);
+    }
     // ---- the native driver: L2 held while the gesture is, then L2 + Y once ----
     {
         using namespace webline_native;

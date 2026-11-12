@@ -43,6 +43,7 @@ from sm1style_record import sm1style_snapshot, sm1style_line  # 0.0.76 EYE HISTO
 import pose_check_record  # 0.0.76 POSE CHECK
 import jitter_log_record  # 0.0.76 JITTER FIX
 import jitter_check_record  # 79.4 JITTER CHECK
+import build_tag  # 79.5 BUILD TAG: which build the injected DLL is, from the file itself
 import vr_aa_record  # 0.0.76 SPIDY TAA
 import taa_watch_record  # 0.0.76 TAA WATCH
 import taa_frame_log_record  # 0.0.76 TAA FRAME LOG
@@ -3144,6 +3145,9 @@ def session(a, startup, session_off=()):
             ROOT/'reports/motion-modules',('SpidyMotionStart','SpidyMotionSubmit','SpidyMotionSample',
                                          'SpidyMotionStop','SpidyMotionData'))
         motion_module = next(m['base'] for m in modules(game.pid) if m['name'].lower() == 'spidy_movement_bridge.dll')
+        build_tag_line = build_tag.tag_line(ROOT/'build/windows-ninja/spidy_stereo_probe.dll')  # 79.5
+        build_tag_record = build_tag.record(ROOT/'build/windows-ninja/spidy_stereo_probe.dll')
+        print(build_tag_line, flush=True)
         xr, xr_hash = prepare(game.pid, process, ROOT/'build/windows-ninja/spidy_stereo_probe.dll',
             ROOT/'reports/stereo-modules', ('SpidyXrStart', 'SpidyXrStop', 'SpidyXrKeepAlive', 'SpidyXrData',
                                            'SpidyGpuData', 'SpidyXrTimingData', 'SpidyAppearanceData',
@@ -3596,7 +3600,7 @@ def session(a, startup, session_off=()):
                         game_settings_refused=startup.fields.get('game_settings_refused'),
                         game_registry=startup.fields.get('game_registry'),
                         xr_runtime=runtime, motion_hash=motion_hash,
-                        xr_hash=xr_hash, ray_hash=ray_hash, samples=list(samples),
+                        xr_hash=xr_hash, build_tag=build_tag_record, build_tag_line=build_tag_line, ray_hash=ray_hash, samples=list(samples),
                         swing_samples=list(swing_samples), motion_samples=list(motion_samples),
                         grab_samples=list(grab_samples), body=body, punch=punch,
                         punch_samples=list(punch_samples), strikes=strikes, strike_samples=list(strike_samples),
@@ -4257,7 +4261,7 @@ def session(a, startup, session_off=()):
         session_fps_last = read_session_fps() or session_fps_last
         result = dict(session_fps=session_fps_last, version=public_version(), port_version=port_version(), launch_args=sys.argv[1:], pid=game.pid, module_base=hex(game.base),
             bridge_hash=bridge_hash,
-            xr_hash=xr_hash,
+            xr_hash=xr_hash, build_tag=build_tag_record, build_tag_line=build_tag_line,  # 79.5 BUILD TAG
             eye_size=a.size,render_scale=a.render_scale,supersample=a.supersample,eyes=eye_options,live_changes=live_changes,capture_images=a.capture_images,
             timing=timing_snapshot(game,xr['SpidyXrTimingData']),
             ray_hash=ray_hash, ray_samples=list(ray_samples), rays=ray_snapshot(game, rays['SpidyRayData']),

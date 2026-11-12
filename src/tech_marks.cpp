@@ -306,7 +306,7 @@ void appendAimMarker(std::vector<Vertex>& out, const AimMarker& marker, Vec3 vie
     // Metres per pixel at the marker, and how far the grip has closed toward a shot.
     const float px = pixelAngle * distance;
     const float squeeze = std::isfinite(marker.squeeze) ? std::clamp(marker.squeeze / .65f, 0.f, 1.f) : 0.f;
-    const Vec3 color = hands[marker.hand ? 1 : 0], light = mix(color, {1, 1, 1}, .55f);
+    const Vec3 color = marker.tinted && finite(marker.tint) ? marker.tint : hands[marker.hand ? 1 : 0], light = mix(color, {1, 1, 1}, .55f);
     Hud hud(out, marker.point, f.right, f.up, f.view, px);
     hud.opacity(opacity);
     switch (marker.kind) {

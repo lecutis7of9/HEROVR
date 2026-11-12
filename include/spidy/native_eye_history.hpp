@@ -18,6 +18,11 @@
 #include <limits>
 
 namespace spidy {
+// 79.5: a hand's Web Line gesture marker at the second spot (state 0 none, 1 valid, 2 not valid).
+struct WeblineMark {
+    uint8_t state{};
+    Vec3 point{};
+};
 struct NativeEyeFrame {
     uint64_t serial{};
     GameMotionFrame motion;
@@ -32,6 +37,8 @@ struct NativeEyeFrame {
     // What each hand's grip press would do (game_swing::AimKind none while
     // the aim markers are off).
     std::array<game_swing::Aim, 2> aims{};
+    // 79.5: each hand's Web Line gesture marker at the second spot (state 0 none, 1 valid, 2 not valid).
+    std::array<WeblineMark, 2> weblineMarks{};
     // The game's interaction each hand points at on Spidy's wall (handle 0:
     // none), drawn instead of its aim marker.
     std::array<offer_pointing::Pointed, 2> offers{};

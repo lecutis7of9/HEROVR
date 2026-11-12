@@ -15370,7 +15370,7 @@ int main() {
         f.hands[1].stickX = 1;
         check(next(true).head[8] > held.head[8] + .01f, "the stick let go and held again did not turn");
     });
-    test("momentum mode supports manual right-stick rotation and an airborne A brake", [] {
+    test("momentum mode supports manual left-stick rotation and an airborne A brake", [] {
         GameTrackingRig rig;
         RealisticFlipSettings settings;
         settings.enabled = true;
@@ -15381,18 +15381,18 @@ int main() {
         auto f = trackedFrame();
         flipFrame(rig, f, false, false);
         flipFrame(rig, f, false, true);
-        f.hands[1].stickY = 1;
+        f.hands[0].stickY = 1;
         GameMotionFrame m;
         for (int i = 0; i < 45; ++i)
             m = flipFrame(rig, f, false, true);
-        check(std::abs(m.flipTilt.x) > .1f, "right stick must rotate with momentum mode on");
+        check(std::abs(m.flipTilt.x) > .1f, "left stick must rotate with momentum mode on");
         check(length(m.swing.move) < .001f, "stick rotation must not also steer flight movement");
         const auto beforeBrake = m.flipTilt;
         m = flipFrame(rig, f, true, true);
         check(std::abs(beforeBrake.x * m.flipTilt.x + beforeBrake.y * m.flipTilt.y + beforeBrake.z * m.flipTilt.z +
                        beforeBrake.w * m.flipTilt.w) > .99f,
               "A recovery must not snap");
-        f.hands[1].stickY = 0;
+        f.hands[0].stickY = 0;
         for (int i = 0; i < 240; ++i)
             m = flipFrame(rig, f, false, true);
         near(length(m.flipTilt.rotate({0, 1, 0}) - Vec3{0, 1, 0}), 0, .001f);
@@ -15457,7 +15457,7 @@ int main() {
                     hand.grip.position.y += .035f;
                 moved = flipFrame(rig, frame, false, true);
             }
-            frame.hands[1].stickY = 1;
+            frame.hands[0].stickY = 1;
             for (int i = 0; i < 30; ++i)
                 moved = flipFrame(rig, frame, false, true);
             return length(moved.flipTilt.rotate({0, 1, 0}) - Vec3{0, 1, 0});
@@ -15630,10 +15630,9 @@ int main() {
         }
         check(length(m.swing.move) > .5f, "a jump held into the air took the stick");
         flipFrame(rig, f, false, true);
-        f.hands[1].stickY = 1; // the RIGHT stick now owns airborne flips
         for (int i = 0; i < 6; ++i)
             m = flipFrame(rig, f, true, true);
-        check(!levelTilt(m.swing.tilt), "A held in the air with the right stick did not turn the player");
+        check(!levelTilt(m.swing.tilt), "A held in the air with the stick did not turn the player");
     });
     test("flip: held, the stick turns as fast as it is tilted and at rest holds the angle; let go, level", [] {
         constexpr float turn = 6.2831853f, full = turn / FlipMotion::holdTurnSeconds;
@@ -15708,96 +15707,114 @@ int main() {
         toLevel(again);
         near(again.turned(), turn, .01f);
     });
-    test("flip: right stick picks the airborne flip; left stick keeps moving", [] {
-        const struct { float x, y; } sticks[] = {{0, 0}, {0, 1}, {0, -1}, {1, 0}};
+    test("flip: held, the left stick picks the way and moves the player no more; let go, it moves them again", [] {
+        // Ahead a front flip, back a backflip, right a cartwheel to the right; at rest nothing.
+        const struct {
+            float x, y;
+        } sticks[] = {{0, 0}, {0, 1}, {0, -1}, {1, 0}};
         for (const auto& stick : sticks) {
             GameTrackingRig rig;
             rig.flips(true);
             auto f = trackedFrame();
-            f.hands[0].stickY = 1; // left-stick movement must remain available
-            f.hands[1].stickX = stick.x;
-            f.hands[1].stickY = stick.y;
+            f.hands[0].stickX = stick.x;
+            f.hands[0].stickY = stick.y;
             const bool still = stick.x == 0 && stick.y == 0;
             const auto before = flipFrame(rig, f, false);
-            check(length(before.swing.move) > .5f, "left stick did not move before the flip");
+            check(still || length(before.swing.move) > .5f, "the stick did not walk");
             auto m = flipFrame(rig, f, true);
-            for (int k = 0; k < 30; ++k) {
-                check(length(m.swing.move) > .5f,
-                      "left stick locomotion was stolen by the right-stick flip");
+            for (int i = 0; i < 30; ++i) {
+                check(length(m.swing.move) == 0 && m.walkForward == 0 && m.walkRight == 0,
+                      "the stick moved the player while A was held in the air");
                 m = flipFrame(rig, f, true);
             }
             const Vec3 ahead = matrixRow(m.head, 2), up = matrixRow(m.head, 1) * -1.f;
             if (still)
-                check(levelTilt(m.swing.tilt), "A held with right stick at rest turned the player");
+                check(levelTilt(m.swing.tilt), "A held with the stick at rest turned the player");
             else if (stick.x > 0)
-                check(up.x > .5f && std::abs(ahead.y) < .05f, "right cartwheel did not occur");
+                check(up.x > .5f && std::abs(ahead.y) < .05f, "the stick to the right did not cartwheel right");
             else if (stick.y < 0)
-                check(ahead.y > .5f, "right stick back did not backflip");
+                check(ahead.y > .5f, "the stick back did not backflip");
             else
-                check(ahead.y < -.5f, "right stick forward did not front flip");
+                check(ahead.y < -.5f, "the stick ahead did not front flip");
+            // Let go of A: the stick moves the player again while they turn back level.
             m = flipFrame(rig, f, false);
-            check(still || !levelTilt(m.swing.tilt), "letting go of A snapped the flip level");
-            check(length(m.swing.move) > .5f, "letting go of A stopped left-stick movement");
+            check(still || !levelTilt(m.swing.tilt), "the player snapped level as A was let go");
+            check(still || length(m.swing.move) > .5f, "the stick stayed the flip's");
             int frames = 0;
             for (; frames < 60 && !levelTilt(m.swing.tilt); ++frames)
                 m = flipFrame(rig, f, false);
-            check(levelTilt(m.swing.tilt) && frames <= 30, "right stick flip did not settle");
+            check(levelTilt(m.swing.tilt) && frames <= 30, "letting go did not bring the player back level");
         }
     });
-    test("flip: right stick airborne only; ground turn and left movement remain independent", [] {
+    test("flip: in the air the left stick alone turns the player once let go there; held from a jump it walks", [] {
         GameTrackingRig rig;
         rig.flips(true);
         auto f = trackedFrame();
+        // A running jump: the stick held from the ground into the air moves the player.
         f.hands[0].stickY = 1;
         flipFrame(rig, f, false, false);
-        GameMotionFrame m = flipFrame(rig, f, false, false);
-        for (int k = 0; k < 30; ++k) {
-            m = flipFrame(rig, f, false, true);
-            check(levelTilt(m.swing.tilt) && length(m.swing.move) > .5f,
-                  "running jump must keep left stick movement, not auto-flip");
+        auto m = flipFrame(rig, f, false, false);
+        for (int i = 0; i < 30; ++i) {
+            m = flipFrame(rig, f, false);
+            check(levelTilt(m.swing.tilt) && length(m.swing.move) > .5f, "a stick held into the air flipped");
         }
-        const float ways[]{1.f, -1.f};
+        // Let go in the air, then pushed: ahead a front flip, back a backflip, the player moved no more.
+        const float ways[] = {1, -1};
         for (const float way : ways) {
-            f.hands[1].stickY = 0;
-            flipFrame(rig, f, false, true);
-            f.hands[1].stickY = way;
-            for (int k = 0; k < 30; ++k) {
-                m = flipFrame(rig, f, false, true);
-                check(length(m.swing.move) > .5f, "right stick flip stole left stick movement");
+            f.hands[0].stickY = 0;
+            flipFrame(rig, f, false);
+            f.hands[0].stickY = way;
+            for (int i = 0; i < 30; ++i) {
+                m = flipFrame(rig, f, false);
+                check(length(m.swing.move) == 0 && m.walkForward == 0 && m.walkRight == 0,
+                      "the stick moved the player while it flipped them");
             }
             const Vec3 ahead = matrixRow(m.head, 2);
             check(way > 0 ? ahead.y < -.5f : ahead.y > .5f,
-                  "right stick did not steer the airborne flip");
-            f.hands[1].stickY = 0;
-            m = flipFrame(rig, f, false, true);
+                  way > 0 ? "the stick ahead did not front flip" : "the stick back did not backflip");
+            // Let go: back level the short way, no snap.
+            f.hands[0].stickY = 0;
+            m = flipFrame(rig, f, false);
+            check(!levelTilt(m.swing.tilt), "the player snapped level as the stick was let go");
             int frames = 0;
             for (; frames < 60 && !levelTilt(m.swing.tilt); ++frames)
-                m = flipFrame(rig, f, false, true);
-            check(levelTilt(m.swing.tilt) && frames <= 30,
-                  "right stick release did not settle the flip");
+                m = flipFrame(rig, f, false);
+            check(levelTilt(m.swing.tilt) && frames <= 30, "letting go of the stick did not bring the player level");
         }
-        // Right stick on a wall cannot flip; left stick continues to crawl.
-        auto wallFrame = [&] {
+        // Landing mid-flip levels the player; from the ground the stick walks again, into the air too.
+        f.hands[0].stickY = 1;
+        for (int i = 0; i < 30; ++i)
+            m = flipFrame(rig, f, false);
+        check(!levelTilt(m.swing.tilt), "no flip before the landing");
+        int frames = 0;
+        for (; frames < 60 && !levelTilt(m.swing.tilt); ++frames)
+            m = flipFrame(rig, f, false, false);
+        check(levelTilt(m.swing.tilt) && frames <= 40, "landing did not level the player quickly");
+        for (int i = 0; i < 20; ++i) {
+            m = flipFrame(rig, f, false, i >= 10);
+            check(levelTilt(m.swing.tilt) && length(m.swing.move) > .5f, "the stick held from the landing flipped");
+        }
+        // On a wall (in the air as the game has it there) the stick crawls: no flip.
+        const auto wallFrame = [&] {
             ++f.predictedDisplayTime;
             return rig.update(f, {}, {0, 0, -1}, true, {1, 0, 0}, true);
         };
-        f.hands[1].stickY = 0;
-        for (int k = 0; k < 20; ++k) wallFrame();
-        f.hands[1].stickY = 1;
-        for (int k = 0; k < 30; ++k) {
+        f.hands[0].stickY = 0;
+        for (int i = 0; i < 20; ++i)
+            wallFrame();
+        f.hands[0].stickY = 1;
+        for (int i = 0; i < 30; ++i) {
             m = wallFrame();
-            check(levelTilt(m.swing.tilt) && length(m.swing.move) > .5f,
-                  "right stick flipped the hero on a wall");
+            check(levelTilt(m.swing.tilt) && length(m.swing.move) > .5f, "the stick flipped the player on a wall");
         }
+        // Flips off: the stick let go and pushed in the air walks, level.
         GameTrackingRig off;
-        off.flips(false);
-        f.hands[1].stickY = 0;
-        flipFrame(off, f, false, true);
-        f.hands[1].stickY = 1;
-        for (int k = 0; k < 15; ++k) {
-            m = flipFrame(off, f, false, true);
-            check(levelTilt(m.swing.tilt) && length(m.swing.move) > .5f,
-                  "right stick flipped when FLIPS is off");
+        f.hands[0].stickY = 0;
+        flipFrame(off, f, false);
+        f.hands[0].stickY = 1;
+        for (int i = 0; i < 20; ++i) {
+            m = flipFrame(off, f, false);
+            check(levelTilt(m.swing.tilt) && length(m.swing.move) > .5f, "flips off, the stick in the air flipped");
         }
     });
     test("flip: the stick alone turns as fast as it is tilted; A held keeps the angle; a flick is no whole flip", [] {
@@ -15940,7 +15957,7 @@ int main() {
             rig.reset();
             auto f = trackedFrame();
             flipFrame(rig, f, false);
-            f.hands[1].stickY = 1;
+            f.hands[0].stickY = 1;
             GameMotionFrame m;
             for (int i = 0; i < 40; ++i)
                 m = flipFrame(rig, f, false);
@@ -15953,7 +15970,7 @@ int main() {
         GameTrackingRig rig;
         rig.flips(true);
         auto f = trackedFrame();
-        f.hands[1].stickY = 1;
+        f.hands[0].stickY = 1;
         flipFrame(rig, f, false);
         auto m = flipFrame(rig, f, true);
         for (int i = 0; i < 75; ++i)
@@ -15986,8 +16003,7 @@ int main() {
             const auto m = flipFrame(rig, f, i < 30);
             check(levelTilt(m.swing.tilt) && length(m.swing.move) > .5f, "flips off, A in the air flipped");
         }
-        // On, A held with the right stick turns the player; switched off, they are level at once.
-        f.hands[1].stickY = 1;
+        // On, A held with the stick turns the player; switched off, they are level at once.
         rig.flips(true);
         auto m = flipFrame(rig, f, true);
         for (int i = 0; i < 20; ++i)
@@ -36812,7 +36828,7 @@ int main() {
                 auto f = trackedFrame();
                 flipFrame(rig, f, false, false);
                 flipFrame(rig, f, false, true);
-                f.hands[1].stickY = stick;
+                f.hands[0].stickY = stick;
                 GameMotionFrame m;
                 for (int i = 0; i < 30; ++i)
                     m = flipFrame(rig, f, false, true);

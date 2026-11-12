@@ -68,6 +68,7 @@ jobs:
           if ($LASTEXITCODE) { throw "Bootstrap failed ($LASTEXITCODE)" }
       - name: Compile all native modules and run C++ tests
         env:
+          HEROVR_BUILD_FOOTER: '1' # 79.5: the wrist footer names the build (version, test number, commit); no test-notice panel
           SPIDY_BHAPTICS_APP_ID: ${{ secrets.SPIDY_BHAPTICS_APP_ID }}
           SPIDY_BHAPTICS_API_KEY: ${{ secrets.SPIDY_BHAPTICS_API_KEY }}
         run: |
@@ -164,6 +165,8 @@ jobs:
       - name: Package isolated test mod (never uploads to Releases)
         run: |
           $name = 'HERO-VR-79.1-DUAL-TEST'
+          # 79.5: BUILD-ID.txt / BUILD-MANIFEST.txt in the package (package.ps1) name this build.
+          $env:HEROVR_BUILD_TAG = "HERO VR 79.5 TEST (commit $($env:GITHUB_SHA.Substring(0, 7)))"
           ./tools/package.ps1 -Name $name -TestNotes 'docs/0791-WEB-MECHANICS-TEST.md' -ModelsFrom 'build/models-078/Models'
           if ($LASTEXITCODE) { throw "Packaging failed ($LASTEXITCODE)" }
           $zip = "dist/$name-win64.zip"
@@ -183,7 +186,7 @@ jobs:
             $entries = @($archive.Entries | ForEach-Object { $_.FullName })
             if (-not ($entries -contains "$name/VERSION")) { throw 'VERSION missing from the test ZIP' }
             # t2155: Reports > Collect reports, and the bisect fallback with its switch.
-            foreach ($entry in @('tools/collect-reports.ps1', 'tools/BISECT-toggle-base-DLL.cmd',
+            foreach ($entry in @('BUILD-MANIFEST.txt', 'BUILD-ID.txt', 'tools/build_tag.py', 'tools/collect-reports.ps1', 'tools/BISECT-toggle-base-DLL.cmd',
                                  'build/windows-ninja/bisect-base-0e94193/spidy_stereo_probe.dll')) {
               if (-not ($entries -contains "$name/$entry")) { throw "$entry missing from the test ZIP" }
             }
@@ -196,7 +199,7 @@ jobs:
             "Models in the test ZIP: $($models.Count) files" >> $env:GITHUB_STEP_SUMMARY
             $script = $archive.GetEntry("$name/tools/launch-game-vr.ps1")
             $reader = New-Object IO.StreamReader($script.Open()); $text = $reader.ReadToEnd(); $reader.Close()
-            foreach ($needed in @('Local\HEROVR-launch-game-vr', 'HEROVR_RENDERER_MODE', 'no 70% enable marker', 'USE-BASE-DLL.txt')) {
+            foreach ($needed in @('Local\HEROVR-launch-game-vr', 'HEROVR_RENDERER_MODE', 'no 70% enable marker', 'USE-BASE-DLL.txt', 'BUILD-MANIFEST.txt', 'BUILD CHECK FAILED')) {
               if (-not $text.Contains($needed)) { throw "launch-game-vr.ps1 in the ZIP lacks: $needed" }
             }
           } finally { $archive.Dispose() }

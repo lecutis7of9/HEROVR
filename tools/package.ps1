@@ -190,6 +190,28 @@ foreach ($from in $notices.Keys) {
     Copy-Item -LiteralPath $source -Destination (Join-Path $stage "docs\licenses\$($notices[$from])")
 }
 
+# 79.5 BUILD MANIFEST: what this package's own files are, so tools\launch-game-vr.ps1 can tell a folder that was only
+# partly updated (a new ZIP extracted over an old folder with "skip" or with a locked file) from a whole one. 79.4's
+# session ran the 79.3 modules from an un-updated folder and nothing said so. BUILD-ID.txt names the build in words.
+$manifestLines = New-Object System.Collections.Generic.List[string]
+$manifestPatterns = @('build\windows-ninja\*.dll', 'build\windows-ninja\*.exe', 'build\windows-ninja\renderer-modes\*\*.dll',
+                      'build\windows-ninja\bisect-base-*\*.dll', 'tools\launcher\SM2VRLauncher.exe',
+                      'tools\launch-game-vr.ps1', 'tools\run_game_vr.py', 'tools\build_tag.py')
+foreach ($pattern in $manifestPatterns) {
+    foreach ($file in @(Get-ChildItem -Path (Join-Path $stage $pattern) -File -ErrorAction SilentlyContinue | Sort-Object FullName)) {
+        $relative = $file.FullName.Substring($stage.Length).TrimStart('\')
+        $manifestLines.Add(((Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()) + '  ' + $relative)
+    }
+}
+if ($manifestLines.Count -lt 8) { throw "BUILD-MANIFEST.txt would list only $($manifestLines.Count) files." }
+$buildTag = if ($env:HEROVR_BUILD_TAG) { $env:HEROVR_BUILD_TAG } else { "$Name (no HEROVR_BUILD_TAG)" }
+$manifestHeader = @("# HERO VR build manifest: $buildTag", '# sha256  file (build\windows-ninja\spidy_stereo_probe.dll is the staged copy and is not checked: the launcher re-stages it from renderer-modes)')
+[IO.File]::WriteAllLines((Join-Path $stage 'BUILD-MANIFEST.txt'), [string[]]($manifestHeader + $manifestLines), (New-Object Text.ASCIIEncoding))
+[IO.File]::WriteAllLines((Join-Path $stage 'BUILD-ID.txt'), [string[]]@($buildTag,
+    'Every launch prints BUILD: HERO VR <version> TEST <n> commit <sha> from the gameplay DLL itself; the hologram footer says the same.',
+    'If that line is not the one in this file, you are running a different folder than the one you just unzipped.'), (New-Object Text.ASCIIEncoding))
+Write-Host "Build manifest: $($manifestLines.Count) files ($buildTag)"
+
 # Self-test, with the packaged Python on the packaged tools only, from a path with spaces: every tool a session
 # imports is there, every other import resolves in the embeddable Python, the entry scripts import, and
 # run_game_vr.py starts (--help: it touches nothing).

@@ -1708,7 +1708,7 @@ void appendAimMarker(std::vector<Vertex>& out, const AimMarker& marker, Vec3 vie
     const float px = pixelAngle * distance;
     const float squeeze = std::isfinite(marker.squeeze) ? std::clamp(marker.squeeze / .65f, 0.f, 1.f) : 0.f;
     const Vec3 c = marker.point;
-    const Vec3 color = handColors[marker.hand ? 1 : 0], light = mix(color, {1, 1, 1}, .6f);
+    const Vec3 color = marker.tinted && finite(marker.tint) ? marker.tint : handColors[marker.hand ? 1 : 0], light = mix(color, {1, 1, 1}, .6f);
     // Every shape is drawn twice, first all of a marker's shadows, then its
     // colours: a soft dark shadow reaching `shade` past the shape keeps it
     // readable on the sky and on a lit wall.

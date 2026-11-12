@@ -204,3 +204,26 @@ the aliasing / shimmer / slight ghosting was back, the game's TAA having no sub-
 
 Test (about 5 minutes in a street): start as SPIDER-MAN; with MED look at far buildings, turn your head slowly; step the
 row LOW / MED / FULL / OFF and say, per level, which shakes and which shimmers. Collect reports.
+
+
+## 79.5 (includes 79.4's EYE JITTER levels)
+
+What the 79.4 session (report game-vr-a9bc38c.json, folder `...\herovr-79-1-dual-renderer-gameplay-test\HERO-VR-79.1-DUAL-TEST-win64\HERO-VR-79.1-DUAL-TEST`)
+showed and what 79.5 changes. CONFIRMED = from that report or the code; COMPILED = built in CI; not headset-verified.
+
+1. **The 79.4 session ran the 79.3 DLL.** CONFIRMED: its `xr_hash` is ee300e76... (the 79.3 DLL), `motion_hash` 9acdee24..., `bridge_hash`
+   aced20e6..., `ray_hash` 0b381603... - every module in the folder was the 79.3 build, and the hologram showed on / off for EYE JITTER (the
+   79.2b toggle). The launcher's own copy logic is not at fault: it copies `build\windows-ninja\renderer-modes\<mode>\spidy_stereo_probe.dll`
+   over the active DLL by SHA, and those copies were 79.3's too. The folder itself was never updated. Every test ZIP has the same artifact,
+   ZIP and folder name and the reports say the same version, so nothing told the user.
+   79.5: **BUILD TAG** - the DLL carries `HEROVR-BUILD-TAG 0.0.79.5 5 <commit>`; the launcher prints `BUILD: HERO VR 0.0.79.5 TEST 5 commit <sha>`
+   (and says so loudly when the DLL has no tag, i.e. is older than 79.5), run_game_vr.py prints and keeps it (`build_tag` in the report), the
+   console's first lines show `79.5 BUILD TAG:`, and the hologram's footer reads `HERO VR 0.0.79.5 TEST 5 <commit>`. **BUILD CHECK** -
+   `BUILD-MANIFEST.txt` lists the sha256 of every module; `launch-game-vr.ps1` refuses to start the game ("BUILD CHECK FAILED") when a file
+   differs (a folder that is a mix of two builds). Unzip each ZIP into a NEW EMPTY folder; do not extract over an old one.
+2. **Flips are on the LEFT stick again** (79.1's 894a84e, b95b7e6's `flipStickOwns` and 844e683's landing guard are reverted): the right stick zips
+   (up) and heals (down) in the air as before, no longer blocked by FLIPS. The air Y web strike from b95b7e6 stays.
+3. **Web Line** (still standing, perched or on a wall only - not in the air): the second anchor is **latched for 0.3 s** (the release moves the
+   hand off the surface: in the 79.4 report 14 of 26 gestures were cancelled), a **green ring / red cross marker** shows the second spot while
+   the grip is held (valid / not valid), a short **haptic tick** when it turns valid, a cancel says **why** (`79.5 WEBLINE: cancelled #n - ...`),
+   and the native L2 + Y timings are trimmed from 0.26 s to 0.18 s (settle .04, Y .10, tail .04).

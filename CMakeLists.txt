@@ -84,6 +84,11 @@ endif()
 if(HERO_TEST_BUILD)
     target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_BUILD=1)
 endif()
+# 79.5 BUILD TAG: the wrist's footer ("HERO VR <version> TEST <n> <commit>") without the test-notice panel, for CI's test
+# packages (HEROVR_BUILD_FOOTER=1 in the environment); public builds leave it off.
+if("$ENV{HEROVR_BUILD_FOOTER}" STREQUAL "1")
+    target_compile_definitions(spidy_core PUBLIC SPIDY_BUILD_FOOTER=1)
+endif()
 # Build 5: the start line names the build ("HERO VR 0.0.72 test <commit>"), so a session's console says
 # which code ran (build 4 ran from an old folder and its console still said 0.0.70). HERO_TEST_COMMIT
 # overrides; else the checkout's short hash; else "unknown".
@@ -104,12 +109,12 @@ target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_COMMIT="${_hero_commit}"
 # showed build 9 still running; the number makes that plain). Bump per test build.
 # 0.0.73 test 4's console still said "HERO VR 0.0.72 TEST 3 a20b9ee" (export-test4): the version was
 # a literal and the number was not bumped. Both are here now; bump them per test build.
-set(HERO_TEST_NUMBER "1" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
+set(HERO_TEST_NUMBER "5" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
 if(NOT HERO_TEST_NUMBER MATCHES "^[0-9]+$")
     set(HERO_TEST_NUMBER "0")
 endif()
 target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_NUMBER="${HERO_TEST_NUMBER}")
-set(HERO_TEST_VERSION "0.0.79.1" CACHE STRING "Version the test build's start line, notice and wrist name")
+set(HERO_TEST_VERSION "0.0.79.5" CACHE STRING "Version the test build's start line, notice and wrist name")
 if(NOT HERO_TEST_VERSION MATCHES "^[0-9][0-9.]*$")
     set(HERO_TEST_VERSION "0.0.74")
 endif()

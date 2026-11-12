@@ -1187,7 +1187,9 @@ Layout build(int page, float k, int open) {
         c = t.v - .0045f - .002f * k;
         l.items.push_back(std::move(t));
     }
-#if defined(SPIDY_TEST_BUILD) && SPIDY_TEST_BUILD
+// 79.5 BUILD TAG: CI sets HEROVR_BUILD_FOOTER=1 for the test packages (SPIDY_BUILD_FOOTER) so the wrist names the build that
+// runs even though the test notice panel (SPIDY_TEST_BUILD) stays off.
+#if (defined(SPIDY_TEST_BUILD) && SPIDY_TEST_BUILD) || (defined(SPIDY_BUILD_FOOTER) && SPIDY_BUILD_FOOTER)
     // Build 5: which build runs, on the wrist (the console's first line says it too).
     {
         Item f = itemOf(Kind::footer);

@@ -436,6 +436,8 @@ struct AimMarker {
     float opacity = 1; // 0..1 while the marker fades in or out
     float spin{};      // radians the target's ring has turned
     float lock = 1;    // 0..1 as the target's ring closes in on it from wider
+    bool tinted{};     // 79.5: draw in `tint` instead of the hand's colour (the Web Line gesture's green / red)
+    Vec3 tint{};
 };
 // pixelAngle as for appendWeb. Each mark below draws its tech_marks.hpp
 // namesake instead in UiStyle::tech.

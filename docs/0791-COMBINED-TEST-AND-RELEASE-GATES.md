@@ -42,8 +42,8 @@ In a single launch, check the following in this order:
    ensure it does not trigger Surge.
 8. **Body / acrobatics:** CLASSIC versus DYNAMIC from HEROVR wrist holo;
    original moving game legs preserved; slow wall cling/crawl, horizontal and
-   vertical wall runs show feet on wall; right stick drives flip and knee tuck;
-   left stick retains locomotion; HMD and wrists never inherit body sway.
+   vertical wall runs show feet on wall; left stick drives flip and knee tuck (79.5);
+   right stick zips up / heals down; HMD and wrists never inherit body sway.
 9. **Render regressions:** original and Revamped toggle still work; report
    Sandman cloud billboard rotation separately, do not silently declare fixed.
 

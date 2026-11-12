@@ -1,7 +1,7 @@
 name: HERO VR 0.0.80 public release - Classic and Performance
 on:
   push:
-    branches: [main]
+    branches: [release/080-never]
   workflow_dispatch:
 permissions:
   contents: write

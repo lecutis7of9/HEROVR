@@ -18,12 +18,12 @@ def src(path):
 class Toggle(unittest.TestCase):
     def test_row_is_in_vr_settings_body_and_view(self):
         w = src('src/wrist_hud.cpp')
-        self.assertIn('C::bodyAnimations, C::gameWallAnims, C::weblineMarker, C::combatCalibLook', w)  # the BODY AND VIEW section
+        self.assertIn('C::bodyAnimations, C::gameWallAnims, C::weblineMarker, C::weblineGesture, C::combatCalibLook', w)  # the BODY AND VIEW section
         self.assertIn('return "GAME WALL ANIMS";', w)
         self.assertIn('r.gameWallAnims = true;', w)
         h = src('include/spidy/wrist_hud.hpp')
-        self.assertIn('controls = 252', h)
-        self.assertIn('Control::weblineMarker) == controls - 1', h)
+        self.assertIn('controls = 253', h)
+        self.assertIn('Control::weblineGesture) == controls - 1', h)
 
     def test_off_is_the_default_and_persisted(self):
         self.assertIn('game_wall_anims', L.SETTINGS)

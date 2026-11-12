@@ -1436,7 +1436,8 @@ PERSISTED = ('web_width', 'web_speed', 'aa', 'history', 'reach', 'monitor', 'sha
              'mirror_view',  # 0.0.7 MIRROR PERSIST FIX: the hologram's MIRROR VIEW (RESTART), the same
              'vr_jitter',  # 79.2b (t2169): the hologram's EYE JITTER (live), kept and applied at the next start
              'game_wall_anims',  # 79.6: the hologram's GAME WALL ANIMS (live), kept and applied at the next start
-             'webline_marker')  # 79.10: the hologram's WEB LINE MARKER (live), ON the default, kept in live.txt
+             'webline_marker',  # 79.10: the hologram's WEB LINE MARKER (live), ON the default, kept in live.txt
+             'webline_gesture')  # 0.0.81: the hologram's WEBLINES (live), ON the default, kept in live.txt
 # Update 23: live.txt-only settings (no hologram control) also applied when a session starts, so they keep.
 START_ONLY = ('web_start', 'trail')  # Update 34.2: trail kept from live.txt
 # Update 37: every new live.txt setting applies at the start too (a file written before the launch
@@ -1553,14 +1554,15 @@ CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach
                 21: 'mirror_view',  # 0.0.7: MIRROR VIEW (RESTART), kept in live.txt (was lost at every restart)
                 22: 'vr_jitter',  # 79.2b (t2169): VR SETTINGS > GRAPHICS > EYE JITTER, live, kept in live.txt
                 23: 'game_wall_anims',  # 79.6: VR SETTINGS > BODY AND VIEW > GAME WALL ANIMS, live, kept in live.txt
-                24: 'webline_marker'}  # 79.10: VR SETTINGS > BODY AND VIEW > WEB LINE MARKER, live, kept in live.txt
+                24: 'webline_marker',  # 79.10: VR SETTINGS > BODY AND VIEW > WEB LINE MARKER, live, kept in live.txt
+                25: 'webline_gesture'}  # 0.0.81: VR SETTINGS > BODY AND VIEW > WEBLINES, live, kept in live.txt
 # Update 18: WEB COLOR sets the chosen style's shade; the launcher keeps every style's.
 WEB_COLOR_KEYS = tuple(f'web_color_{style}' for style in WEB_STYLES)
 SELECTOR = {'web_width': 0, 'web_speed': 0, 'aa': 1, 'history': 1, 'reach': 1, 'monitor': 1, 'supersample': 2,
             'sharpen': 4, 'reticles': 4, 'hud_height': 5, 'hud_scale': 5, 'hud_text': 5, 'hud_theme': 5,
             'hud_text_color': 5, 'web_style': 6, **{key: 6 for key in WEB_COLOR_KEYS},
             'music_volume': 7, 'music_visualizer': 7, 'music_track': 7, 'lens_flares': 10,
-            'mirror_view': 10, 'vr_jitter': 10, 'game_wall_anims': 10, 'webline_marker': 10}
+            'mirror_view': 10, 'vr_jitter': 10, 'game_wall_anims': 10, 'webline_marker': 10, 'webline_gesture': 10}
 CHANGED_SELECTOR = 3
 MARKER = 1 << 30
 SUPERSAMPLES = (100, 200)
@@ -1588,7 +1590,8 @@ def decode_hud_settings(selector, code):
                 'mirror_view': ('off', 'test')[code >> 1 & 1],
                 'vr_jitter': ('off', 'low', 'med', 'full', 'e5d2746')[min(code >> 2 & 7, 4)],  # 79.4: EYE JITTER level (bits 2-4)
                 'game_wall_anims': ('off', 'on')[code >> 5 & 1],  # 79.6: GAME WALL ANIMS (bit 5)
-                'webline_marker': ('on', 'off')[code >> 6 & 1]}  # 79.10: WEB LINE MARKER (bit 6, 0 on)
+                'webline_marker': ('on', 'off')[code >> 6 & 1],  # 79.10: WEB LINE MARKER (bit 6, 0 on)
+                'webline_gesture': ('on', 'off')[code >> 7 & 1]}  # 0.0.81: WEBLINES (bit 7, 1 off)
     if selector == CHANGED_SELECTOR:
         changed = {CONTROL_KEYS[bit]: True for bit in CONTROL_KEYS if code >> bit & 1}
         if changed.pop('web_color', None):

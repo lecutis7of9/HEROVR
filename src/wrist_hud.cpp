@@ -706,6 +706,8 @@ const char* labelOf(Control c) {
         return "GAME WALL ANIMS";
     case Control::weblineMarker:
         return "WEB LINE MARKER";
+    case Control::weblineGesture:
+        return "WEBLINES";
     case Control::flyMode:
         return "FLY MODE";
     case Control::flyVignette:
@@ -970,7 +972,7 @@ constexpr SectionDef powersSections[] = {
 constexpr SectionDef vrSections[] = {
     {"BODY AND VIEW", C::none, C::none, "", "", "SETTINGS", -1,
      {C::combatCrawlCap, C::combatWallTilt, C::combatHandFlips, C::npcFade, C::playOnMonitor, C::combatSpiderClimbOnly,
-      C::combatGameBody, C::bodyAnimations, C::gameWallAnims, C::weblineMarker, C::combatCalibLook, C::combatWeaponCollision}}, // 79.10: + WEB LINE MARKER
+      C::combatGameBody, C::bodyAnimations, C::gameWallAnims, C::weblineMarker, C::weblineGesture, C::combatCalibLook, C::combatWeaponCollision}}, // 79.10: + WEB LINE MARKER
     {"WEBS", C::webStyle, C::webColor, "", "", nullptr, -1,
      {C::thickness, C::speed, C::webStyle, C::webColor, C::reticles, C::combatWebRope}},
     {"HOLOGRAM", C::hudHeight, C::hudScale, "", "", nullptr, -1,
@@ -2591,6 +2593,7 @@ std::string buttonValue(const View& view, Control c) {
            : c == Control::vrJitter     ? std::string(jitter_check::rowText[std::min<uint32_t>(view.vrJitterLevel, jitter_check::levels - 1)])
            : c == Control::gameWallAnims ? std::string(view.gameWallAnims == 0 ? "OFF" : view.gameWallAnims == 2 ? "ON (WAITING)" : view.gameWallAnims == 3 ? "ON (RECOVER)" : "ON")
            : c == Control::weblineMarker ? std::string(view.weblineMarker ? "ON" : "OFF")
+           : c == Control::weblineGesture ? std::string(view.weblineGesture ? "ON" : "OFF")
            : c == Control::flyMode      ? std::string(extras385::fly::speedName(view.flyMode))
            : c == Control::flyVignette  ? std::string(view.flyVignette ? "ON" : "OFF")
            : c == Control::flyRoll      ? std::string(extras385::fly::rollName(view.flyRoll))
@@ -3491,6 +3494,8 @@ const char* helpText(Control c) {
         return "ON: the game's own wall animations take you on walls. OFF: HEROVR's wall run.";
     case Control::weblineMarker:
         return "ON: a disc / red cross marks the Web Line's second spot. OFF: no marker.";
+    case Control::weblineGesture:
+        return "ON: grip-and-sweep Web Line. OFF: no Web Line gesture, grips only swing.";
     case Control::vrJitter:
         return "Each press: OFF > LOW > MED > FULL. OFF holds the eyes' TAA still (no far shake, rougher edges); FULL is the biggest sample walk (sharpest, far buildings may shake).";
     case Control::flyMode:
@@ -3881,6 +3886,8 @@ const char* shortName(Control c) {
         return "WALL ANIM";
     case Control::weblineMarker:
         return "WEB MARKER";
+    case Control::weblineGesture:
+        return "WEBLINES";
     case Control::flyMode:
         return "FLY";
     case Control::flyVignette:
@@ -4607,6 +4614,9 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
                 break;
             case Control::weblineMarker:
                 r.weblineMarker = true;
+                break;
+            case Control::weblineGesture:
+                r.weblineGesture = true;
                 break;
             case Control::flyMode:
                 r.flyMode = true;

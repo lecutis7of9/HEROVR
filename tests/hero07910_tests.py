@@ -44,10 +44,10 @@ class WeblineMarker(unittest.TestCase):
     def test_wiring(self):
         h = src('include/spidy/wrist_hud.hpp')
         self.assertIn('weblineMarker, // 79.10 WEB LINE MARKER', h)
-        self.assertIn('Control::weblineMarker) == controls - 1', h)
-        self.assertIn('controls = 252', h)
+        self.assertIn('Control::weblineGesture) == controls - 1', h)
+        self.assertIn('controls = 253', h)
         w = src('src/wrist_hud.cpp')
-        self.assertIn('C::gameWallAnims, C::weblineMarker, C::combatCalibLook', w)
+        self.assertIn('C::gameWallAnims, C::weblineMarker, C::weblineGesture, C::combatCalibLook', w)
         self.assertIn('r.weblineMarker = true;', w)
         self.assertIn('return "WEB LINE MARKER";', w)
         g = src('src/game_xr.cpp')
@@ -58,6 +58,22 @@ class WeblineMarker(unittest.TestCase):
         self.assertIn('(weblineMarkerNow.load() ? 1u : 0u) << 6', g)
         self.assertIn('if (weblineMarkerNow.load() != 0)', g)
         self.assertIn('continue; // 79.10: live.txt webline_marker', g)
+
+    def test_weblines_toggle(self):  # 0.0.81 hotfix
+        self.assertEqual(L.CONTROL_KEYS[25], 'webline_gesture')
+        self.assertIn('webline_gesture', L.PERSISTED)
+        self.assertEqual(L.SELECTOR['webline_gesture'], 10)
+        self.assertEqual(L.decode_hud_settings(10, L.MARKER)['webline_gesture'], 'on')
+        self.assertEqual(L.decode_hud_settings(10, L.MARKER | 1 << 7)['webline_gesture'], 'off')
+        self.assertEqual(L.decode_hud_settings(3, L.MARKER | 1 << 25), {'webline_gesture': True})
+        self.assertEqual(L.parse('webline_gesture = off\n')[0]['webline_gesture'], 'off')
+        w = src('src/wrist_hud.cpp')
+        self.assertIn('return "WEBLINES";', w)
+        self.assertIn('r.weblineGesture = true;', w)
+        g = src('src/game_xr.cpp')
+        self.assertIn('if (result.weblineGesture)', g)
+        self.assertIn('1u << 25', g)
+        self.assertIn('(weblineGestureNow.load() == webline_native::modeOff ? 1u : 0u) << 7', g)
 
     def test_tag(self):
         c = src('CMakeLists.txt')

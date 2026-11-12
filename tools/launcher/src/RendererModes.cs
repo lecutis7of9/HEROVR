@@ -28,7 +28,7 @@ namespace Sm2VrLauncher
         }
         public static string Store(string root, string mode)
         {
-            // Public 0.0.80: distribute both renderers inside build/windows-ninja so
+            // Public 0.0.81: distribute both renderers inside build/windows-ninja so
             // the launcher's normal prebuilt updater installs them automatically.
             return Path.Combine(root, "build", "windows-ninja", "renderer-modes", Normal(mode), "spidy_stereo_probe.dll");
         }
@@ -53,7 +53,7 @@ namespace Sm2VrLauncher
                     throw new InvalidOperationException("Close Spider-Man 2 before changing renderer mode. VR modules cannot be swapped inside a running game.");
                 string source = Store(root, mode);
                 if (!File.Exists(source))
-                    throw new FileNotFoundException("The Original/Performance renderer files are missing. Install the complete 0.0.80 mod package or use Update to repair it.", source);
+                    throw new FileNotFoundException("The Original/Performance renderer files are missing. Install the complete 0.0.81 mod package or use Update to repair it.", source);
                 string target = SystemInfo.BuiltModule(root);
                 if (!File.Exists(target)) throw new FileNotFoundException("The HERO VR mod is not installed.", target);
                 string digest = Hash(source);

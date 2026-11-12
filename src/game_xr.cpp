@@ -5052,6 +5052,14 @@ DWORD runBody() {
                                     message(3, 0, next ? "HEROVR WEB LINE MARKER: OFF" : "HEROVR WEB LINE MARKER: ON");
                                     consoleLine(std::string("79.10 WEB LINE MARKER ") + (next ? "OFF" : "ON") + " from the hologram");
                                 }
+                                if (result.weblineGesture) { // 0.0.81 WEBLINES: the next press flips live.txt webline_gesture (on/anywhere -> off, off -> on)
+                                    const uint32_t next = weblineGestureNow.load() == webline_native::modeOff ? webline_native::modeOn
+                                                                                                             : webline_native::modeOff;
+                                    weblineGestureNow = next;
+                                    wristChanged |= 1u << 25; // SpidyHudSettings 3 bit 25, 10 bit 7
+                                    message(3, 0, next == webline_native::modeOff ? "HEROVR WEBLINES: OFF" : "HEROVR WEBLINES: ON");
+                                    consoleLine(std::string("0.0.81 WEBLINES ") + (next == webline_native::modeOff ? "OFF" : "ON") + " from the hologram");
+                                }
                                 if (result.vrJitter) { // 79.2b (t2169): EYE JITTER, live; the launcher keeps it in live.txt
                                     // 79.4 (t2188): the next level (OFF > LOW > MED > FULL > OFF; the hidden e5d2746 goes to OFF).
                                     const uint32_t next = jitter_check::nextLevel(SpidyVrJitterLevelNow());
@@ -18272,6 +18280,7 @@ DWORD runBody() {
                                             hud.vrJitterLevel = static_cast<uint8_t>(SpidyVrJitterLevelNow()); // 79.4 EYE JITTER
                                             hud.gameWallAnims = static_cast<uint8_t>(gameWallAnimsShown.load()); // 79.6 GAME WALL ANIMS
                                             hud.weblineMarker = weblineMarkerNow.load() == 0 ? 1 : 0; // 79.10: 1 ON, 0 OFF
+                                            hud.weblineGesture = weblineGestureNow.load() == webline_native::modeOff ? 0 : 1; // 0.0.81: 1 ON, 0 OFF
                                             hud.flyMode = flyModeNow.load();
                                             hud.flyVignette = flyVignetteOn.load();
                                             hud.flyRoll = flyRollNow.load();
@@ -20227,7 +20236,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
         // The 20 settings' bits, and Update 19's song (20), music volume (27) and visualizer (28).
         // Version 0.0.62: LENS FLARES (29), kept for the next start. 0.0.7: MIRROR VIEW (21), the same.
         // 79.2b: EYE JITTER (22), kept in live.txt as vr_jitter. 79.6: GAME WALL ANIMS (23), game_wall_anims.
-        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29 | 1u << 22 | 1u << 23 | 1u << 24));
+        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29 | 1u << 22 | 1u << 23 | 1u << 24 | 1u << 25));
     case 4: // Update 21: sharpening 0-200 in bits 0-7, the reticles shown in bit 8 (Update 16: 0-6 and 7)
         return marker | std::min<DWORD>(native_gpu::eyeSharpen(), 255) | (reticlesShown.load() ? 1u : 0u) << 8;
     case 5: // Update 17: the hologram's height, size, text size, theme and text colour
@@ -20252,7 +20261,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
         // 79.4: bits 2-4 EYE JITTER's level (live.txt vr_jitter: 0 off, 1 low, 2 med, 3 full, 4 e5d2746).
         return marker | std::min<DWORD>(c38(combat38::lensFlares), 1) | std::min<DWORD>(c38(combat38::mirrorView), 1) << 1 |
                std::min<DWORD>(SpidyVrJitterLevelNow(), 4) << 2 | (gameWallAnimsWanted.load() ? 1u : 0u) << 5 | // 79.6: bit 5 GAME WALL ANIMS
-               (weblineMarkerNow.load() ? 1u : 0u) << 6; // 79.10: bit 6 WEB LINE MARKER (0 on, 1 off)
+               (weblineMarkerNow.load() ? 1u : 0u) << 6 | // 79.10: bit 6 WEB LINE MARKER (0 on, 1 off)
+               (weblineGestureNow.load() == webline_native::modeOff ? 1u : 0u) << 7; // 0.0.81: bit 7 WEBLINES (1 off)
     default:
         return 3970;
     }

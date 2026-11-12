@@ -70,6 +70,10 @@ jobs:
           if ($LASTEXITCODE) { throw 'Slow-walk jitter (79.7) regression compile failed' }
           ./jitter_slow_tests.exe
           if ($LASTEXITCODE) { throw 'Slow-walk jitter (79.7) regression failed' }
+          & $compiler.Source -std=c++20 -Iinclude tests/camera_press_tests.cpp -o camera_press_tests.exe
+          if ($LASTEXITCODE) { throw 'Camera gesture (79.9) regression compile failed' }
+          ./camera_press_tests.exe
+          if ($LASTEXITCODE) { throw 'Camera gesture (79.9) regression failed' }
       - name: Fetch native build dependencies
         run: |
           ./tools/bootstrap.ps1 -Observer
@@ -174,7 +178,7 @@ jobs:
         run: |
           $name = 'HERO-VR-79.1-DUAL-TEST'
           # 79.5: BUILD-ID.txt / BUILD-MANIFEST.txt in the package (package.ps1) name this build.
-          $env:HEROVR_BUILD_TAG = "HERO VR 79.8 TEST (commit $($env:GITHUB_SHA.Substring(0, 7)))"
+          $env:HEROVR_BUILD_TAG = "HERO VR 79.9 TEST (commit $($env:GITHUB_SHA.Substring(0, 7)))"
           ./tools/package.ps1 -Name $name -TestNotes 'docs/0791-WEB-MECHANICS-TEST.md' -ModelsFrom 'build/models-078/Models'
           if ($LASTEXITCODE) { throw "Packaging failed ($LASTEXITCODE)" }
           $zip = "dist/$name-win64.zip"

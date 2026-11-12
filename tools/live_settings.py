@@ -644,6 +644,12 @@ SETTINGS = {
                          "the game's web strike; 1 on: a grip aimed at an enemy is the game's web strike on the same "
                          "frame, a second grip within 0.24 s turns it into the two-hand grab and yank) - live, no "
                          "restart needed"),
+    # HERO VR 79.9 CAMERA GESTURE (include/spidy/game_pad.hpp CameraPress)
+    'camera_hero': ((0, 3), 'SpidyCameraHero', "CAMERA HERO {} (0 auto, the default: the left trigger pulled at the LEFT side of "
+                    "the head holds the game's L2 while the game names L2 - the Prowler scan - else the game's D-pad Up, "
+                    "Peter's camera gadget; 1 camera: always D-pad Up; 2 scanner: always L2; 3 off: that spot is the scan again "
+                    "like the right side; the RIGHT trigger at the head is the scan whatever this says) - live, no restart "
+                    "needed"),
     # HERO VR 79.2 PROP PROBE (t2166, READ-ONLY diagnostic; world_trace.cpp prop79)
     'prop_probe': ((0, 1), 'SpidyPropProbe', "PROP PROBE {} (0 on: read-only, VR gameplay only - finds the game's "
                    "throwables (bins, boxes) and its own web yank / throw, logs them as '79.2 PROP PROBE' lines, writes "
@@ -855,6 +861,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'prompt_layer': ('on', 'off'),  # HERO VR 0.0.78 cut21
                 'webline_gesture': ('on', 'off', 'anywhere'),  # HERO VR 0.0.79.1 web-mechanics test
                 'enemy_grip_split': ('off', 'on'),  # HERO VR 0.0.79.1 (t2145: opt-in)
+                'camera_hero': ('auto', 'camera', 'scanner', 'off'),  # HERO VR 79.9 CAMERA GESTURE
                 'prop_probe': ('on', 'off'),  # HERO VR 79.2 PROP PROBE (read-only)
                 'world_light': ('game', 'game_soft', 'studio'),  # HERO VR 0.0.78 WORLD LIGHT
                 'world_shadow': ('on', 'vehicles', 'off'),  # HERO VR 0.0.78 WORLD LIGHT
@@ -1149,6 +1156,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'prompt_layer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut21
            'webline_gesture': {'on': 0, 'off': 1, 'anywhere': 2, 'air': 2, '0': 0, '1': 1, '2': 2},  # 0.0.79.1
            'enemy_grip_split': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.79.1 (t2145: opt-in)
+           'camera_hero': {'auto': 0, 'camera': 1, 'scanner': 2, 'off': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 79.9 CAMERA GESTURE
            'prop_probe': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 79.2 PROP PROBE (read-only)
            'world_light': {'game': 0, 'game_soft': 1, 'studio': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'world_shadow': {'on': 0, 'vehicles': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78

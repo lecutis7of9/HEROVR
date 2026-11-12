@@ -127,6 +127,9 @@ struct Walk {
     bool parkour{};
     float look{}, lookUp{};
     bool scan{};
+    // 79.9 CAMERA GESTURE (CameraPress below): the game's D-pad Up, held - the camera gadget's equip on a pad with no
+    // touchpad (CANDIDATE: a Steam answer, "hold Up on the D-pad and the camera turns on"; not seen in a headset).
+    bool camera{};
     // What a pull at a thing the game is prompting for sends instead of the
     // pull's own LB + RB: the pair it names (its LT + RT for a vent). {}: the
     // pull is as it is. The buttons a prompt names otherwise go out from the
@@ -309,6 +312,58 @@ class TemplePress {
     bool down_[2]{}, held_{};
     uint32_t hands_{}, scans_{};
     float left_{};
+};
+// 79.9 CAMERA GESTURE: the LEFT hand's trigger pulled with that hand at the LEFT temple (TemplePress's own spot, the
+// half of it nearer the left: the right trigger and every other hand / side keep TemplePress's scan exactly) is the
+// camera, held for as long as the trigger stays pulled (minSeconds at least) and that trigger is the camera's alone
+// meanwhile (no web ball, no reel, no scan). What it sends is the caller's choice per hero (Peter: the camera gadget's
+// equip; the second spider: the Prowler scanner, L2 held). Outside VR play nothing holds.
+class CameraPress {
+  public:
+    static constexpr float side = TemplePress::side, reach = TemplePress::reach, pressed = .6f, released = .3f,
+                           minSeconds = .6f;
+    // seconds: since the previous update. play: the controllers play VR and the gesture is on. head, grip: the
+    // headset's and the left hand's pose, in one space; tracked and trigger: the left hand's. True while it holds.
+    bool update(float seconds, bool play, const Pose& head, const Pose& grip, bool tracked, float trigger) {
+        const float dt = std::isfinite(seconds) ? std::clamp(seconds, 0.f, .1f) : 0.f;
+        left_ = std::max(0.f, left_ - dt);
+        const float value = std::isfinite(trigger) ? trigger : 0.f;
+        const bool down = tracked && value > (down_ ? released : pressed);
+        const bool press = down && !down_;
+        down_ = down;
+        if (!down || !play)
+            on_ = false;
+        else if (press && finite(head.position) && finite(grip.position)) {
+            const Vec3 local = head.orientation.conjugate().rotate(grip.position - head.position);
+            if (finite(local)) {
+                const float toLeft = length(local - Vec3{-side, 0, 0}), toRight = length(local - Vec3{side, 0, 0});
+                if (toLeft <= reach && toLeft < toRight) {
+                    on_ = true;
+                    ++opens_;
+                    left_ = minSeconds;
+                }
+            }
+        }
+        if (!play)
+            left_ = 0;
+        held_ = on_ || left_ > 0;
+        return held_;
+    }
+    bool held() const {
+        return held_;
+    }
+    // The left trigger is the camera's (it is down and began at the left temple): no web ball from it.
+    bool claimsTrigger() const {
+        return on_;
+    }
+    uint32_t opens() const {
+        return opens_;
+    }
+
+  private:
+    bool down_{}, on_{}, held_{};
+    float left_{};
+    uint32_t opens_{};
 };
 // The right thumbstick pushed straight down or up, as Walk::heal and
 // Walk::zip. In VR play that stick turns the player with its left and right;
@@ -1442,6 +1497,8 @@ inline State fromControllers(const XrFrame& frame, Mapping mapping, const Walk& 
             s.rightTrigger = 255;
         if (walk.scan)
             s.buttons |= rightThumb;
+        if (walk.camera)
+            s.buttons |= dpadUp;
         s.thumbLX = stick(walk.right);
         s.thumbLY = stick(walk.forward);
         s.thumbRX = stick(walk.look);

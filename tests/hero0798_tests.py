@@ -50,11 +50,7 @@ class Classic(unittest.TestCase):
             self.assertEqual((v['vr_aa'], v['vr_jitter']), ('smaa', 'low'))
             self.assertIn(L.MIGRATED_798_RENDER, q.read_text())
 
-    def test_tag(self):
-        c = src('CMakeLists.txt')
-        self.assertIn('set(HERO_TEST_VERSION "0.0.79.8"', c)
-        self.assertIn('set(HERO_TEST_NUMBER "8"', c)
-        self.assertIn('HERO VR 79.8 TEST (commit', src('.github/workflows/dynamic-body-0791.yml'))
+    def test_tag(self):  # 79.8's own line stays in the console; the tag itself is 79.9 now (hero0799_tests)
         self.assertIn('HERO VR 79.8 TEST (includes 79.7)', src('src/game_xr.cpp'))
 
     def test_gameplay_kept(self):

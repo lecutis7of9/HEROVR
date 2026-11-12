@@ -101,12 +101,12 @@ class Record(unittest.TestCase):
 
 
 class Version(unittest.TestCase):
-    def test_tag_is_79_8(self):
+    def test_tag_is_79_9(self):
         c = src('CMakeLists.txt')
-        self.assertIn('set(HERO_TEST_VERSION "0.0.79.8"', c)
-        self.assertIn('set(HERO_TEST_NUMBER "8"', c)
-        self.assertIn('HERO VR 79.8 TEST (commit', src('.github/workflows/dynamic-body-0791.yml'))
-        self.assertIn('HERO VR 79.8 TEST (includes 79.7)', src('src/game_xr.cpp'))
+        self.assertIn('set(HERO_TEST_VERSION "0.0.79.9"', c)
+        self.assertIn('set(HERO_TEST_NUMBER "9"', c)
+        self.assertIn('HERO VR 79.9 TEST (commit', src('.github/workflows/dynamic-body-0791.yml'))
+        self.assertIn('HERO VR 79.9 TEST (includes 79.8)', src('src/game_xr.cpp'))
         self.assertIn('wall_anims_tests', src('.github/workflows/dynamic-body-0791.yml'))
 
 

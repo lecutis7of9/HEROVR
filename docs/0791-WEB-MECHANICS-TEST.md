@@ -281,3 +281,16 @@ Request: "just make me a build with the current public classic render pipeline i
 - Unchanged from 0.0.78 and checked by diff: `vr_render native`, `sm1style on` (only used with `vr_aa = game`), `--mip-bias` 0.5 (`apply_vr_aa` sets the game's
   bias for ours), `--building-reach`, the Update 37/38 defaults (`shared_lod`, `eye_lod`, ...), the `native_eye_gpu.cpp` ours path at 100%.
 - The game-TAA SM1STYLE eye-jitter code (79.4-79.7 levels, slow walk) is still in the DLL; it runs only with `vr_aa = game`.
+
+## 79.9 (includes everything in 79.8): CAMERA GESTURE and STEALTH
+
+- **Left trigger at the LEFT temple** (`game_pad::CameraPress`; the same spot as the scan, the half nearer the left, hand within 0.19 m of 0.15 m left of the
+  head): holds for as long as the trigger stays pulled (0.6 s at least); no web ball, reel or scan from that trigger meanwhile.
+  `live.txt camera_hero`: **auto** (default) sends the game's **L2** held while a game prompt names L2 (Miles's Prowler scan: "hold L2 to scan", CONFIRMED in guides),
+  else the game's **D-pad Up** held (Peter's camera gadget on a pad with no touchpad: CANDIDATE, one Steam answer, not seen in a headset; the exe has the
+  `Camera Gadget` hero binding on a touchpad swipe and `CameraGadgetToggle` as a D-pad shortcut option); **camera** always D-pad Up; **scanner** always L2;
+  **off** gives the left temple's scan back.
+- **Right trigger at the temple** and every other hand / side: `TemplePress`, unchanged (the R3 scan).
+- **Stealth**: a prompt's named button still goes out through `NamedPress` (X = Square, Y = Triangle, claimed controls win over every other use of the
+  button). New: with an enemy within 30 m a plain Y no longer starts `InteractStep` (the turn toward the gaze and the walk), which would spoil a takedown
+  approach when the prompt was not read; the Y itself is sent as before.

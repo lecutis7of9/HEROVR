@@ -1519,6 +1519,9 @@ std::atomic<uint32_t> weblineGestureNow{spidy::webline_native::modeOn};
 // in the air is the game's web strike), 1 on (enemy_grip_split.hpp: aimed grip = native web strike on the press frame,
 // a second grip within 0.24 s upgrades it to the two-hand grab/pull).
 std::atomic<uint32_t> enemyGripSplitNow{0};
+// HERO VR 79.9 CAMERA GESTURE: live.txt camera_hero - 0 auto (the Prowler scan's L2 while the game names L2, else Peter's camera),
+// 1 camera (D-pad Up held), 2 scanner (L2 held), 3 off (the left temple's trigger is the scan again).
+std::atomic<uint32_t> cameraHeroNow{0};
 // HERO VR 79.2 PROP PROBE (t2166, READ-ONLY; world_trace.cpp prop79): live.txt prop_probe - 0 on, 1 off (the default
 // since 79.2b, t2168: 2429458's probe, on from boot, lagged the splash). Even on it runs only in VR gameplay.
 // It finds the game's throwables and its own yank / throw components and logs them; it writes nothing to the game.
@@ -2560,6 +2563,9 @@ DWORD runBody() {
             modelsAdopted = true;
         };
         consoleLine(std::string("79.5 BUILD TAG: ") + SpidyBuildTag + " (this line is in the DLL that is running; a console without it is an older build)");
+        consoleLine("HERO VR 79.9 TEST (includes 79.8): CAMERA GESTURE: the LEFT trigger pulled at the LEFT side of the head is Peter's camera gadget (the game's "
+                    "D-pad Up held, CANDIDATE) or the second spider's Prowler scan (the game's L2 held while the game names L2; live.txt camera_hero); the RIGHT trigger at the "
+                    "head is the scan as before; Y near an enemy goes out plain (no turn / walk toward the gaze) so a stealth takedown is not spoiled");
         consoleLine("HERO VR 79.8 TEST (includes 79.7): CLASSIC PICTURE: the picture is the public v0.0.78 one (VR AA = ours, HEROVR's own per-eye TAA with its "
                     "own jitter, the eyes at 100%, EYE JITTER on) and every gameplay change of 79.1-79.7 stays; the game-TAA SM1STYLE path is a test, not the default");
         consoleLine("HERO VR 79.7 TEST (includes 79.6): GAME WALL ANIMS no longer turns the view 180 degrees on the left stick (the level view stays level, "
@@ -3329,6 +3335,8 @@ DWORD runBody() {
         // leap let go of, for the swing's next commands.
         game_pad::ChargeJump chargeJump;
         game_pad::TemplePress templePress;
+        game_pad::CameraPress cameraPress; // 79.9 CAMERA GESTURE: the left trigger at the left temple
+        uint32_t cameraOpensSeen{};
         // The wrist hologram's toggle: the other wrist to it and that hand's trigger.
         wrist_hud::Toggle wristToggle;
         // HERO VR 0.0.77 WRIST MAP (story077h.hpp): the left hand to the right wrist and the left trigger.
@@ -5448,6 +5456,15 @@ DWORD runBody() {
                         for (unsigned i = 0; i < 2; ++i)
                             if (hudTriggers & (1u << i))
                                 triggers[i] = 0;
+                        // 79.9 CAMERA GESTURE: the left trigger at the LEFT temple is the camera (Peter's) / the Prowler
+                        // scanner (the second spider's), no longer the scan; the right trigger's scan, and the scan from the other
+                        // hand / side, are TemplePress's as before (live.txt camera_hero = off gives the old scan back).
+                        cameraPress.update(frame.seconds, gesturesPlay && cameraHeroNow.load() != 3, frame.head, grips[0],
+                                           gripsTracked[0], triggers[0]);
+                        if (cameraPress.held())
+                            triggers[0] = 0;
+                        if (cameraPress.claimsTrigger())
+                            controller.hands[0].trigger = 0;
                         templePress.update(frame.seconds, gesturesPlay, frame.head, grips, gripsTracked,
                                            triggers);
                         for (unsigned i = 0; i < 2; ++i)
@@ -5603,7 +5620,8 @@ DWORD runBody() {
                         named.buttons = frame.buttons;
                         // The temple's scan has a trigger, the pocket's draw a grip.
                         const uint32_t gestures =
-                            values.triggerWebs ? pocketDraw.hands() : templePress.hands() | hudTriggers;
+                            values.triggerWebs ? pocketDraw.hands()
+                                               : templePress.hands() | hudTriggers | (cameraPress.claimsTrigger() ? 1u : 0u);
                         for (unsigned i = 0; i < 2; ++i) {
                             const auto& hand = frame.hands[i];
                             named.balls[i] = values.triggerWebs ? hand.squeeze : hand.trigger;
@@ -8843,9 +8861,14 @@ DWORD runBody() {
                         // the game got the turn's stick 0 16160 and a 0.6 s Y). In a boss fight it goes out plain, as
                         // cut8's landing one (RB + Y from the Upshot gesture, no InteractStep) did.
                         const bool yPlain16 = bossGateNow.load() == cut16::bossGateOn && bossFightNow16();
+                        // 79.9 STEALTH (CANDIDATE): with an enemy within 30 m, Y is the game's stealth takedown / web strike, not an
+                        // interact, so it goes out plain as the player presses it: InteractStep's turn toward the gaze and
+                        // walk would spoil the approach. (Prompt-named Ys never reached it: NamedPress.)
+                        const bool yEnemyAround79 = world_trace::nearestEnemyMetres() < 30.f;
                         const float stepIn = interactStep.update(
                             frame.seconds, walk.interact,
-                            playing && !mounting && swingState.grounded && !fight && !motion.standing && !yPlain16,
+                            playing && !mounting && swingState.grounded && !fight && !motion.standing && !yPlain16 &&
+                                !yEnemyAround79, // 79.9 STEALTH: no turn / walk toward the gaze with an enemy near
                             std::hypot(swingState.velocity.x, swingState.velocity.z));
                         if (interactStep.steps() != interactStepsBefore) {
                             interactStepsBefore = interactStep.steps();
@@ -9231,6 +9254,29 @@ DWORD runBody() {
                             }
                         }
                         walk.scan = templePress.held() && steering;
+                        { // 79.9 CAMERA GESTURE: what the held left-temple trigger sends, per hero (camera_hero).
+                            const uint32_t heroMode = cameraHeroNow.load();
+                            const bool promptL2 = game_prompts::demand().leftTrigger; // the game names L2: the Prowler scan
+                            const bool camHeld = cameraPress.held() && steering && heroMode != 3;
+                            const bool sendL2 = camHeld && (heroMode == 2 || (heroMode == 0 && promptL2));
+                            const bool sendUp = camHeld && !sendL2;
+                            walk.aim = walk.aim || sendL2;
+                            walk.camera = sendUp;
+                            if (cameraPress.opens() != cameraOpensSeen) {
+                                cameraOpensSeen = cameraPress.opens();
+                                runtime.haptic(0, .3f);
+                                char note[200];
+                                sprintf_s(note, "79.9 CAMERA GESTURE #%u: left trigger at the left temple -> %s (camera_hero %s, "
+                                                "game names L2 %d, steering %d)",
+                                          cameraOpensSeen,
+                                          sendL2 ? "the game's L2 held (the Prowler scan)"
+                                                 : sendUp ? "the game's D-pad Up held (Peter's camera, CANDIDATE)" : "nothing (not steering)",
+                                          heroMode == 0 ? "auto" : heroMode == 1 ? "camera" : heroMode == 2 ? "scanner" : "off",
+                                          promptL2 ? 1 : 0, steering ? 1 : 0);
+                                game_prompts::note(note);
+                                consoleLine(note);
+                            }
+                        }
                         // A perfect dodge: the game slows its own time within a
                         // moment of a B that went down with it at full speed.
                         if (walk.dodge && !dodging) {
@@ -19311,6 +19357,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeblineGesture(void* v) { ret
 // HERO VR 0.0.79.1: live.txt enemy_grip_split, 0 off (the default: pre-9d58d65 combat), 1 on (strike-first split).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyEnemyGripSplit(void* v) { return setLive(v, 0, 1, 5648, enemyGripSplitNow, asU32); }
 // HERO VR 79.2 PROP PROBE (read-only): live.txt prop_probe - 0 on (default), 1 off.
+// HERO VR 79.9 CAMERA GESTURE: live.txt camera_hero, 0 auto, 1 camera, 2 scanner, 3 off.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCameraHero(void* v) { return setLive(v, 0, 3, 5691, cameraHeroNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPropProbe(void* v) { return setLive(v, 0, 1, 5649, propProbeNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);

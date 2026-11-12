@@ -3225,6 +3225,8 @@ DWORD runBody() {
         std::vector<uint32_t> uaShown;
         std::vector<float> uaYaw;
         float uaIdleClock{}, uaMissionsFade{};
+        // UA EXPANSION v5: the blink a teleport makes (seconds of black left; the black sphere round the eye is drawn while > 0)
+        float uaBlink{};
         Vec3 uaMissionsAt{};
         ua_cast::Chat uaChat;
         int uaChatNpc = -1, uaLookNpc = -1, uaStickWas = 0;
@@ -11501,12 +11503,32 @@ DWORD runBody() {
                                                 uaChatNpc = uaLookNpc = -1;
                                             }
                                             hideout074::Out ho{};
+                                            if (uaBlink > 0.f) { // mid-blink: no press, no walking
+                                                uaBlink = std::max(0.f, uaBlink - hi.dt);
+                                                hi.press = false;
+                                                hi.moveX = hi.moveY = 0;
+                                            }
                                             try {
                                                 ho = uaVisit.step(hi);
                                             } catch (...) {
                                                 ho.leave = true;
                                             }
                                             const hideout074::Room* room = uaVisit.room();
+                                            // UA EXPANSION v5: a teleport point's press (the lift, the waterfall, the lab's door): the room is
+                                            // moved under him so he stands on the landing facing its way (Visit::seatAt, as the spawn does), with
+                                            // a short blink of black round the eye over the jump; the landing's own prompt shows at once
+                                            if (ho.act == hideout074::Action::teleport && room && ho.point >= 0 &&
+                                                static_cast<size_t>(ho.point) < room->points.size() && !uaChat.active()) {
+                                                const hideout074::Point& tp = room->points[static_cast<size_t>(ho.point)];
+                                                if (uaVisit.seatAt(hi.head, hi.headForward, tp.to, tp.toYaw)) {
+                                                    uaBlink = ua_expansion::blinkSeconds;
+                                                    uaPointShown = -2;
+                                                    ho.point = -1; // (the point he left: nothing to say about it)
+                                                    uaLookNpc = -1;
+                                                    game_prompts::note(("UA EXPANSION: teleport " + tp.id).c_str());
+                                                }
+                                                ho.act = hideout074::Action::none;
+                                            }
                                             if (ho.point != uaPointShown) {
                                                 uaPointShown = ho.point;
                                                 if (room && ho.point >= 0 && static_cast<size_t>(ho.point) < room->points.size() &&
@@ -14819,6 +14841,7 @@ DWORD runBody() {
                                 saved.hideoutModel = mesh_model::library().model(mesh_model::slotUaStarkTower);
                                 saved.hideoutPlace = uaVisit.place();
                                 saved.hideoutFloor = uaFloorY;
+                                saved.uaBlink = uaBlink;
                                 try {
                                     auto& HV = saved.hideoutView;
                                     HV = {};
@@ -14831,12 +14854,17 @@ DWORD runBody() {
                                             const auto& pt = rm->points[k];
                                             const int kind = pt.action == hideout074::Action::toVehicle    ? 0
                                                              : pt.action == hideout074::Action::comingSoon ? 2
+                                                             : pt.action == hideout074::Action::teleport   ? 3
                                                                                                            : -1;
                                             if (kind < 0 || !finite(pt.at))
                                                 continue;
                                             if (static_cast<int>(k) == uaPointShown)
                                                 HV.markLit = static_cast<int>(HV.marks);
                                             HV.markAt[HV.marks] = pt.at;
+                                            if (kind == 3) { // the marker's name: the prompt up to its " - "
+                                                const size_t dash = pt.prompt.find(" - ");
+                                                HV.markLabel[HV.marks] = pt.prompt.substr(0, dash == std::string::npos ? pt.prompt.size() : dash);
+                                            }
                                             HV.markKind[HV.marks++] = static_cast<uint8_t>(kind);
                                         }
                                     HV.hintAt = uaHintAt;
@@ -14850,10 +14878,14 @@ DWORD runBody() {
                                     if (uaCastOk[ua_expansion::starkTower] && uaYaw.size() == cast.npcs.size()) {
                                         saved.uaCastModel = mesh_model::library().model(ua_expansion::castSlots[ua_expansion::starkTower]);
                                         saved.uaCast = &cast;
-                                        saved.uaPoses.reserve(uaShown.size());
-                                        for (const uint32_t i : uaShown)
-                                            saved.uaPoses.push_back({i, uaYaw[i], uaIdleClock + 1.37f * static_cast<float>(i)});
                                         const Vec3 eyeR = uaVisit.place().room(motion.headPose.position);
+                                        saved.uaPoses.reserve(uaShown.size());
+                                        for (const uint32_t i : uaShown) {
+                                            // v5: the room holds more than one place, 260 m apart: only the characters of this one are posed
+                                            if (std::abs(cast.npcs[i].at.x - eyeR.x) > ua_expansion::placeReach)
+                                                continue;
+                                            saved.uaPoses.push_back({i, uaYaw[i], uaIdleClock + 1.37f * static_cast<float>(i)});
+                                        }
                                         auto chestOf = [&](int i) {
                                             const auto& n = cast.npcs[static_cast<size_t>(i)];
                                             const bool seated = n.look < cast.looks.size() && !cast.looks[n.look].turns;
@@ -16029,6 +16061,10 @@ DWORD runBody() {
                                     drew = hideout074::appendRoom(modelVertices, *saved->hideoutModel, place, hero007::modelSinkBudget) &&
                                            hideout074::appendBackdrop(vertices, *saved->hideoutModel, place, viewer, 2.f,
                                                                       saved->hideoutView.ua ? hideout074::uaBackdropMost : 150.f);
+                                // UA EXPANSION v5: the teleport's blink (opaque black round the eye; the room, its characters and the
+                                // backdrop are all farther, so it hides them for blinkSeconds)
+                                if (drew && saved->uaBlink > 0.f)
+                                    hideout074::appendBackdropSphere(vertices, viewer, ua_expansion::blinkRadius);
                                 // ULTIMATE ALLIANCE EXPANSION CHARACTERS: in the room's place; a fault or over the budget: the
                                 // room without them (never the fallback box)
                                 if (drew && saved->uaCastModel && saved->uaCast && !saved->uaPoses.empty()) {

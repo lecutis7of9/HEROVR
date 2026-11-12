@@ -4,7 +4,8 @@ Reads what the game reads - scene.glb (the room), Cast/scene.glb + cast.txt (the
 frame, placed at its npc line, turned by its yaw as ua_cast.hpp does) - and writes <prefix>cast_hub.png (the hub
 with its characters, as he walks in), <prefix>cast_floor.png (the floor from above) and <prefix>cast_raw_closeup.png (the first character you can talk to, at arm's length;
 convert_ua.py lays the subtitle mock over it as cast_closeup.png). `pair`: the office workers' pair shown
-(default pair05; in VR one pair a visit, picked at random as the map's rand_npcs.py does)."""
+(default pair05; in VR one pair a visit, picked at random as the map's rand_npcs.py does). After `pair`, any number of
+name:ex,ey,ez:lx,ly,lz[:lens] shots (room space: eye, look-at) are rendered instead of those three (v5: the lab)."""
 import sys, os, math, json, struct, tempfile, bpy
 import numpy as np
 
@@ -92,6 +93,12 @@ def shoot(name, eye, look_at, lens):
     print('WROTE', sc.render.filepath)
 
 
+custom = argv[3:]  # v5: name:ex,ey,ez:lx,ly,lz[:lens] shots (room space) instead of the hub's three
+if custom:
+    for c in custom:
+        parts = c.split(':')
+        shoot(parts[0], [float(v) for v in parts[1].split(',')], [float(v) for v in parts[2].split(',')], float(parts[3]) if len(parts) > 3 else 20)
+    raise SystemExit(0)
 talkers = [n for n in shown if n['talk'] != '-']
 main = next((n for n in talkers if 'fury' in n['id']), talkers[0] if talkers else shown[0])
 mx, my, mz = main['at']

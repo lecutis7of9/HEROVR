@@ -34037,7 +34037,7 @@ int main() {
         check(mm::slotIsUa(mm::slotUaStarkTower) && !mm::slotIsHideout(mm::slotUaStarkTower) && !mm::slotIsVehicle(mm::slotUaStarkTower) &&
                   !mm::slotIsSuit(mm::slotUaStarkTower) && mm::slotShipped(mm::slotUaStarkTower) &&
                   mm::slotDrawCap[mm::slotUaStarkTower] == mm::uaRoomTriangles && mm::uaRoomTriangles >= 138001 &&
-                  mm::uaRoomTriangles <= mm::vanTriangles,
+                  mm::uaRoomTriangles <= mm::maxCapTriangles,
               "slotUaStarkTower: a whole map's cap, within what loadFolder keeps");
         check(hero007::modelSinkBudget >= 3 * size_t{mm::uaRoomTriangles}, "the model sink holds a UA room");
         // the switch: UA LOCATIONS, ON (0) the default, a restart to turn on, the same sentence as the module's
@@ -34187,6 +34187,38 @@ int main() {
         check(ho::actionOf("return_to_city") == ho::Action::toVehicle && ho::actionOf("return_to_city_in_batmobile") == ho::Action::toVehicle &&
                   ho::actionOf("weapons_reserved") == ho::Action::comingSoon,
               "action words");
+        // UA EXPANSION v5: a teleport point and its link line; one with no landing on the floor is COMING SOON
+        {
+            std::string tt = "HEROVR-HIDEOUT 1\nname TP\nspawn -1.375 0 0.125 90\n";
+            tt += "point lift teleport -1.625 0 -1.125 0.6 LIFT - up (A or trigger)\n";
+            tt += "point lost teleport 1.0 0 1.0 0.6 NOWHERE - no link\n";
+            tt += "point off teleport 0.5 0 0.5 0.6 OFF - landing off the grid\n";
+            tt += "link lift 1.625 0 1.125 -90\nlink off 40 0 40 0\n";
+            tt += "bounds -2 -1.5 2 1.5\nkilly -3.00\ngrid -2 -1.5 0.25 16 12\n";
+            for (int j = 0; j < 12; ++j) {
+                tt += "row";
+                for (int i = 0; i < 16; ++i)
+                    tt += " 0";
+                tt += "\n";
+            }
+            ho::Room tr;
+            check(ho::parseRoom(tt, tr, err) && tr.points.size() == 3, "teleport room read: " + err);
+            check(tr.points[0].action == ho::Action::teleport && std::abs(tr.points[0].to.x - 1.625f) < 1e-5f &&
+                      std::abs(tr.points[0].to.z - 1.125f) < 1e-5f && std::abs(tr.points[0].toYaw + 90.f) < 1e-5f,
+                  "a teleport keeps its landing and the way he faces there");
+            check(tr.points[1].action == ho::Action::comingSoon && tr.points[2].action == ho::Action::comingSoon,
+                  "a teleport with no link, or a landing off the floor, is COMING SOON");
+            check(ho::actionOf("teleport") == ho::Action::teleport, "the teleport action word");
+            ho::Visit tv;
+            const Vec3 th{50, 11.7f, -20};
+            check(tv.begin(ho::Which::uaStarkTower, tr, th, Vec3{1, 0, 0}, 10.f), "teleport room entered");
+            check(tv.seatAt(th, Vec3{1, 0, 0}, tr.points[0].to, tr.points[0].toYaw), "put on the landing");
+            const Vec3 landed = tv.place().world(tr.points[0].to);
+            check(std::abs(landed.x - th.x) < 1e-4f && std::abs(landed.z - th.z) < 1e-4f, "the landing is under the eye");
+            // yaw -90 in the spawn's sense faces (cos -90, 0, -sin -90) = (0, 0, 1) in the room: the eye's forward (+x) there
+            const Vec3 fw = tv.place().worldDir(Vec3{0, 0, 1});
+            check(dot(fw, Vec3{1, 0, 0}) > .999f, "he faces the landing's way (the eye's forward is the landing yaw)");
+        }
         // entered: the spawn under the eye, the spawn's forward where he looks, the floor on the real floor
         ho::Visit v;
         Vec3 head{50, 11.7f, -20};
@@ -37921,7 +37953,7 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         check(std::string(mm::slotFolders[mm::slotUaStarkCast]) == "UA/StarkTower/Cast" && mm::slotIsUa(mm::slotUaStarkCast) &&
                   mm::slotIsUaCast(mm::slotUaStarkCast) && !mm::slotIsUaCast(mm::slotUaStarkTower) && !mm::slotMayDecimate[mm::slotUaStarkCast] &&
                   mm::slotDrawCap[mm::slotUaStarkCast] == mm::uaCastTriangles && mm::uaCastTriangles >= 118000 &&
-                  mm::uaCastTriangles <= mm::vanTriangles && mm::slotShipped(mm::slotUaStarkCast),
+                  mm::uaCastTriangles <= mm::maxCapTriangles && mm::slotShipped(mm::slotUaStarkCast),
               "slotUaStarkCast: its folder, cap and switch");
         check(hero007::modelSinkBudget >= 3 * (size_t{mm::uaRoomTriangles} + size_t{uc::drawBudget}) && uc::drawBudget >= 15000,
               "the model sink holds the room and its characters");

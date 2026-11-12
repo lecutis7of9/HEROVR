@@ -31,7 +31,9 @@ inline constexpr const char* folders[4] = {"", "Hideout/Safehouse", "Hideout/Bat
 
 // What a point does: back to the vehicle (the exits), or nothing yet (a "coming soon" point).
 // 0.0.74 test 2b: batcomputer (room.txt's "batcomputer"): sit in its chair and use it (batcave074.hpp).
-enum class Action : uint8_t { none, toVehicle, comingSoon, batcomputer };
+// UA EXPANSION v5: teleport (room.txt's "teleport" + a `link` line): a press puts him on the point's landing (Point::to,
+// Point::toYaw), in the same room, after a short blink. A teleport with no link is COMING SOON, never a dead press.
+enum class Action : uint8_t { none, toVehicle, comingSoon, batcomputer, teleport };
 Action actionOf(const std::string& name); // room.txt's action word
 
 struct Point {
@@ -40,6 +42,8 @@ struct Point {
     Vec3 at{};       // room (glTF) space
     float radius{};  // metres, on the floor
     std::string prompt;
+    Vec3 to{};       // teleport: the landing (room space; its floor), and the way he faces there (the spawn's yaw sense)
+    float toYaw{};
 };
 
 inline constexpr int16_t blocked = -32768; // a grid cell nobody may stand in

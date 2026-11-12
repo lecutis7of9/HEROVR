@@ -23,6 +23,8 @@ Action actionOf(const std::string& name) {
         return Action::none;
     if (name == "batcomputer")
         return Action::batcomputer;
+    if (name == "teleport")
+        return Action::teleport;
     return Action::comingSoon;
 }
 
@@ -55,6 +57,7 @@ bool parseInto(const std::string& text, Room& out, std::string& error) {
     }
     bool spawn = false, grid = false;
     int row = 0;
+    std::vector<std::string> linked;
     while (std::getline(in, line)) {
         if (!line.empty() && line.back() == '\r')
             line.pop_back();
@@ -78,6 +81,21 @@ bool parseInto(const std::string& text, Room& out, std::string& error) {
             p.action = actionOf(action);
             if (out.points.size() < 32)
                 out.points.push_back(std::move(p));
+        } else if (key == "link") { // link <point id> x y z yaw: where that point's teleport lands
+            std::string id;
+            Vec3 to{};
+            float yaw{};
+            l >> id >> to.x >> to.y >> to.z >> yaw;
+            if (l.fail() || !fine(to) || !fine(yaw)) {
+                error = "a bad link line";
+                return false;
+            }
+            for (Point& p : out.points)
+                if (p.id == id && p.action == Action::teleport) {
+                    p.to = to;
+                    p.toYaw = yaw;
+                    linked.push_back(id);
+                }
         } else if (key == "killy") {
             l >> out.killY;
         } else if (key == "grid") {
@@ -121,6 +139,12 @@ bool parseInto(const std::string& text, Room& out, std::string& error) {
     if (!out.floorAt(out.spawn.x, out.spawn.z, y)) {
         error = "the spawn is not on the walk grid";
         return false;
+    }
+    for (Point& p : out.points) { // a teleport with no landing on the grid is COMING SOON, not a dead press
+        if (p.action != Action::teleport)
+            continue;
+        if (std::find(linked.begin(), linked.end(), p.id) == linked.end() || !out.floorAt(p.to.x, p.to.z, y))
+            p.action = Action::comingSoon;
     }
     return true;
 }

@@ -61,6 +61,8 @@ struct NativeEyeFrame {
     const mesh_model::Mesh* uaCastModel{};
     const ua_cast::Cast* uaCast{};
     std::vector<ua_cast::Pose> uaPoses;
+    // UA EXPANSION v5: seconds of the teleport's blink left (> 0: a black sphere round the eye; 0: none).
+    float uaBlink{};
     // Slow motion: the image's recolouring and the focus meter (none at rest).
     SlowMotionView slow{};
     // Update 36: the hero's share of his most hit points, for the wrist ring

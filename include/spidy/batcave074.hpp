@@ -145,10 +145,12 @@ struct Feed {
 struct View {
     bool on{};
     hideout074::Place place{};
-    // markers: room-space point, kind (0 exit, 1 computer, 2 coming soon), radius
-    static constexpr uint32_t mostMarks = 12;
+    // markers: room-space point, kind (0 exit, 1 computer, 2 coming soon, 3 teleport: UA EXPANSION v5), its label (a
+    // teleport's: where it goes), radius
+    static constexpr uint32_t mostMarks = 16;
     Vec3 markAt[mostMarks]{};
     uint8_t markKind[mostMarks]{};
+    std::string markLabel[mostMarks]{};
     uint32_t marks{};
     int markLit{-1};
     float seconds{};      // the pulse clock

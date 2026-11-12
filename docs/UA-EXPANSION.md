@@ -180,3 +180,30 @@ looking at him.
   gives up after 240 frames; the log names what is missing. Drawing the SM2 suit model ourselves needs the model
   reader (`include/spidy/sm2_model.hpp`, CANDIDATE: its vertex layout and the GDeflate textures are not verified) and
   is not done.
+
+## v5: Iron Man's Lab, the lift, and teleports
+
+Stark Tower is now **two converted MUA1 maps in one room**: the hub (`act1/stark/stark1`) and **Iron Man's Lab**
+(`act1/stark/stark2`, behind the hub's waterfall wall). `convert_ua.py` unpacks and builds both
+(`build_stark_tower.py --place stark1|stark2 --offset X Z`), `tools/ua/combine_places.py` joins them (glTF buffers appended
+as they are, points, bounds, NPC hooks), then the same walk grid, opaque-material fix, cast, talk and voices as before.
+The lab stands 260 m east of the hub (each place has its own raised city and sky box about 120 m round it; the room's black
+sphere hides what is past 190 m, so each place sees only itself). Characters of the other place are not posed.
+
+- **Where things go.** The waterfall (`link_stark2`) leads to the lab; the lab's door (`doors_stk_d01`) leads back to the
+  waterfall. The Act 1 arrival lift is **not a separate map**: in `stark1` it is a mover (`lift`, 240 units up, `move_lift.py`)
+  the opening cutscene raises with the heroes on it, then the shaft is removed. So the lift takes you **up to the central
+  platform** (the player start: Nick Fury's desk and the conference table), and a **LIFT** marker there takes you back down to
+  the pad (facing the hub).
+- **Teleport = `Action::teleport`.** `room.txt`: `point <id> teleport x y z r <prompt>` plus `link <id> x y z yaw` (the landing,
+  made by `make_hideout.py` from room.json's `to` and `landing` points; a landing also seeds the walkable area). A teleport
+  with no landing on the floor is COMING SOON. Pressing A / a trigger at it blinks (0.45 s of black round the eye) and puts him
+  on the landing facing its way (`Visit::seatAt`, as the spawn does). Markers are cyan rings with the destination's name.
+- **The lab** has the same pipeline as the hub: the 8 conversation heroes and staff (Tony Stark, Jarvis, Weasel, the lab
+  technicians and the heroes' stand-ins) with their idle loops from `zone_stark2.igb`, their 8 conversations and 103 voiced
+  lines (`SOUNDS/T/O/TOWN1B_V.ENS`), its entity props (doors, pillars, machines, hologram projector and hologram, the Iron Man
+  suit, the Black Panther figure), a ceiling like the hub's.
+- **Limits.** One room draws ~215,000 triangles (the hub 136,000, the lab 77,000) and the cast 256,000 stored: the caps are
+  raised (`uaRoomTriangles` 300,000, `uaCastTriangles` 260,000, `maxCapTriangles`, `mostSourceTriangles`). The hologram is an
+  opaque model (the game draws it translucent). The Act 5 maps (`act5/doomstark/doomstark1a`, `1b`, `2`: Doom's occupation of
+  the tower) are combat levels, not converted. The C++ was only compiled by CI, not tried in a headset.

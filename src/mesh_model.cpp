@@ -1012,7 +1012,7 @@ Status loadFolder(const std::string& folder, bool mayDecimate, Mesh& out, std::s
             if (!readFile(folder + im.uri, im.bytes, mostImageBytes) || (imageBytes += im.bytes.size()) > 2 * mostImageBytes)
                 im.bytes.clear();
         }
-    if (cap == 0 || cap > vanTriangles)
+    if (cap == 0 || cap > maxCapTriangles)
         cap = drawTriangles;
     if (out.triangles() > cap) {
         if (!mayDecimate) {

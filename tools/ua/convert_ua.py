@@ -42,9 +42,19 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / 'hideout074'))
 
-MAP = 'stark1'  # MUA1 Act 1: the Stark Tower hub
-IGB = 'stark1/__combined.igb'
-ENGB = 'stark1/maps/act1/stark/stark1.engb.xml'
+# v5: Stark Tower is TWO converted MUA1 maps in ONE room: the hub (stark1) and Iron Man's Lab (stark2, behind the hub's
+# waterfall). The lab stands LAB_X metres east of the hub (each has its own city and sky box, about 120 m round it, so
+# the places must be 245 m or more apart; the room's black sphere hides what is past 190 m). `bank`: the sound bank
+# (SOUNDS/T/O) with the map's conversation voices; `zone`: the map's own animation file (EA_ZONEn differs per map).
+# The Act 5 maps (act5/doomstark/doomstark1a, 1b, 2: Doom's occupation of the tower) are combat levels: not converted.
+LAB_X = 260.0
+PLACES = [
+    {'map': 'stark1', 'name': 'STARK TOWER', 'offset': (0.0, 0.0), 'tag': '', 'zone': 'zone_stark1', 'bank': 'TOWN1_V.ENS'},
+    {'map': 'stark2', 'name': "IRON MAN'S LAB", 'offset': (LAB_X, 0.0), 'tag': 'lab_', 'zone': 'zone_stark2', 'bank': 'TOWN1B_V.ENS'},
+]
+for _p in PLACES:
+    _p['engb'] = f"maps/act1/stark/{_p['map']}"
+MAP = PLACES[0]['map']
 
 
 def run(cmd, env=None):
@@ -77,8 +87,8 @@ def overlay(plan_png, walk_png, out_png):
     Image.fromarray(out.clip(0, 255).astype('uint8')).save(out_png)
 
 
-CAST_CAP = 140000  # triangles in Cast/scene.glb: mesh_model::uaCastTriangles (frames dropped to fit)
-HUB_BANK = 'TOWN1_V.ENS'  # Act 1's hub voices (SOUNDS/T/O): every stark1 conversation line
+CAST_CAP = 260000  # triangles in Cast/scene.glb: mesh_model::uaCastTriangles (frames dropped to fit)
+HUB_BANK = PLACES[0]['bank']  # Act 1's hub voices (SOUNDS/T/O): every stark1 conversation line
 
 
 def closeup_subtitle(out):
@@ -98,14 +108,24 @@ def closeup_subtitle(out):
     (out / 'cast_raw_closeup.png').unlink()
 
 
-def build_cast(a, pkg, work, out, env):
-    """The characters (Blender: build_cast.py), their atlas model, cast.txt, talk.txt and the voice clips."""
+def build_cast(a, pkgs, work, out, env):
+    """The characters of every place (Blender: build_cast.py), their atlas model, cast.txt, talk.txt and the voice clips.
+    pkgs: {map: unpacked package folder}."""
     import json
     import ua_cast
-    cast = ua_cast.plan_cast(pkg, 'maps/act1/stark/stark1', a.scale)
-    looks = ua_cast.looks_of(cast)
-    plan = {'scale': a.scale, 'looks': [{'name': l['name'], 'skin_igb': str(pkg / 'actors' / f"{l['skin']}.igb"),
-                                         'anim_igb': str(pkg / 'actors' / 'zone_stark1.igb'), 'anim': l['anim'],
+    cast, looks, talks_pkg = [], [], {}
+    for pl in PLACES:
+        pkg = pkgs[pl['map']]
+        c = ua_cast.plan_cast(pkg, pl['engb'], a.scale, offset=pl['offset'], tag=pl['tag'], zone=pl['zone'])
+        ls = ua_cast.looks_of(c)
+        for l in ls:
+            l['pkg'] = pkg
+        cast += c
+        looks += ls
+        for n in {x['talk'] for x in c if x['talk']}:
+            talks_pkg[n] = pkg
+    plan = {'scale': a.scale, 'looks': [{'name': l['name'], 'skin_igb': str(l['pkg'] / 'actors' / f"{l['skin']}.igb"),
+                                         'anim_igb': str(l['pkg'] / 'actors' / f"{l['zone']}.igb"), 'anim': l['anim'],
                                          'frames': 10 if l['principal'] else 6} for l in looks]}
     (work / 'cast_plan.json').write_text(json.dumps(plan, indent=1))
     built = work / 'cast'
@@ -114,18 +134,28 @@ def build_cast(a, pkg, work, out, env):
     lines, tris, sheets = ua_cast.pack_cast(looks, out / 'Cast', CAST_CAP)
     ua_cast.write_cast(out / 'cast.txt', lines, cast)
     print(f'cast: {len(cast)} characters, {len(looks)} looks, {tris} triangles, {sheets} atlas page(s)')
-    talks = ua_cast.read_talks(pkg, sorted({c['talk'] for c in cast if c['talk']}))
+    talks = {}
+    for pkg in dict.fromkeys(talks_pkg.values()):
+        talks.update(ua_cast.read_talks(pkg, sorted(n for n, p in talks_pkg.items() if p == pkg)))
     bank = {}
-    ens = Path(a.sounds) if a.sounds else None
-    if ens is None and a.iso:
+    ens = [Path(x) for x in (a.sounds or [])]
+    if a.iso:
         import ua_extract
-        ens = ua_extract.iso_extract_file(a.iso, HUB_BANK, work / 'sounds')
-    if ens and Path(ens).exists():
-        bank = ua_cast.voice_bank(ens, work / 'bank')
-    else:
-        print('no hub sound bank: the characters talk in subtitles only (give --sounds TOWN1_V.ENS)')
+        have = {x.name.lower() for x in ens}
+        for pl in PLACES:
+            if pl['bank'].lower() not in have:
+                got = ua_extract.iso_extract_file(a.iso, pl['bank'], work / 'sounds')
+                if got:
+                    ens.append(Path(got))
+    for k, e in enumerate(ens):
+        if e.exists():
+            bank.update(ua_cast.voice_bank(e, work / f'bank{k}'))
+    if not bank:
+        print('no sound bank: the characters talk in subtitles only (give --sounds TOWN1_V.ENS and TOWN1B_V.ENS)')
     index, durations = ua_cast.write_voices(out / 'Voice', talks, bank)
-    stats = ua_cast.read_npcstat(pkg / 'data' / 'npcstat.engb.xml')
+    stats = {}
+    for pkg in dict.fromkeys(talks_pkg.values()):
+        stats.update(ua_cast.read_npcstat(pkg / 'data' / 'npcstat.engb.xml'))
     ua_cast.write_talk(out / 'talk.txt', talks, ua_cast.speaker_names(talks, stats), index, durations)
     n = sum(len(t['lines']) for t in talks.values())
     print(f'talk: {len(talks)} conversations, {n} lines, {len(index)} voice clips ({sum(durations.values()):.0f} s)')
@@ -145,7 +175,7 @@ def main():
     ap.add_argument('--out', required=True, help='<HERO VR>/Models/UA/StarkTower')
     ap.add_argument('--work', help='scratch folder (kept; default: a temp folder, removed after)')
     ap.add_argument('--previews', action='store_true', help='also render walk_overlay.png and eye-level views into --out')
-    ap.add_argument('--sounds', help="the disc's hub sound bank (TOWN1_V.ENS) when --wad is used (voices)")
+    ap.add_argument('--sounds', action='append', help="a sound bank of the disc (TOWN1_V.ENS: the hub, TOWN1B_V.ENS: the lab) when --wad is used (voices); repeat for each")
     ap.add_argument('--no-cast', action='store_true', help='leave out the characters and their conversations')
     ap.add_argument('--scale', type=float, default=0.0254,
                     help='metres per game unit (default 0.0254: Raven units are inches, a 72-unit hero ~ 1.83 m)')
@@ -161,21 +191,32 @@ def main():
         import ua_extract
         wad_path = ua_extract.resolve_wad(a.iso or a.wad, work)
         wad = ua_extract.Wad(wad_path)
-        hits = [n for n in wad.names if n.lower().endswith('.fb') and Path(n).stem.lower() == MAP]
-        if not hits:
-            raise SystemExit(f'no {MAP}.fb in {wad_path} - is this Marvel: Ultimate Alliance for PS2?')
-        pkg = work / 'pkg'
-        for n in hits:
-            ua_extract.fb_unpack(wad.read(n), pkg / Path(n).stem)
-        ua_extract.decompile_xmlb(pkg / MAP)
-        igb, engb = pkg / IGB, pkg / ENGB
-        if not igb.exists() or not engb.exists():
-            raise SystemExit(f'{MAP}: {igb.name} or {engb.name} missing after unpacking')
+        pkgs = {}
+        for pl in PLACES:
+            m = pl['map']
+            hits = [n for n in wad.names if n.lower().endswith('.fb') and Path(n).stem.lower() == m]
+            if not hits:
+                raise SystemExit(f'no {m}.fb in {wad_path} - is this Marvel: Ultimate Alliance for PS2?')
+            for n in hits:
+                ua_extract.fb_unpack(wad.read(n), work / 'pkg' / Path(n).stem)
+            pkgs[m] = work / 'pkg' / m
+            ua_extract.decompile_xmlb(pkgs[m])
+            igb, engb = pkgs[m] / '__combined.igb', pkgs[m] / (pl['engb'] + '.engb.xml')
+            if not igb.exists() or not engb.exists():
+                raise SystemExit(f'{m}: {igb.name} or {engb.name} missing after unpacking')
 
         env = blender_env(a.igb_blender, work)
+        builts = []
+        for pl in PLACES:
+            m = pl['map']
+            bd = work / f'built_{m}'
+            run([a.blender, '-b', '--factory-startup', '--python', HERE / 'build_stark_tower.py', '--',
+                 pkgs[m] / '__combined.igb', pkgs[m] / (pl['engb'] + '.engb.xml'), bd, '--scale', a.scale,
+                 '--place', m, '--offset', pl['offset'][0], pl['offset'][1]], env)
+            builts.append(bd)
+        import combine_places
         built = work / 'built'
-        run([a.blender, '-b', '--factory-startup', '--python', HERE / 'build_stark_tower.py', '--',
-             igb, engb, built, '--scale', a.scale], env)
+        combine_places.combine(built, builts)
 
         import make_hideout
         room = work / 'room'
@@ -193,7 +234,7 @@ def main():
             f.write(f'materials opaque {len(solid)}, cut-out {len(cut)}: {", ".join(cut)}\n')
 
         if not a.no_cast:
-            build_cast(a, pkg / MAP, work, out, env)
+            build_cast(a, pkgs, work, out, env)
 
         if a.previews:
             grid = next(l for l in (room / 'room.txt').read_text().splitlines() if l.startswith('grid '))

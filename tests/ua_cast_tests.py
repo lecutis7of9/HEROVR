@@ -290,11 +290,11 @@ class Wiring(unittest.TestCase):
 
     def test_converter(self):
         c = src('tools/ua/convert_ua.py')
-        for s in ("build_cast(a, pkg / MAP, work, out, env)", "ua_extract.iso_extract_file(a.iso, HUB_BANK, work / 'sounds')",
+        for s in ("build_cast(a, pkgs, work, out, env)", "ua_extract.iso_extract_file(a.iso, pl['bank'], work / 'sounds')",
                   "ua_cast.write_talk(out / 'talk.txt'", "ua_cast.pack_cast(looks, out / 'Cast', CAST_CAP)", "'--no-cast'"):
             self.assertIn(s, c)
-        self.assertIn('CAST_CAP = 140000', c)
-        self.assertIn('inline constexpr uint32_t uaCastTriangles = 140000', src('include/spidy/mesh_model.hpp'))
+        self.assertIn('CAST_CAP = 260000', c)
+        self.assertIn('inline constexpr uint32_t uaCastTriangles = 260000', src('include/spidy/mesh_model.hpp'))
 
     def test_nothing_of_the_game_committed(self):
         gi = src('.gitignore')

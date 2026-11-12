@@ -35,6 +35,9 @@ inline constexpr uint32_t castSlots[locations] = {mesh_model::slotUaStarkCast};
 inline constexpr float eyeHeight = 1.65f;
 // B held this long goes back to the city (the hideouts' hold).
 inline constexpr float exitHold = .8f;
+// v5: a teleport's blink (seconds of black round the eye, its radius in metres), and how far along x a character may stand
+// from the eye to be posed (the places of one room are 260 m apart; a place's own people are all within about 50 m).
+inline constexpr float blinkSeconds = .45f, blinkRadius = .35f, placeReach = 150.f;
 
 // Why a trip cannot start now (nullptr: it can). The first reason that holds, in this order.
 struct Gate {

@@ -114,8 +114,10 @@ def label_of(stat, character):
     return re.sub(r'\s+', ' ', name).strip().upper()
 
 
-def plan_cast(pkg, engb_rel, scale, sex_of=None):
-    """Every character spawner of the map: its skin, the idle it plays and where (room space, like npcs.txt)."""
+def plan_cast(pkg, engb_rel, scale, sex_of=None, offset=(0.0, 0.0), tag='', zone='zone_stark1'):
+    """Every character spawner of the map: its skin, the idle it plays and where (room space, like npcs.txt). v5: `offset`
+    (x, z metres) is where the map stands in a room of several (build_stark_tower.py --offset), `tag` prefixes its looks'
+    names and `zone` is the map's own animation file (actors/<zone>.igb: EA_ZONEn differs between maps)."""
     pkg = Path(pkg)
     insts, ents = read_engb(pkg / (engb_rel + '.engb.xml'))
     stats = read_npcstat(pkg / 'data' / 'npcstat.engb.xml')
@@ -123,7 +125,7 @@ def plan_cast(pkg, engb_rel, scale, sex_of=None):
     O = start['pos']
 
     def to_room(p):
-        return [round((p[0] - O[0]) * scale, 3), round((p[2] - O[2]) * scale, 3), round(-(p[1] - O[1]) * scale, 3)]
+        return [round((p[0] - O[0]) * scale + offset[0], 3), round((p[2] - O[2]) * scale, 3), round(-(p[1] - O[1]) * scale + offset[1], 3)]
 
     out = []
     for name, inst in sorted(insts.items()):
@@ -158,7 +160,7 @@ def plan_cast(pkg, engb_rel, scale, sex_of=None):
             group = f'pair{(int(m.group(1)) + 1) // 2:02d}'
         out.append({'id': nid, 'character': character, 'skin': skin, 'anims': stat.get('characteranims', ''),
                     'anim': anim, 'at': to_room(pos), 'yaw': round(math.degrees(yaw), 1), 'group': group,
-                    'talk': talk, 'label': label_of(stat, character), 'turns': anim not in SITTING})
+                    'talk': talk, 'label': label_of(stat, character), 'turns': anim not in SITTING, 'tag': tag, 'zone': zone})
     return out
 
 
@@ -166,11 +168,11 @@ def looks_of(cast):
     """The distinct (skin, animation) looks the cast needs, named like '2101_zone9'."""
     seen = {}
     for c in cast:
-        key = f"{c['skin']}_{c['anim']}"
+        key = f"{c.get('tag', '')}{c['skin']}_{c['anim']}"
         c['look'] = key
         if key not in seen:
             seen[key] = {'name': key, 'skin': c['skin'], 'anim': c['anim'], 'principal': c['talk'] is not None,
-                         'turns': c['turns']}
+                         'turns': c['turns'], 'zone': c.get('zone', 'zone_stark1')}
         seen[key]['principal'] = seen[key]['principal'] or c['talk'] is not None
     return list(seen.values())
 

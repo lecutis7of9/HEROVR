@@ -177,9 +177,26 @@ def build(kind, room_glb, room_json, col_glb, out):
         d = (free[:, 0] - sj) ** 2 + (free[:, 1] - si) ** 2
         sj, si = free[int(np.argmin(d))]
         print(f'spawn moved to the nearest walkable cell ({si}, {sj})')
+    # UA EXPANSION v5: more than one place in a room (Stark Tower and Iron Man's Lab): each 'landing' point (where a
+    # teleport puts him) seeds the walkable part too, on the nearest free cell
+    seeds = [(sj, si)]
+    landed = {}
+    for p in meta['points']:
+        if p['type'] != 'landing':
+            continue
+        lx, _, lz = p['pos_gltf']
+        li, lj = int((lx - x0) / CELL), int((lz - z0) / CELL)
+        free = np.argwhere(~blocked)
+        if not (0 <= li < cols and 0 <= lj < rows) or blocked[lj, li]:
+            d = (free[:, 0] - lj) ** 2 + (free[:, 1] - li) ** 2
+            lj, li = free[int(np.argmin(d))]
+            print(f"{p['id']}: landing moved to the nearest walkable cell ({li}, {lj})")
+        seeds.append((int(lj), int(li)))
+        landed[p['id']] = (int(lj), int(li), p.get('yaw_deg', 0))
     reach = np.zeros_like(blocked)
-    reach[sj, si] = True
-    q = deque([(sj, si)])
+    for (a_, b_) in seeds:
+        reach[a_, b_] = True
+    q = deque(seeds)
     while q:
         j, i = q.popleft()
         for dj, di in ((1, 0), (-1, 0), (0, 1), (0, -1)):
@@ -192,6 +209,7 @@ def build(kind, room_glb, room_json, col_glb, out):
     lines = ['HEROVR-HIDEOUT 1', f'name {meta.get("name", kind.upper())}',
              f'spawn {x0 + (si + .5) * CELL:.3f} {h[sj, si]:.3f} {z0 + (sj + .5) * CELL:.3f} {spawn.get("yaw_deg", 0):.2f}']
     notes = []
+    links = []
     for p in meta['points']:
         if p['type'] != 'interact':
             continue
@@ -203,6 +221,10 @@ def build(kind, room_glb, room_json, col_glb, out):
             r = near + .6
         prompt = p.get('prompt', p['id']).replace('\n', ' ')
         lines.append(f"point {p['id']} {p.get('action', 'none')} {x:.3f} {y:.3f} {z:.3f} {r:.2f} {prompt}")
+        if p.get('to') is not None:  # a teleport: where it puts him (a landing's cell centre, its floor, its yaw)
+            lj, li, lyaw = landed[p['to']]
+            links.append(f"link {p['id']} {x0 + (li + .5) * CELL:.3f} {h[lj, li]:.3f} {z0 + (lj + .5) * CELL:.3f} {lyaw:.2f}")
+    lines.extend(links)
     killy = b.get('kill_z', -3.0)
     lines.append(f'bounds {x0:.3f} {z0:.3f} {x1:.3f} {z1:.3f}')
     lines.append(f'killy {killy:.2f}')

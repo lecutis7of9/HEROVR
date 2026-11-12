@@ -15,9 +15,9 @@ class Room(unittest.TestCase):
 
     def test_entities_placed_where_the_engb_puts_them(self):
         for etype in ("'door'", "'lift'", "'waterfall'", "'bridge_railing'", "'doors_logo_stk_d_01'"):
-            self.assertIn(etype + ': [(', self.b)
+            self.assertIn(etype + ': [(', self.b)  # (the hub's table; v5's lab table is ENTITY_PARTS_LAB)
         self.assertIn('entity_notes = place_entities()', self.b)
-        self.assertIn("insts.get(etype)", self.b)
+        self.assertIn("inst_all.get(etype", self.b)  # v5: every instance of a type (pillars, machines)
         self.assertIn('PLACED_PROTOS', self.b)  # the prototypes under the hub are removed once copied
 
     def test_north_wall_bulkhead(self):
@@ -25,8 +25,9 @@ class Room(unittest.TestCase):
         self.assertIn('WARNING north wall not found', self.b)
 
     def test_points_say_where_they_lead(self):
-        self.assertIn("('arrival_lift', 'lift',", self.b)
-        self.assertIn("('ironman_lab', 'link_stark2',", self.b)
+        # v5: the lift and the waterfall are teleports now (tests/ua_fix5_tests.py); only an unknown action word is COMING SOON
+        self.assertIn("insts.get('lift')", self.b)
+        self.assertIn("insts.get('link_stark2')", self.b)
         h = src('src/hideout074.cpp')
         self.assertIn('return Action::comingSoon;', h)  # any other action word: COMING SOON on the press
 

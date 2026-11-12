@@ -592,7 +592,7 @@ bool append(std::vector<Vertex>& solid, std::vector<Vertex>& glow, const View& v
             const Vec3 at = v.markAt[k];
             const int kind = v.markKind[k];
             const bool lit = v.markLit == static_cast<int>(k);
-            const Vec3 col = kind == 0 ? gold : kind == 1 ? cyan : grey;
+            const Vec3 col = kind == 0 ? gold : (kind == 1 || kind == 3) ? cyan : grey;
             const float al = (kind == 2 ? .35f : .55f + .3f * pulse) * (lit ? 1.3f : 1.f);
             // floor rings (room x-z plane)
             Painter fl{glow, pl.world(Vec3{at.x, at.y + .03f, at.z}), pl.worldDir({1, 0, 0}), pl.worldDir({0, 0, -1}), {0, 1, 0}};
@@ -607,11 +607,14 @@ bool append(std::vector<Vertex>& solid, std::vector<Vertex>& glow, const View& v
                 bb.quad(-.015f, 0, .015f, 2.2f, .001f, col, .45f);
             }
             Painter lb = facing(glow, top, viewer);
-            const char* label = kind == 0 ? "RETURN TO CITY" : kind == 1 ? "BATCOMPUTER" : "COMING SOON";
+            const char* label = kind == 0   ? "RETURN TO CITY"
+                                : kind == 1 ? "BATCOMPUTER"
+                                : kind == 3 ? v.markLabel[k].c_str()
+                                            : "COMING SOON";
             const float h = kind == 2 ? .07f : .13f;
             lb.quad(-textWidth(label, h) / 2 - .05f, -.04f, textWidth(label, h) / 2 + .05f, h + .05f, -.002f, face, .55f);
             lb.textCentre(label, 0, 0, h, kind == 2 ? grey : ice, .002f, 1);
-            if (kind == 0)
+            if (kind == 0 || kind == 3)
                 lb.textCentre(lit ? "A / TRIGGER" : "WALK HERE", 0, -.11f, .055f, col, .002f, .9f);
         }
         // the arrival hint

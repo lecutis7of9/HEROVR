@@ -38,7 +38,7 @@
 namespace spidy::mesh_model {
 
 inline constexpr size_t mostFileBytes = 64u << 20;
-inline constexpr uint32_t mostSourceTriangles = 200000;
+inline constexpr uint32_t mostSourceTriangles = 320000;  // v5: a UA room of two places is about 215,000
 // Version 0.0.72 REAL MODELS: the models keep their real geometry (tools/models072: whole, or
 // collapse-decimated only where VR needs it; the largest ships at about 14,000), so the per-model cap
 // is 24000 (was 700, which crushed them to flat shapes).
@@ -47,16 +47,18 @@ inline constexpr uint32_t drawTriangles = 24000; // the VR cap per model (3 vert
 // at the eye: the user's "make sure the new models arent falttened"), the van 150,000 (a whole vehicle; the source
 // has 431,452, the shipped one 135,000 by collapse decimation). Every other slot keeps drawTriangles.
 inline constexpr uint32_t hammerTriangles = 50000, vanTriangles = 150000;
+// v5: the biggest per-slot cap loadFolder keeps (the van's, and a UA room's or cast's: Stark Tower with Iron Man's Lab).
+inline constexpr uint32_t maxCapTriangles = 300000;
 // Version 0.0.74 test 1 HIDEOUTS: a whole room (the Batcave ships 40,533).
 inline constexpr uint32_t hideoutTriangles = 60000;
 // ULTIMATE ALLIANCE EXPANSION (ua_expansion.hpp): a whole MUA1 map converted from the player's own disc
 // (tools/ua/convert_ua.py; the Stark Tower hub with its city backdrop and ceiling is about 138,000). Within
 // vanTriangles, the most loadFolder keeps; never drawn with a hideout (one trip at a time).
-inline constexpr uint32_t uaRoomTriangles = 150000;
+inline constexpr uint32_t uaRoomTriangles = 300000; // v5: Stark Tower and Iron Man's Lab together are about 215,000 (the hub 136,000, the lab 77,000)
 // ULTIMATE ALLIANCE EXPANSION characters (ua_cast.hpp): every look of the place's cast, each a few frames of its idle
 // (the converter halves the frames until they fit: Stark Tower's 11 looks are about 118,000). Stored, not drawn whole:
 // ua_cast::append draws one frame a character, about 14,000 a visit (ua_cast::drawBudget).
-inline constexpr uint32_t uaCastTriangles = 140000, uaCastDrawnTriangles = 30000;
+inline constexpr uint32_t uaCastTriangles = 260000, uaCastDrawnTriangles = 30000;
 // 0.0.78 PUNISHER HQ (owner, t1889u: "keep the visual quality" of his 592,596-triangle Punisher): that suit's own
 // cap (Suit_punisher_1; every other suit keeps drawTriangles). tools/suits/convert_suit.py ships it at 80,000.
 inline constexpr uint32_t suitHqTriangles = 80000;
@@ -361,8 +363,8 @@ inline constexpr bool slotIsUa(uint32_t slot) { return slot == slotUaStarkTower 
 inline constexpr bool slotIsUaCast(uint32_t slot) { return slot == slotUaStarkCast; }
 // UA EXPANSION fix 2: the player's avatar there (not a room, not a roster suit: never in wornSuitSlot).
 inline constexpr bool slotIsUaBody(uint32_t slot) { return slot == slotUaBody; }
-static_assert(uaCastTriangles <= vanTriangles, "loadFolder keeps caps up to vanTriangles");
-static_assert(uaRoomTriangles <= vanTriangles, "loadFolder keeps caps up to vanTriangles");
+static_assert(uaCastTriangles <= maxCapTriangles, "loadFolder keeps caps up to maxCapTriangles");
+static_assert(uaRoomTriangles <= maxCapTriangles && vanTriangles <= maxCapTriangles, "loadFolder keeps caps up to maxCapTriangles");
 static_assert(slotDrawCap[slotSuitFirst + 16] == suitHqTriangles && suitFolders[16][5] == 'p' && suitFolders[16][14] == '1',
               "0.0.78: Suit_punisher_1 (suitFolders[16]) has the HQ cap");
 static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slotHideoutBatcave == 44 && slotBatmobileFirst == 46 &&

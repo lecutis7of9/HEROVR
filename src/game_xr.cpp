@@ -11,6 +11,7 @@
 #include "spidy/thor_grip.hpp"
 #include "spidy/jitter_check.hpp" // 79.4 EYE JITTER levels, JITTER CHECK
 #include "spidy/wall_anims.hpp" // 79.6 GAME WALL ANIMS and its WALL WATCH
+#include "spidy/webline_marker.hpp" // 79.7 BOLD WEB LINE MARKER counters
 #include "spidy/mirror_guard.hpp"
 #include "spidy/mirror_props074.hpp" // 0.0.74 test 10 MIRROR PROPS
 #include "spidy/glove_overlay.hpp" // Version 0.0.72 GAME BODY fallback gloves
@@ -713,6 +714,8 @@ DWORD WINAPI SpidyVrJitter(void* off);  // 0.0.76 FAR SHAKE: vr_jitter, 0 on, 1 
 DWORD WINAPI SpidyVrJitterLevel(void* level); // 79.4: 0 off, 1 low, 2 med, 3 full, 4 e5d2746; bit 8: from the hologram
 uint32_t SpidyVrJitterLevelNow();
 extern spidy::jitter_check::Data SpidyJitterCheckData; // 79.4 JITTER CHECK (stereo_probe.cpp)
+// 79.7 BOLD WEB LINE MARKER: set / drawn / first-frame counters for the report (tools/hero797_record.py), read-only.
+__declspec(dllexport) webline_marker::Data SpidyWeblineMarkerData;
 // 79.6 WALL WATCH: the record for the report (tools/wall_anims_record.py), read-only; written by the VR loop.
 __declspec(dllexport) spidy::wall_anims::Data SpidyWallAnimsData;
 // 79.5 BUILD TAG: the string tools/build_tag.py reads out of the DLL FILE ('HEROVR-BUILD-TAG <version> <test number> <commit>'),
@@ -2557,8 +2560,12 @@ DWORD runBody() {
             modelsAdopted = true;
         };
         consoleLine(std::string("79.5 BUILD TAG: ") + SpidyBuildTag + " (this line is in the DLL that is running; a console without it is an older build)");
+        consoleLine("HERO VR 79.7 TEST (includes 79.6): GAME WALL ANIMS no longer turns the view 180 degrees on the left stick (the level view stays level, "
+                    "the stick climbs the wall's up, a yaw jump over 60 deg in a frame is put back and logged); feet pressed to the wall and the head 0.3 m off it "
+                    "on the game's crawl; hand climb reaches 0.7 m; the Web Line marker is a 40 px disc / red cross with a preview line; EYE JITTER walks a slow "
+                    "32-step circle (the same for both eyes)");
         consoleLine("HERO VR 79.6 TEST (includes 79.5): GAME WALL ANIMS (VR SETTINGS > BODY AND VIEW; live.txt game_wall_anims, OFF the default) "
-                    "turns the game's own wall crawl, wall run and hand climb on, the view level; '79.6 WALL' lines in this console log each wall contact, "
+                    "turns the game's own wall crawl, wall run and hand climb on, the view level; '79.7 WALL' lines in this console log each wall contact, "
                     "hand-over, drop and view flip (79.5 flips left stick, Web Line release latch + aim marker, BUILD TAG)");
         consoleLine("HERO VR 79.5 TEST (includes 79.4): EYE JITTER is a level (VR SETTINGS > GRAPHICS > EYE JITTER: OFF / LOW 0.10 px / MED 0.22 px / "
                     "FULL 0.44 px, MED the default; live.txt vr_jitter), with a 10 s '79.4 JITTER CHECK' line in this console");
@@ -2758,7 +2765,7 @@ DWORD runBody() {
         // 79.5: each hand's second-anchor marker while its gesture holds a grip (0 none, 1 valid green, 2 not valid red)
         // and the valid tick's edge; weblineCancelWhy counts the cancels by reason (webline_gesture::Reason).
         WeblineMark weblineMarks[2]{};
-        bool weblineWasValid[2]{};
+        bool weblineWasValid[2]{}, weblineFirstPending[2]{};
         uint64_t weblineCancelWhy[8]{};
         // t2161: a grip that did not start the gesture says why (rate-limited, 79.1 WEBLINE REFUSED).
         bool weblineGripWas[2]{};
@@ -5023,7 +5030,7 @@ DWORD runBody() {
                                     wristChanged |= 1u << 23; // SpidyHudSettings 3 bit 23, 10 bit 5
                                     message(3, 0, next ? "HEROVR GAME WALL ANIMS: ON (applies off the swing's wall)"
                                                        : "HEROVR GAME WALL ANIMS: OFF (HEROVR's wall run)");
-                                    consoleLine(std::string("79.6 WALL: GAME WALL ANIMS ") + (next ? "ON" : "OFF") + " from the hologram");
+                                    consoleLine(std::string("79.7 WALL: GAME WALL ANIMS ") + (next ? "ON" : "OFF") + " from the hologram");
                                 }
                                 if (result.vrJitter) { // 79.2b (t2169): EYE JITTER, live; the launcher keeps it in live.txt
                                     // 79.4 (t2188): the next level (OFF > LOW > MED > FULL > OFF; the hidden e5d2746 goes to OFF).
@@ -7236,9 +7243,25 @@ DWORD runBody() {
                                 // is green (a valid second anchor: release now) or red (not valid: the cancel's reason
                                 // is the note on release); one short tick on the way to valid.
                                 weblineMarks[h] = {};
-                                if (weblineGestures[h].active() && lo.hasTarget) {
-                                    weblineMarks[h].state = lo.valid ? 1 : 2;
-                                    weblineMarks[h].point = lo.target;
+                                if (lo.started) {
+                                    ++SpidyWeblineMarkerData.gestures;
+                                    weblineFirstPending[h] = true;
+                                }
+                                if (weblineGestures[h].active()) {
+                                    // 79.7: an active gesture ALWAYS has a marker: green where the release lays the line,
+                                    // red where it does not, red on the aim itself where it meets nothing (state 3).
+                                    weblineMarks[h].state = lo.hasTarget ? (lo.valid ? 1 : 2) : 3;
+                                    weblineMarks[h].point = lo.hasTarget ? lo.target : Vec3{};
+                                    weblineMarks[h].from = lo.from;
+                                    weblineMarks[h].hasFrom = finite(lo.from);
+                                    ++SpidyWeblineMarkerData.set[h];
+                                    ++(lo.hasTarget ? (lo.valid ? SpidyWeblineMarkerData.validFrames : SpidyWeblineMarkerData.invalidFrames)
+                                                    : SpidyWeblineMarkerData.noTargetFrames);
+                                    if (weblineFirstPending[h]) {
+                                        weblineFirstPending[h] = false;
+                                        ++SpidyWeblineMarkerData.firstFrames;
+                                        SpidyWeblineMarkerData.firstValid += lo.valid;
+                                    }
                                 }
                                 if (weblineGestures[h].active() && lo.valid && !weblineWasValid[h])
                                     runtime.haptic(static_cast<int>(h), .18f);
@@ -8452,7 +8475,7 @@ DWORD runBody() {
                             wallFallbackUntil = 0;
                             gameWallCrawl = true;
                             wallCrawlChanged = true;
-                            consoleLine("79.6 WALL: RECOVER over, the game's wall animations are back");
+                            consoleLine("79.7 WALL: RECOVER over, the game's wall animations are back");
                         }
                         LARGE_INTEGER wallNow{};
                         QueryPerformanceCounter(&wallNow);
@@ -8471,10 +8494,8 @@ DWORD runBody() {
                         win.speed = std::sqrt(swingState.velocity.x * swingState.velocity.x + swingState.velocity.y * swingState.velocity.y +
                                               swingState.velocity.z * swingState.velocity.z);
                         win.collisionFlags = swingState.collisionFlags;
-                        win.tiltDegrees = motion.active ? motion.viewTilt * 57.2957795f : 0.f;
+                        win.yawJumpDegrees = motion.active ? motion.yawJumpDegrees : 0.f; // 79.7 YAW JUMP SAFETY
                         const wall_anims::Action wallAct = wallWatch.update(static_cast<float>(frame.seconds), win, wallNotes);
-                        if (wallAct.levelView)
-                            rig.diedOrRespawned(); // the view flipped on a wall: level it (GameTrackingRig, as a respawn)
                         if (wallAct.recover && wallAnimsOn && wallFallbackUntil == 0) {
                             wallFallbackUntil = wallAnimsClock + wall_anims::fallbackSeconds; // HEROVR's wall holds him meanwhile
                             gameWallCrawl = false;
@@ -8489,7 +8510,7 @@ DWORD runBody() {
                         wallLineBudget = std::min(6.f, wallLineBudget + static_cast<float>(frame.seconds) * 1.2f);
                         for (const auto& n : wallNotes) {
                             const bool chatty = n.kind == wall_anims::contact || n.kind == wall_anims::leave ||
-                                                n.kind == wall_anims::handOver;
+                                                n.kind == wall_anims::handOver || n.kind == wall_anims::flip;
                             const std::string line = wall_anims::text(n);
                             if (chatty && wallLineBudget < 1.f)
                                 continue;
@@ -8642,6 +8663,7 @@ DWORD runBody() {
                                 cc.on = climbOn.load() && heroClimbs(); // 0.0.76 WALLS: SPIDER-MAN's hand climb only
                                 cc.pull = climbPull.load();
                                 cc.grip = climbGrip.load();
+                                cc.handReach = wallAnimsOn ? hand_crawl::Config::wallAnimsReach : hand_crawl::Config::reach; // 79.7
                                 const auto climb = climber.update(cf, cc);
                                 for (unsigned i = 0; i < 2; ++i) {
                                     u37.climbing[i] = climb.holding[i];
@@ -14205,6 +14227,17 @@ DWORD runBody() {
                         const bool ownGameCrawl =
                             swingFresh && !swingState.owned && motion.standing &&
                             swingState.wall == static_cast<uint32_t>(game_swing::Surface::game);
+                        // 79.7 wall frame on the game's crawl (level view): the wall's outward normal as an azimuth
+                        // (8 bits) and the head's distance from its plane in cm (16 bits): native_body presses the
+                        // game's feet to that plane. wallCrawl only: the own-wall poses above keep theirs.
+                        if (ownGameCrawl && !wallPose && finite(motion.crawlNormal) && length(motion.crawlNormal) > .5f &&
+                            std::isfinite(motion.crawlHeadDistance)) {
+                            float turns = std::atan2(motion.crawlNormal.x, motion.crawlNormal.z) / 6.2831853f;
+                            turns -= std::floor(turns);
+                            const uint32_t azimuth = std::min<uint32_t>(255u, static_cast<uint32_t>(turns * 256.f));
+                            const uint32_t headCm = static_cast<uint32_t>(std::clamp(motion.crawlHeadDistance, 0.f, 3.f) * 100.f);
+                            pose.reserved = azimuth | (headCm << 8);
+                        }
                         // 79.1 Dynamic Body flip tuck: use the *actual* tracking
                         // FlipMotion tilt, not the combined pose.tilt, because
                         // fly lean and wall-body roll also change the latter.
@@ -16424,6 +16457,12 @@ DWORD runBody() {
                         // line steadied from image to image. Translucent, the farthest
                         // drawn first.
                         std::vector<AimMarker> marks;
+                        struct WeblineDraw {
+                            Vec3 point, from;
+                            bool hasFrom, valid, aimOnly;
+                            unsigned hand;
+                        };
+                        std::vector<WeblineDraw> weblineDraw;
                         for (unsigned hand = 0; hand < 2; ++hand) {
                             auto& steady = aimMotion[hand];
                             const auto& input = rendered.swing.hands[hand];
@@ -16447,16 +16486,13 @@ DWORD runBody() {
                             // 79.5 WEBLINE AIM MARKER: while this hand's Web Line gesture holds its grip, the spot its
                             // aim would take as the SECOND anchor: a green ring when the release will lay the line
                             // (valid), a red cross when it will not (too close, not a surface, out of reach).
-                            if (const auto& wm = saved->weblineMarks[hand]; wm.state && finite(wm.point)) {
-                                AimMarker marker;
-                                marker.squeeze = input.grip;
-                                marker.hand = hand;
-                                marker.kind = wm.state == 1 ? AimMark::target : AimMark::blocked;
-                                marker.point = wm.point;
-                                marker.radius = .35f;
-                                marker.tinted = true;
-                                marker.tint = wm.state == 1 ? Vec3{.12f, 1.f, .25f} : Vec3{1.f, .08f, .08f};
-                                steady.markers(&marker, origin, direction, marks);
+                            // 79.7 BOLD: a filled disc / red cross of at least 40 pixels and a preview line from the first
+                            // anchor, drawn below with the translucent layer whatever the RETICLES setting says (79.6's tester saw
+                            // no green ring); the aim marker easing only keeps running.
+                            if (const auto& wm = saved->weblineMarks[hand]; wm.state) {
+                                weblineDraw.push_back({wm.state == 3 || !finite(wm.point) ? origin + direction * 4.f : wm.point,
+                                                       wm.from, wm.hasFrom, wm.state == 1, wm.state == 3, hand});
+                                steady.markers(nullptr, origin, direction, marks);
                                 ++markersDrawn;
                                 continue;
                             }
@@ -16530,6 +16566,15 @@ DWORD runBody() {
                             for (const auto& mark : marks)
                                 appendAimMarker(translucent, mark, viewer, pixelAngle * markerPixels,
                                                 saved->uiStyle);
+                        for (const auto& line : weblineDraw) {
+                            if (line.hasFrom && !line.aimOnly &&
+                                appendWeblinePreview(translucent, line.from, line.point, line.valid, viewer,
+                                                     pixelAngle * markerPixels))
+                                ++SpidyWeblineMarkerData.previewDrawn;
+                            if (appendWeblineMarker(translucent, line.point, line.valid, viewer, pixelAngle * markerPixels,
+                                                    webline_marker::minPixels))
+                                ++SpidyWeblineMarkerData.drawn[line.hand];
+                        }
                         // Slow motion's focus meter over the back of the left wrist, moved
                         // with the player to this image as the glove is. Update 36: in
                         // the comic style with the art loaded, the health and focus ring

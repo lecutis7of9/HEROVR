@@ -39,11 +39,10 @@ class Webline(unittest.TestCase):
     def test_game_uses_them(self):
         g = src('src/game_xr.cpp')
         self.assertIn('li.seconds = frame.seconds;', g)
-        self.assertIn('weblineMarks[h].state = lo.valid ? 1 : 2;', g)
+        self.assertIn('weblineMarks[h].state = lo.hasTarget ? (lo.valid ? 1 : 2) : 3;', g)  # 79.7: always a marker
         self.assertIn('runtime.haptic(static_cast<int>(h), .18f);', g)
         self.assertIn('webline_gesture::reasonText(lo.reason)', g)
         self.assertIn('saved.weblineMarks[i] = weblineMarks[i];', g)
-        self.assertIn('marker.tinted = true;', g)
         self.assertIn('weblineMarks', src('include/spidy/native_eye_history.hpp'))
         for f in ('src/web_visual.cpp', 'src/tech_marks.cpp'):
             self.assertIn('marker.tinted && finite(marker.tint)', src(f))
@@ -77,7 +76,7 @@ class BuildTag(unittest.TestCase):
         self.assertIn('build_tag.tag_line(', r)
         self.assertIn('build_tag=build_tag_record', r)
         c = src('CMakeLists.txt')
-        self.assertIn('set(HERO_TEST_VERSION "0.0.79.6"', c)
+        self.assertIn('set(HERO_TEST_VERSION "0.0.79.7"', c)
         self.assertIn('HEROVR_BUILD_FOOTER', c)
         self.assertIn('SPIDY_BUILD_FOOTER', src('src/wrist_hud.cpp'))
 

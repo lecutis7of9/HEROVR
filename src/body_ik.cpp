@@ -841,6 +841,23 @@ Result solve(Pose& pose, const Rig& rig, const Targets& targets, const Config& c
             pose.turn(rig.below[leg.foot], partial(back, legWeight), pose.position(leg.foot));
         }
     }
+    // 79.7 wall frame on the game's own crawl (level view): the game's leg pose is kept, but each foot that stands
+    // off the wall's plane by more than a hand is pressed to it (the player: "feet are noticeably far back from the
+    // wall"). The plane is the head's, from game_xr: the hips stand a little behind the eyes.
+    if (gameWallCrawl && w > 0.f && length(t.crawlNormal) > .5f && t.crawlHipDistance > 0.f) {
+        const Vec3 wallOut = normalized(t.crawlNormal);
+        for (int i = 0; i < 2; ++i) {
+            const auto& leg = legs[i];
+            const Vec3 hip = pose.position(leg.upper), foot = pose.position(leg.foot), knee = pose.position(leg.lower);
+            const float sole = std::max(.1f, rig.ankleHeight[i] * s);
+            const float off = dot(foot - hip, wallOut) + t.crawlHipDistance - sole;
+            if (off > .08f * s) {
+                const float shift = std::min(off, .6f * s);
+                const Vec3 pole = normalized(knee - (hip + foot) * .5f);
+                limb(pose, rig, leg.upper, leg.lower, leg.foot, foot - wallOut * shift, length(pole) > .5f ? pole : wallOut, w);
+            }
+        }
+    }
     // 6. Arms to the controllers: the shoulder lifts toward a far reach, the
     // elbow hangs down, out and a little back, the hand takes the
     // controller's orientation and the forearm shares its roll. A controller

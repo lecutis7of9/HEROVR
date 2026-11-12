@@ -37,9 +37,11 @@ struct Config {
     bool on = true;                     // live.txt hand_climb
     uint32_t pull = 100;                // climb_pull, percent (25-300)
     uint32_t grip = gripOrTrigger;      // climb_grip
+    float handReach = .45f;             // 79.7: the reach in use (reach; wallAnimsReach with GAME WALL ANIMS ON)
     static constexpr uint32_t minPull = 25, maxPull = 300;
     static constexpr float crawlSpeed = 2.5f;  // m/s the game's crawl reaches at a full stick (CANDIDATE)
     static constexpr float reach = .45f;       // a hand this near the wall's plane can take hold
+    static constexpr float wallAnimsReach = .7f; // 79.7: the same, measured against the wall plane, GAME WALL ANIMS ON
     static constexpr float press = .55f, keep = .30f; // the hold's button (forgiving), and let go below
     static constexpr float coast = .18f;       // seconds a let-go keeps the last speed
     static constexpr float smoothing = .06f;   // seconds, the speed's ease
@@ -90,7 +92,7 @@ class Climber {
                 continue;
             }
             if (!s.held) {
-                if (b < Config::press || std::abs(dot(h.world - f.anchor, n)) > Config::reach)
+                if (b < Config::press || std::abs(dot(h.world - f.anchor, n)) > c.handReach)
                     continue;
                 s.held = true;
                 s.previous = h.relative;

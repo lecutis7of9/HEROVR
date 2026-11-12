@@ -503,7 +503,9 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         const Quat floor = arc(surfaceTurn_.rotate({0, 1, 0}), held) * surfaceTurn_;
         const Vec3 level = horizontal(floor.conjugate().rotate(travel));
         const Vec3 tracked = horizontal(f.head.orientation.rotate({0, 0, -1}));
-        if (length(level) > .5f && length(tracked) > .5f) {
+        // 79.7: with the level wall view the stick never turns the view
+        // (79.6 report: 160-170 degree head-yaw jumps as the climb began).
+        if (!wallLevel_ && length(level) > .5f && length(tracked) > .5f) {
             const float yaw = std::atan2(-level.x, -level.z) - std::atan2(-tracked.x, -tracked.z);
             rig_.turn(std::remainder(yaw - rig_.yaw, 2 * pi), f.head.position);
         }
@@ -581,8 +583,13 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         // Keep the horizon upright and crouch beside the facade, hands within
         // touching distance. This shifts the tracking space, never the collider.
         const Vec3 alongUp = normalized(Vec3{0, 1, 0} - held * held.y);
-        const float lower = std::clamp(f.head.position.y - .9f, 0.f, .7f);
-        target = held * (wallDistance_ - dot(unplacedHead - surface.anchor, held)) - alongUp * lower;
+        // 79.7: on the game's own crawl with the level view the head stands
+        // gameCrawlStandOff off the wall and is not crouched: the crouch and
+        // the closer stand-off put the waist and chest inside the near clip.
+        const bool gameLevel = surface.crawl && wallLevel_;
+        const float lower = gameLevel ? 0.f : std::clamp(f.head.position.y - .9f, 0.f, .7f);
+        const float distance = gameLevel ? gameCrawlStandOff : wallDistance_;
+        target = held * (distance - dot(unplacedHead - surface.anchor, held)) - alongUp * lower;
         surfaceDepth_ = 0;
     } else if (onSurface && !standsOnto) {
         const float height = dot(unplacedHead - feet, away);
@@ -642,6 +649,21 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         }
     }
     seatLiftApplied_ = seatLift_; // 0.0.74 test 1 SEATED DRIVING
+    {
+        // 79.7 YAW JUMP SAFETY (replaces 79.6's tilt flip detector, which never
+        // saw the flips): the head's world yaw cannot turn this far in a frame
+        // by itself. On a wall without the right stick, a jump over 60 degrees
+        // in the tracking space's yaw is put back, and reported once.
+        const float delta = std::remainder(rig_.yaw - safeYaw_, 2 * pi);
+        const bool rightStick = handValid(f.hands[1]) && std::abs(f.hands[1].stickX) > .2f;
+        if (safeYawSet_ && holds && wallLevel_ && !rightStick && !resumed && !pendingRecenter_ && std::abs(delta) > yawJumpLimit) {
+            rig_.turn(-delta, f.head.position);
+            out.yawJumpDegrees = delta * 57.2957795f;
+            ++yawJumps_;
+        }
+        safeYaw_ = rig_.yaw;
+        safeYawSet_ = true;
+    }
     Rig placed{rig_.origin + standOff_ + headDrop_ + seatLiftApplied_, rig_.yaw, rig_.tilt, rig_.pivot};
     const bool turned = surfaceTurn_.x != 0 || surfaceTurn_.y != 0 || surfaceTurn_.z != 0;
     if (turned || length(surfaceShift_) > 0) {
@@ -661,6 +683,12 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
     if (wallRun && holds)
         placed.origin += wall_run_clearance::headPush(
             true, placed.toWorld(f.head).position, surface.anchor, held, wallDistance_);
+    // 79.7: the wall frame the body solver gets on the game's own crawl in the level view: the wall's outward
+    // normal and how far the placed head stands off its plane (native_body, wallCrawl).
+    if (holds && surface.crawl && wallLevel_ && std::abs(held.y) < .7f) {
+        out.crawlNormal = held;
+        out.crawlHeadDistance = dot(placed.toWorld(f.head).position - surface.anchor, held);
+    }
     if (!holds || f.jump)
         wallRoll_.reset();
     const bool rollAllowed = handClimb_ && holds && !standing_ && !walks && !f.jump && std::abs(held.y) < .5f;
@@ -796,6 +824,19 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
             side = cross(ahead, held);
             const Vec3 meant = (standsOnto ? surfaceTurn_ : arc({0, 1, 0}, held)).rotate(levelMove);
             move = meant - held * dot(meant, held);
+        }
+        // 79.7: level view on a wall: the stick is laid on the wall's own up
+        // and right, whichever way the head looks (forward climbs, as asked).
+        if (wallLevel_ && std::abs(held.y) < .7f && handValid(f.hands[0])) {
+            const Vec3 wallUp = normalized(Vec3{0, 1, 0} - held * held.y);
+            float sx = f.hands[0].stickX, sy = f.hands[0].stickY;
+            if (std::hypot(sx, sy) < .2f)
+                sx = sy = 0;
+            ahead = wallUp;
+            side = cross(ahead, held);
+            move = ahead * sy + side * sx;
+            if (length(move) > 1.f)
+                move = normalized(move);
         }
     }
     const float forward = dot(move, ahead), right = dot(move, side);

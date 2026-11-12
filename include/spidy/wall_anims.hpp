@@ -16,9 +16,11 @@
 //   leave     off a wall, how long, and why: INTENT (a jump / web / leap within 0.5 s) or not
 //   drop      off the game's wall (or the swing's) with no intent and falling (vy below -3 m/s 0.4 s later)
 //   far fall  a fall of 80 m with no web: logged as OUT OF WORLD?
-//   flip      the view tilted more than 80 degrees from level for 0.25 s on a wall: leveled (ON only)
+//   flip      79.7: the head's yaw jumped over 60 degrees in one frame on a wall with no right stick: the tracking
+//             space puts it back (GameTrackingRig, YAW JUMP SAFETY) and the watch logs it (79.6's tilt detector
+//             never fired)
 // Actions (ON only): a drop off the game's wall puts HEROVR's wall back for 15 s (the next touch is held), a third
-// drop in a session turns GAME WALL ANIMS back OFF, and a flip levels the view (GameTrackingRig::diedOrRespawned).
+// drop in a session turns GAME WALL ANIMS back OFF.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -33,8 +35,8 @@ inline constexpr const char* clsName[classes] = {"NONE", "AIR", "GROUND", "OWN W
 enum Kind : uint32_t { contact, handOver, leave, drop, farFall, flip, toggle, deferred, recover, autoOff, kinds };
 inline constexpr const char* kindName[kinds] = {"CONTACT", "HAND-OVER", "LEAVE", "DROP", "OUT OF WORLD?", "VIEW FLIP",
                                                 "TOGGLE", "DEFERRED", "RECOVER", "AUTO-OFF"};
-inline constexpr float intentSeconds = 0.5f, dropWait = 0.4f, dropSpeed = -3.f, farFallMetres = 80.f, flipDegrees = 80.f,
-                       flipHold = 0.25f, flipCooldown = 2.f, fallbackSeconds = 15.f;
+inline constexpr float intentSeconds = 0.5f, dropWait = 0.4f, dropSpeed = -3.f, farFallMetres = 80.f,
+                       yawJumpDegrees = 60.f, fallbackSeconds = 15.f;
 inline constexpr uint32_t autoOffDrops = 3;
 
 inline bool isWall(Cls c) { return c == ownWall || c == gameWall || c == floorCrawl; }
@@ -55,7 +57,7 @@ struct Input {
     bool airborne{}, grounded{}, owned{}, intent{}, webbed{};
     float y{}, vy{}, speed{}; // position.y, velocity.y, |velocity|
     uint32_t collisionFlags{};
-    float tiltDegrees{};     // GameMotionFrame::viewTilt in degrees (0 level)
+    float yawJumpDegrees{};  // GameMotionFrame::yawJumpDegrees: the yaw the safety put back this frame (0 none)
 };
 struct Note {
     Kind kind{};
@@ -65,7 +67,7 @@ struct Note {
     uint32_t n{};
 };
 struct Action {
-    bool levelView{}, recover{}, autoOff{};
+    bool recover{}, autoOff{};
 };
 struct EventRec { // 16 bytes, in Data
     uint32_t ms{};
@@ -80,7 +82,7 @@ struct Data {
     uint32_t contacts[classes]{};
     uint32_t handOvers{}, drops{}, dropsGame{}, farFalls{}, flips{}, recoveries{}, toggles{}, deferrals{};
     float seconds[classes]{};
-    float maxTiltDegrees{}, lastContactSpeed{};
+    float maxYawJumpDegrees{}, lastContactSpeed{};
     uint32_t eventTotal{}, eventCount{}, sessionMs{}, spare{};
     EventRec events[ringSize]{};
     uint32_t pad[2]{};
@@ -94,7 +96,7 @@ public:
         Action act;
         const Cls now = classify(in.surface, in.airborne, in.grounded);
         data_.seconds[now] += dt;
-        data_.maxTiltDegrees = std::max(data_.maxTiltDegrees, in.tiltDegrees);
+        data_.maxYawJumpDegrees = std::max(data_.maxYawJumpDegrees, std::abs(in.yawJumpDegrees));
         if (in.intent)
             lastIntent_ = in.session;
         if (isWall(now) && !isWall(prev_)) {
@@ -148,18 +150,10 @@ public:
                     act.recover = true;
             }
         }
-        // The view flips: past the limit for flipHold on a wall (ON only): leveled once, then a cooldown.
-        if (in.enabled && isWall(now) && in.tiltDegrees > flipDegrees) {
-            flipFor_ += dt;
-            if (flipFor_ >= flipHold && in.session - flipAt_ >= flipCooldown) {
-                flipAt_ = in.session;
-                flipFor_ = 0;
-                ++data_.flips;
-                act.levelView = true;
-                note(notes, {flip, now, now, in.session, in.tiltDegrees, 0, data_.flips});
-            }
-        } else {
-            flipFor_ = 0;
+        // 79.7: a yaw jump the tracking space put back: counted and logged (see the console's rate limit).
+        if (in.yawJumpDegrees != 0.f) {
+            ++data_.flips;
+            note(notes, {flip, now, now, in.session, in.yawJumpDegrees, 0, data_.flips});
         }
         prev_ = now;
         data_.sessionMs = static_cast<uint32_t>(std::min(in.session * 1000.0, 4e9));
@@ -200,8 +194,8 @@ private:
     }
     Data data_{};
     Cls prev_ = none, contactClass_ = none, leftClass_ = none;
-    double lastIntent_ = -100, contactAt_{}, leftAt_{}, flipAt_ = -100;
-    float leftY_{}, flipFor_{};
+    double lastIntent_ = -100, contactAt_{}, leftAt_{};
+    float leftY_{};
     bool pendingDrop_{}, falling_{}, farFallSaid_{};
     uint32_t revision_{};
 };
@@ -213,42 +207,42 @@ inline std::string text(const Note& n) {
     const char* to = clsName[std::min<uint32_t>(n.to, classes - 1)];
     switch (n.kind) {
     case contact:
-        std::snprintf(line, sizeof line, "79.6 WALL %.1fs: CONTACT %s (from %s) speed %.1f m/s, game collision flags 0x%X",
+        std::snprintf(line, sizeof line, "79.7 WALL %.1fs: CONTACT %s (from %s) speed %.1f m/s, game collision flags 0x%X",
                       n.session, to, from, static_cast<double>(n.a), static_cast<unsigned>(n.b));
         break;
     case handOver:
-        std::snprintf(line, sizeof line, "79.6 WALL %.1fs: HAND-OVER %s -> %s at %.1f m/s", n.session, from, to,
+        std::snprintf(line, sizeof line, "79.7 WALL %.1fs: HAND-OVER %s -> %s at %.1f m/s", n.session, from, to,
                       static_cast<double>(n.a));
         break;
     case leave:
-        std::snprintf(line, sizeof line, "79.6 WALL %.1fs: LEFT %s after %.1fs -> %s (%s)", n.session, from,
+        std::snprintf(line, sizeof line, "79.7 WALL %.1fs: LEFT %s after %.1fs -> %s (%s)", n.session, from,
                       static_cast<double>(n.a), to, n.b > 0 ? "by intent: jump, web or leap" : "no jump or web");
         break;
     case drop:
-        std::snprintf(line, sizeof line, "79.6 WALL %.1fs: DROP off %s, falling %.1f m/s, %.1f m below the wall's last point",
+        std::snprintf(line, sizeof line, "79.7 WALL %.1fs: DROP off %s, falling %.1f m/s, %.1f m below the wall's last point",
                       n.session, from, static_cast<double>(n.a), static_cast<double>(-n.b));
         break;
     case farFall:
-        std::snprintf(line, sizeof line, "79.6 WALL %.1fs: OUT OF WORLD? fallen %.0f m (%.0f m/s) with no web since %s",
+        std::snprintf(line, sizeof line, "79.7 WALL %.1fs: OUT OF WORLD? fallen %.0f m (%.0f m/s) with no web since %s",
                       n.session, static_cast<double>(n.a), static_cast<double>(n.b), from);
         break;
     case flip:
-        std::snprintf(line, sizeof line, "79.6 WALL %.1fs: VIEW FLIP corrected (view %.0f deg off level), flip #%u", n.session,
+        std::snprintf(line, sizeof line, "79.7 WALL %.1fs: VIEW YAW JUMP of %.0f deg put back, #%u", n.session,
                       static_cast<double>(n.a), n.n);
         break;
     case toggle:
-        std::snprintf(line, sizeof line, "79.6 WALL %.1fs: GAME WALL ANIMS %s", n.session, n.a > 0 ? "ON" : "OFF");
+        std::snprintf(line, sizeof line, "79.7 WALL %.1fs: GAME WALL ANIMS %s", n.session, n.a > 0 ? "ON" : "OFF");
         break;
     case deferred:
-        std::snprintf(line, sizeof line, "79.6 WALL %.1fs: GAME WALL ANIMS ON waits: on the swing's wall now, applies when you leave it",
+        std::snprintf(line, sizeof line, "79.7 WALL %.1fs: GAME WALL ANIMS ON waits: on the swing's wall now, applies when you leave it",
                       n.session);
         break;
     case recover:
-        std::snprintf(line, sizeof line, "79.6 WALL %.1fs: RECOVER: HEROVR's wall holds you for %.0fs (drop #%u off the game's wall)",
+        std::snprintf(line, sizeof line, "79.7 WALL %.1fs: RECOVER: HEROVR's wall holds you for %.0fs (drop #%u off the game's wall)",
                       n.session, static_cast<double>(n.a), n.n);
         break;
     case autoOff:
-        std::snprintf(line, sizeof line, "79.6 WALL %.1fs: AUTO-OFF: %u drops off the game's wall this session, GAME WALL ANIMS back OFF",
+        std::snprintf(line, sizeof line, "79.7 WALL %.1fs: AUTO-OFF: %u drops off the game's wall this session, GAME WALL ANIMS back OFF",
                       n.session, n.n);
         break;
     default:
@@ -256,12 +250,12 @@ inline std::string text(const Note& n) {
     }
     return line;
 }
-// The summary: '79.6 WALL ...' (console every 20 s while something changed, and the report's line).
+// The summary: '79.7 WALL ...' (console every 20 s while something changed, and the report's line).
 inline std::string summary(const Data& d) {
     char line[420];
     std::snprintf(line, sizeof line,
-                  "79.6 WALL: GAME WALL ANIMS %s; contacts own %u / game %u / floor %u; hand-overs %u; drops %u (game %u); "
-                  "out-of-world? %u; view flips %u; recoveries %u; on own wall %.0fs, game wall %.0fs, floor crawl %.0fs, air %.0fs",
+                  "79.7 WALL: GAME WALL ANIMS %s; contacts own %u / game %u / floor %u; hand-overs %u; drops %u (game %u); "
+                  "out-of-world? %u; view yaw jumps %u; recoveries %u; on own wall %.0fs, game wall %.0fs, floor crawl %.0fs, air %.0fs",
                   (d.flags & 1) ? "ON" : "OFF", d.contacts[ownWall], d.contacts[gameWall], d.contacts[floorCrawl], d.handOvers,
                   d.drops, d.dropsGame, d.farFalls, d.flips, d.recoveries, static_cast<double>(d.seconds[ownWall]),
                   static_cast<double>(d.seconds[gameWall]), static_cast<double>(d.seconds[floorCrawl]),

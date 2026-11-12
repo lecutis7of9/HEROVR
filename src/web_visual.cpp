@@ -1690,6 +1690,51 @@ void appendWeb(std::vector<Vertex>& out, const WebLine& web, Vec3 viewer, float 
     }
     appendNineties(out, web, viewer, pixelAngle, look);
 }
+bool appendWeblineMarker(std::vector<Vertex>& out, Vec3 point, bool valid, Vec3 viewer, float pixelAngle, float minPixels) {
+    if (!finite(point) || !finite(viewer) || !std::isfinite(pixelAngle) || pixelAngle <= 0 || !std::isfinite(minPixels))
+        return false;
+    const float distance = length(viewer - point);
+    if (!(distance >= .3f && distance <= 1000))
+        return false;
+    const Vec3 view = (viewer - point) / distance;
+    Vec3 right = cross(Vec3{0, 1, 0}, view);
+    right = length(right) > .1f ? normalized(right) : soft::perpendicular(view);
+    const Vec3 up = cross(view, right);
+    const float px = pixelAngle * distance;
+    const float radius = std::max(minPixels, 40.f) * .5f * px;
+    // Toward the eye a little, so it is not lost in the surface it marks.
+    const Vec3 c = point + view * std::min(.05f, distance * .1f);
+    const Vec3 green{.12f, 1.f, .25f}, red{1.f, .08f, .08f}, dark{0.f, 0.f, 0.f}, white{1.f, 1.f, 1.f};
+    if (valid) {
+        soft::softArc(out, c, right, up, 0, radius + 3.5f * px, 0, 2 * pi, dark, .55f, 2.f * px, 40);
+        soft::softArc(out, c, right, up, 0, radius, 0, 2 * pi, green, .92f, px, 40);
+        soft::softArc(out, c, right, up, radius * .82f, radius, 0, 2 * pi, white, .85f, px, 40);
+    } else {
+        const float half = radius, bar = std::max(3.f * px, radius * .16f);
+        for (const float turn : {pi / 4, -pi / 4}) {
+            const Vec3 d = right * std::cos(turn) + up * std::sin(turn);
+            soft::softBar(out, c - d * half, c + d * half, view, bar + 2.5f * px, dark, .55f, 1.5f * px);
+        }
+        for (const float turn : {pi / 4, -pi / 4}) {
+            const Vec3 d = right * std::cos(turn) + up * std::sin(turn);
+            soft::softBar(out, c - d * half, c + d * half, view, bar, red, .95f, px);
+        }
+    }
+    return true;
+}
+bool appendWeblinePreview(std::vector<Vertex>& out, Vec3 from, Vec3 to, bool valid, Vec3 viewer, float pixelAngle) {
+    if (!finite(from) || !finite(to) || !finite(viewer) || !std::isfinite(pixelAngle) || pixelAngle <= 0)
+        return false;
+    const float span = length(to - from);
+    const float closest = std::max(.3f, std::min(length(viewer - from), length(viewer - to)));
+    if (!(span > .2f) || closest > 1000)
+        return false;
+    const Vec3 view = normalized(viewer - (from + to) * .5f);
+    const float px = pixelAngle * closest;
+    const Vec3 color = valid ? Vec3{.12f, 1.f, .25f} : Vec3{1.f, .08f, .08f};
+    soft::softBar(out, from, to, view, 2.2f * px + .004f, color, valid ? .75f : .6f, px);
+    return true;
+}
 void appendAimMarker(std::vector<Vertex>& out, const AimMarker& marker, Vec3 viewer, float pixelAngle,
                      UiStyle style) {
     if (style == UiStyle::tech)

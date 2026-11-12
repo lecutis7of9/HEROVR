@@ -44,6 +44,7 @@ import pose_check_record  # 0.0.76 POSE CHECK
 import jitter_log_record  # 0.0.76 JITTER FIX
 import jitter_check_record  # 79.4 JITTER CHECK
 import wall_anims_record  # 79.6 WALL WATCH
+import hero797_record  # 79.7 WEB LINE MARKER counters, JITTER LEVELS
 import build_tag  # 79.5 BUILD TAG: which build the injected DLL is, from the file itself
 import vr_aa_record  # 0.0.76 SPIDY TAA
 import taa_watch_record  # 0.0.76 TAA WATCH
@@ -3182,6 +3183,8 @@ def session(a, startup, session_off=()):
                       jitter_log_record.EXPORT,  # 0.0.76 JITTER FIX
                       jitter_check_record.EXPORT,  # 79.4 JITTER CHECK: absent from an older module
                       wall_anims_record.EXPORT,  # 79.6 WALL WATCH: absent from an older module
+                      hero797_record.WEBLINE_EXPORT,  # 79.7 WEB LINE MARKER: absent from an older module
+                      hero797_record.JITTER_EXPORT,  # 79.7 JITTER LEVELS: absent from an older module
                       vr_aa_record.EXPORT,  # 0.0.76 SPIDY TAA
                       taa_watch_record.EXPORT,  # 0.0.76 TAA WATCH
                       taa_frame_log_record.EXPORT,  # 0.0.76 TAA FRAME LOG: absent from an older module
@@ -3291,6 +3294,7 @@ def session(a, startup, session_off=()):
         # after the game was closed, had neither: they were only read at a normal stop).
         vr_aa_last = jitter_log_last = jitter_check_last = None
         wall_anims_last = None  # 79.6 WALL WATCH: wall_anims_snapshot, kept from the samples
+        webline_marker_last = jitter_levels_last = None  # 79.7 records, kept from the samples
         taa_watch_last = None  # 0.0.76 TAA WATCH: taa_watch_snapshot, kept from the samples
         taa_watch_said = 0  # 10 s windows already printed
         depth_check_last = None  # 0.0.76 A-depth CHECKED: taa_depth_check_snapshot, kept from the samples
@@ -3617,6 +3621,7 @@ def session(a, startup, session_off=()):
                         sm1style_eyes=sm1style_last,
                         pose_check=pose_check_last,
                         vr_aa=vr_aa_last, jitter_log=jitter_log_last, jitter_check=jitter_check_last, wall_anims=wall_anims_last,
+                        webline_marker=webline_marker_last, jitter_levels=jitter_levels_last,
                         taa_watch=taa_watch_record.taa_watch_report(taa_watch_last),
                         taa_frame_log=dict(most_still=taa_frame_log_record.taa_frame_log_report(frame_log_best),
                                            last=taa_frame_log_record.taa_frame_log_report(frame_log_last)),
@@ -3688,6 +3693,10 @@ def session(a, startup, session_off=()):
                         print(said, flush=True)
                     if (said := wall_anims_record.wall_anims_line(result.get('wall_anims'))):
                         print(said, flush=True)  # 79.6 WALL WATCH: the session's end (the DLL prints each event as '79.6 WALL ...')
+                    if (said := hero797_record.webline_marker_line(result.get('webline_marker'))):
+                        print(said, flush=True)  # 79.7 WEB LINE MARKER: set / drawn / first frame
+                    if (said := hero797_record.jitter_levels_line(result.get('jitter_levels'))):
+                        print(said, flush=True)  # 79.7 JITTER LEVELS: lag and left-right difference per level
                     if (said := jitter_check_record.jitter_check_line(result.get('jitter_check'))):
                         print(said, flush=True)  # 79.4 JITTER CHECK: the session's end, with each level change's second
                     if (said := vr_aa_record.vr_aa_line(result.get('vr_aa'))):
@@ -4037,6 +4046,10 @@ def session(a, startup, session_off=()):
                         game, xr.get(jitter_check_record.EXPORT), sample.get('seconds')) or jitter_check_last)
                     wall_anims_last = (wall_anims_record.wall_anims_snapshot(game, xr.get(wall_anims_record.EXPORT))
                                        or wall_anims_last)  # 79.6 WALL WATCH
+                    webline_marker_last = (hero797_record.webline_marker_snapshot(game, xr.get(hero797_record.WEBLINE_EXPORT))
+                                           or webline_marker_last)  # 79.7
+                    jitter_levels_last = (hero797_record.jitter_levels_snapshot(game, xr.get(hero797_record.JITTER_EXPORT))
+                                          or jitter_levels_last)  # 79.7
                     # Update 34.2: ENGINE TAA's record each sample, a console line when its state or mode changes.
                     if (taa := engine_taa_snapshot(game, xr['SpidyEngineTaaData'])):
                         said = (taa['state'], taa['reason'], taa['jitter_mode'], taa['jitter_scale'])
@@ -4316,7 +4329,11 @@ def session(a, startup, session_off=()):
             jitter_check=jitter_check_record.jitter_check_snapshot(game, xr.get(jitter_check_record.EXPORT))
             or jitter_check_last,
             wall_anims=wall_anims_record.wall_anims_snapshot(game, xr.get(wall_anims_record.EXPORT))
-            or wall_anims_last,  # 79.6 WALL WATCH ('79.6 WALL' in the report)
+            or wall_anims_last,  # 79.6 WALL WATCH ('79.7 WALL' in the report)
+            webline_marker=hero797_record.webline_marker_snapshot(game, xr.get(hero797_record.WEBLINE_EXPORT))
+            or webline_marker_last,  # 79.7
+            jitter_levels=hero797_record.jitter_levels_snapshot(game, xr.get(hero797_record.JITTER_EXPORT))
+            or jitter_levels_last,  # 79.7
             vr_aa=vr_aa_record.vr_aa_snapshot(game, xr.get(vr_aa_record.EXPORT)) or vr_aa_last,
             taa_watch=taa_watch_record.taa_watch_report(
                 taa_watch_record.taa_watch_snapshot(game, xr.get(taa_watch_record.EXPORT)) or taa_watch_last),

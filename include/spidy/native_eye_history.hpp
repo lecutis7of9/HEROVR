@@ -20,8 +20,10 @@
 namespace spidy {
 // 79.5: a hand's Web Line gesture marker at the second spot (state 0 none, 1 valid, 2 not valid).
 struct WeblineMark {
-    uint8_t state{};
+    uint8_t state{}; // 0 none, 1 valid (green disc), 2 not valid (red cross), 3 active but the aim meets nothing (red cross on the aim)
     Vec3 point{};
+    Vec3 from{};     // 79.7: the first anchor (the preview line's start)
+    bool hasFrom{};
 };
 struct NativeEyeFrame {
     uint64_t serial{};

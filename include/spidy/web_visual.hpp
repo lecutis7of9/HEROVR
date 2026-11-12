@@ -439,6 +439,12 @@ struct AimMarker {
     bool tinted{};     // 79.5: draw in `tint` instead of the hand's colour (the Web Line gesture's green / red)
     Vec3 tint{};
 };
+// 79.7 BOLD WEB LINE MARKER: while a Web Line gesture holds its grip, a filled disc at the second spot, green when the
+// release will lay the line, a red cross when it will not, at least `minPixels` across (pixelAngle as for appendWeb),
+// shadowed and outlined to read on the sky and on a lit wall; and a thin preview line from the first anchor to it. Both
+// ignore the RETICLES setting and the aim markers' easing. False: nothing drawn (not finite, or closer than 0.3 m).
+bool appendWeblineMarker(std::vector<Vertex>& out, Vec3 point, bool valid, Vec3 viewer, float pixelAngle, float minPixels = 40.f);
+bool appendWeblinePreview(std::vector<Vertex>& out, Vec3 from, Vec3 to, bool valid, Vec3 viewer, float pixelAngle);
 // pixelAngle as for appendWeb. Each mark below draws its tech_marks.hpp
 // namesake instead in UiStyle::tech.
 void appendAimMarker(std::vector<Vertex>& out, const AimMarker& marker, Vec3 viewer, float pixelAngle,

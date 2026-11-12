@@ -65,6 +65,12 @@ struct GameMotionFrame {
     bool flyRollBodyOnly{};
     float flyLookUp{}; // 0.0.74 test 10: FLY LOOK UP's pan applied this frame (0 none .. 1 the full pitch up)
     float viewTilt{};
+    // 79.7: the yaw the safety put back this frame, degrees (0: none).
+    float yawJumpDegrees{};
+    // 79.7: the game's crawl in the level view: the wall's outward normal (zero: none) and the placed head's
+    // distance from its plane, metres.
+    Vec3 crawlNormal{};
+    float crawlHeadDistance{};
     // For the player's body: the up the view stands him along (the world's
     // until it turns onto a surface), the point of that surface under his
     // feet, from the feet (zero on the ground), and a flip's tilt alone, in
@@ -125,6 +131,9 @@ constexpr float wallStandSpeed = 1.5f, wallStrideSpeed = 7.5f, wallTurnRate = 10
 // instead: wallClearance once the actor has turned onto it, then never closer
 // than minWallClearance; a head moved back stays where it went.
 constexpr float wallClearance = .5f, minWallClearance = .25f;
+// 79.7: the game's own crawl, level view: the head's stand-off from the wall, and the
+// most a frame may turn the tracking space's yaw on a wall without the right stick.
+constexpr float gameCrawlStandOff = .3f, yawJumpLimit = 1.0471976f;
 // The head never goes through what is over the player. A ray from his feet
 // along the surface he stands on says how far there is, and the head stops
 // headClearance short of that, never closer to the feet than leastHeadroom -
@@ -438,6 +447,7 @@ class GameTrackingRig {
     void wallLevel(bool on) {
         wallLevel_ = on;
     }
+    uint32_t yawJumps() const { return yawJumps_; }
     bool wallLevelOn() const {
         return wallLevel_;
     }
@@ -452,6 +462,9 @@ class GameTrackingRig {
   private:
     uint32_t tiltMode_{};
     bool levelNow_{};
+    float safeYaw_{};
+    bool safeYawSet_{};
+    uint32_t yawJumps_{};
     bool wallLevel_ = false; // CUT7 WALL VIEW (game_xr sets it from live.txt wall_view, level by default)
     combat38::TiltGuard tiltGuard_{};
     RealisticFlipSettings autoSettings_{};

@@ -378,6 +378,14 @@ void solveHero(float* out, uintptr_t job, uintptr_t instance) {
             t.wallNormal = ownWall && finite(wanted.standUp) ? toModel.rotate(wanted.standUp) : Vec3{};
             t.wallTravel = ownWall && finite(wanted.floor) ? toModel.rotate(wanted.floor) : Vec3{};
             t.wallCrawl = standing && (wanted.flags & native_body::wallCrawl) != 0;
+            // 79.7: the game's crawl in the level view carries the wall's outward normal (azimuth, 8 bits of
+            // reserved) and the head's distance from its plane (cm, the 16 bits above); the hips stand a little
+            // behind the eyes. body_ik presses the game's feet to that plane.
+            if (t.wallCrawl && !ownWall && (wanted.reserved >> 8) != 0) {
+                const float turns = static_cast<float>(wanted.reserved & 0xffu) / 256.f * 6.2831853f;
+                t.crawlNormal = toModel.rotate(Vec3{std::sin(turns), 0, std::cos(turns)});
+                t.crawlHipDistance = std::min(((wanted.reserved >> 8) & 0xffffu) * .01f, 3.f) + .1f;
+            }
             t.flipPose = (wanted.flags & native_body::flipPose) != 0;
             // The player can flip during an ordinary jump before HEROVR's
             // swing owns the mover. A real flip is airborne for leg IK even

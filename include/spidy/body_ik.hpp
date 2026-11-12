@@ -208,6 +208,10 @@ struct Targets {
     Vec3 wallTravel{}; // tangent motion direction; handles lateral AND upward runs
     float wallDistance{}; // actor centre to wall surface in metres
     bool wallCrawl{}; // native game wall-crawl pose, preserve animated legs
+    // 79.7: with wallCrawl in the level view: the wall's outward normal (model axes; zero none) and the hips' distance
+    // from its plane, metres. The game's feet are pressed to that plane.
+    Vec3 crawlNormal{};
+    float crawlHipDistance{};
     bool wallCling{}; // HEROVR own wall, slow climb or stationary spider stance
     // TRUE only for the player's actual FlipMotion rotation. A wall-body
     // tilt, flight lean or game cutscene tilt must never trigger a knee tuck.

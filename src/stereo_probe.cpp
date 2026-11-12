@@ -6,6 +6,7 @@
 #include "spidy/eye_bloom.hpp"
 #include "spidy/sm1style.hpp" // 0.0.74 test 10 SM1STYLE
 #include "spidy/jitter_check.hpp" // 79.4 JITTER CHECK, EYE JITTER levels
+#include "spidy/jitter_slow.hpp"  // 79.7 SLOW-WALK JITTER
 #include "spidy/jitter_log.hpp" // 0.0.76 JITTER FIX
 #include "spidy/cutscene077.hpp" // HERO VR 0.0.77 CUTSCENES
 #include "spidy/cutscene077_gate.hpp" // HERO VR 0.0.77 CUTFIX
@@ -396,6 +397,9 @@ __declspec(dllexport) spidy::sm1style::Data SpidySm1StyleData;
 // 79.4 JITTER CHECK (include/spidy/jitter_check.hpp): what each eye's lens stored against what the game's TemporalAa
 // jobs read, the left-right difference, the other TemporalAa jobs, and EYE JITTER's level changes (read-only).
 __declspec(dllexport) spidy::jitter_check::Data SpidyJitterCheckData;
+// 79.7 SLOW-WALK JITTER (include/spidy/jitter_slow.hpp): per EYE JITTER level, how far behind the TemporalAa jobs read and how often the eyes
+// differ (read-only).
+__declspec(dllexport) spidy::jitter_slow::Data SpidyJitterLevelData;
 // 0.0.76 JITTER FIX (include/spidy/jitter_log.hpp): each view's lens jitter, its first 200 frames (read-only).
 __declspec(dllexport) spidy::jitter_log::Data SpidyJitterLogData;
 }
@@ -439,6 +443,7 @@ void jitterCheckLens(unsigned eye, const float sent[2], const float* made) {
     r.sent[at][0] = sent[0], r.sent[at][1] = sent[1];
     r.made[at][0] = m[0], r.made[at][1] = m[1];
     ++e.lens;
+    ++SpidyJitterLevelData.frames;
     if (jc::almost(m[0], 2 * sent[0]) && jc::almost(m[1], -2 * sent[1]))
         ++e.lensRule;
     e.sent[0] = sent[0], e.sent[1] = sent[1];
@@ -472,6 +477,13 @@ void jitterCheckRun(unsigned eye, const float jitter[2]) {
                 break;
         }
     }
+    auto& level79 = SpidyJitterLevelData.levels[std::min<uint32_t>(d.level, spidy::jitter_slow::levels - 1)];
+    SpidyJitterLevelData.level = d.level;
+    ++level79.runs[eye];
+    if (best == jc::lens)
+        ++level79.lag[eye][spidy::jitter_slow::bucket(lag)];
+    else if (best == jc::none)
+        ++level79.unmatched[eye];
     switch (best) {
     case jc::lens:
         ++e.matchLens;
@@ -490,6 +502,10 @@ void jitterCheckRun(unsigned eye, const float jitter[2]) {
     if (o.runs) {
         const float diff = std::max(std::fabs(jitter[0] - o.job[0]), std::fabs(jitter[1] - o.job[1]));
         e.lrDiffMax = std::max(e.lrDiffMax, diff);
+        ++level79.lrCompared;
+        level79.lrDiffers += diff > 1e-9f;
+        level79.lrDiffMax = std::max(level79.lrDiffMax, diff);
+        level79.lrDiffSum += diff;
     }
     d.lastTickMs = GetTickCount64();
     ReleaseSRWLockExclusive(&jitterCheckLock);
@@ -2798,6 +2814,15 @@ std::array<float, 2> eyeJitter() {
         const uint32_t level = std::min<uint32_t>(eyeJitterLevel.load(std::memory_order_relaxed), spidy::jitter_check::levels - 1);
         walk[0] *= spidy::jitter_check::scales[level];
         walk[1] *= spidy::jitter_check::scales[level];
+        // 79.7 SLOW-WALK JITTER: LOW / MED / FULL walk a small circle of 32 steps a turn instead of the 8-phase Halton
+        // walk (jitter_slow.hpp), one value for both eyes, so a TemporalAa job a frame behind is off by at most a fifth of the
+        // amplitude. The hidden e5d2746 level keeps the old walk, to compare; OFF the fixed offset (eyeJitterFor).
+        if (level >= spidy::jitter_check::low && level <= spidy::jitter_check::full) {
+            float x = 0, y = 0;
+            spidy::jitter_slow::walk(frameIndex, spidy::jitter_check::maxStoredPixels(level), x, y);
+            walk[0] = x / render[0];
+            walk[1] = y / render[1];
+        }
         const auto j = spidy::sm1style::eyeJitterFor(eyeJitterOff.load(std::memory_order_relaxed) != 0, walk);
         eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
         eyeJitterSent[1].store(j[1], std::memory_order_relaxed);

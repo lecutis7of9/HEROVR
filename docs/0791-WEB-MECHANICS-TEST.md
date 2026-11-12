@@ -254,3 +254,15 @@ headset-verified. Nothing in this build reads or forces the game's own hero stat
   a floor crawl), with the game's collision flags and the speed on each contact line. Whether a given moment is the game's crawl or its wall run is not
   separated, and 79.6 has not been seen on a headset: whether the game's wall run takes over at speed, the earlier run371 view inversion, and the hand-over
   from a swing are what the test must show.
+
+## 79.7 (includes everything in 79.6)
+
+From the 79.6 test (0e1aae5): "feet far back from the wall, waist up vanishes, the view does a 180 on the left stick, hand over hand is useless, no green dot, far buildings shake more with jitter".
+
+1. **GAME WALL ANIMS stick / yaw.** With the level wall view (which GAME WALL ANIMS sets) the stick-to-yaw alignment that turned the tracking space 160-170 degrees as a climb began is off. The stick is laid on the wall's own up and right (forward climbs). A *yaw jump safety* replaces the tilt flip detector (which never fired): a yaw change over 60 degrees in one frame on a wall without right-stick input is put back, and `79.7 WALL ... VIEW YAW JUMP` is logged and counted (`view_flips`, `max_yaw_jump_degrees` in the report's `wall_anims`).
+2. **Wall frame and stand-off (game crawl, level view).** The head stands 0.3 m off the wall (no crouch). The body solver gets the wall's normal and the head's distance to its plane; each foot that stands more than 8 cm further from the wall than the game's sole should is pressed to the plane (the game's leg pose is kept otherwise).
+3. **Hand-climb reach** 0.7 m against the wall plane while GAME WALL ANIMS is ON (0.45 m otherwise).
+4. **Bold Web Line marker.** While the gesture holds its grip: a filled green disc (red cross when the release would not lay a line, or the aim meets nothing) of at least 40 px, drawn whatever RETICLES says, and a preview line from the first anchor. Counters (`webline_marker` in the report): marker set / drawn per hand, first-frame target valid, valid / not valid / no-target frames, preview drawn.
+5. **Slow-walk jitter.** LOW / MED / FULL walk a circle of 32 steps a turn (amplitude 0.10 / 0.22 / 0.44 px), the same phase for both eyes, so a TemporalAa job one frame behind is off by at most 0.196 of the amplitude. Per level counters (`jitter_levels` in the report): the job's lag (0 / 1 / 2 / 3+ frames) per eye and the left-right difference.
+
+Unproven: all five need a headset. The body wall frame and the stand-off distances are guesses from the 79.6 numbers.

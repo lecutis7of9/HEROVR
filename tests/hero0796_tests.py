@@ -51,14 +51,14 @@ class Toggle(unittest.TestCase):
 
     def test_safety_and_diagnostics_are_wired(self):
         g = src('src/game_xr.cpp')
-        self.assertIn('rig.diedOrRespawned(); // the view flipped on a wall', g)
+        self.assertIn('win.yawJumpDegrees = motion.active ? motion.yawJumpDegrees : 0.f;', g)
         self.assertIn('wallWatch.update(', g)
         self.assertIn('wallAct.autoOff', g)
         self.assertIn('SpidyWallAnimsData = wallWatch.data();', g)
         self.assertIn('wall_anims::summary(', g)
         h = src('include/spidy/wall_anims.hpp')
-        self.assertIn('79.6 WALL', h)
-        self.assertIn('flipDegrees = 80.f', h)
+        self.assertIn('79.7 WALL', h)
+        self.assertIn('yawJumpDegrees = 60.f', h)
         self.assertIn('autoOffDrops = 3', h)
         r = src('tools/run_game_vr.py')
         self.assertIn('wall_anims=wall_anims_last', r)
@@ -90,7 +90,7 @@ class Record(unittest.TestCase):
         self.assertEqual(r['events'][1]['kind'], 'drop')
         self.assertFalse(r['hero_state_read'])
         line = W.wall_anims_line(r)
-        self.assertTrue(line.startswith('79.6 WALL'))
+        self.assertTrue(line.startswith('79.7 WALL'))
         self.assertIn('the game\'s hero state is not read', line)
 
     def test_bad_records(self):
@@ -101,12 +101,12 @@ class Record(unittest.TestCase):
 
 
 class Version(unittest.TestCase):
-    def test_tag_is_79_6(self):
+    def test_tag_is_79_7(self):
         c = src('CMakeLists.txt')
-        self.assertIn('set(HERO_TEST_VERSION "0.0.79.6"', c)
-        self.assertIn('set(HERO_TEST_NUMBER "6"', c)
-        self.assertIn('HERO VR 79.6 TEST (commit', src('.github/workflows/dynamic-body-0791.yml'))
-        self.assertIn('HERO VR 79.6 TEST (includes 79.5)', src('src/game_xr.cpp'))
+        self.assertIn('set(HERO_TEST_VERSION "0.0.79.7"', c)
+        self.assertIn('set(HERO_TEST_NUMBER "7"', c)
+        self.assertIn('HERO VR 79.7 TEST (commit', src('.github/workflows/dynamic-body-0791.yml'))
+        self.assertIn('HERO VR 79.7 TEST (includes 79.6)', src('src/game_xr.cpp'))
         self.assertIn('wall_anims_tests', src('.github/workflows/dynamic-body-0791.yml'))
 
 

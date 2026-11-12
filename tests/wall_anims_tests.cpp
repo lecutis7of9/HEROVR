@@ -82,23 +82,17 @@ int main() {
         for (int i = 0; i < 12; ++i) r.step(in);
         CHECK(r.w.data().drops == 0);
     }
-    { // the view flip: 80 degrees for 0.25 s on a wall levels once, then waits 2 s; OFF never acts
+    { // 79.7 the yaw jump the tracking space put back: counted and noted, with its size
         Run r;
         Input in{};
-        in.enabled = true; in.surface = 2; in.tiltDegrees = 120;
-        int levels = 0;
-        for (int i = 0; i < 20; ++i) levels += r.step(in).levelView;
-        CHECK(levels == 1 && r.w.data().flips == 1);
-        for (int i = 0; i < 60; ++i) levels += r.step(in).levelView;
-        CHECK(levels == 2);
-        Run off;
-        in.enabled = false;
-        for (int i = 0; i < 30; ++i) CHECK(!off.step(in).levelView);
-        Run brief;
-        in.enabled = true;
-        for (int i = 0; i < 3; ++i) CHECK(!brief.step(in).levelView);
-        in.tiltDegrees = 10;
-        for (int i = 0; i < 10; ++i) CHECK(!brief.step(in).levelView);
+        in.enabled = true; in.surface = 2;
+        for (int i = 0; i < 10; ++i) r.step(in);
+        CHECK(r.w.data().flips == 0 && !r.has(flip));
+        in.yawJumpDegrees = -165.f;
+        r.step(in);
+        in.yawJumpDegrees = 0.f;
+        r.step(in);
+        CHECK(r.w.data().flips == 1 && r.has(flip) && r.w.data().maxYawJumpDegrees > 164.f);
     }
     { // a far fall is logged
         Run r;
@@ -109,13 +103,13 @@ int main() {
         for (int i = 0; i < 40; ++i) { in.y -= 2.5f; r.step(in); }
         CHECK(r.has(farFall) && r.w.data().farFalls == 1);
     }
-    { // the ring keeps the latest events; text and summary say '79.6 WALL'
+    { // the ring keeps the latest events; text and summary say '79.7 WALL'
         Run r;
         Input in{};
         for (int i = 0; i < 40; ++i) { in.surface = i % 2 ? 0 : 1; in.airborne = !(i % 2); r.step(in); }
         CHECK(r.w.data().eventCount == ringSize && r.w.data().eventTotal > ringSize);
-        for (const auto& n : r.notes) CHECK(text(n).rfind("79.6 WALL", 0) == 0);
-        CHECK(summary(r.w.data()).rfind("79.6 WALL:", 0) == 0);
+        for (const auto& n : r.notes) CHECK(text(n).rfind("79.7 WALL", 0) == 0);
+        CHECK(summary(r.w.data()).rfind("79.7 WALL:", 0) == 0);
     }
     std::puts("wall_anims tests passed");
 }

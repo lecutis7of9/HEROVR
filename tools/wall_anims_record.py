@@ -1,5 +1,5 @@
 # SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR.
-"""79.6 WALL WATCH: SpidyWallAnimsData (include/spidy/wall_anims.hpp Data, 512 bytes) for the report and the console:
+"""79.7 WALL WATCH: SpidyWallAnimsData (include/spidy/wall_anims.hpp Data, 512 bytes) for the report and the console:
 GAME WALL ANIMS ON / OFF, the wall contacts by kind, hand-overs, drops, out-of-world falls, view flips, recoveries, the
 seconds on each kind of surface and the last 24 events with their session seconds. The game's own hero state
 (HeroStateWallCrawl / WallRun / Perch) is NOT read by the mod: the surface kinds come from the swing bridge. No Windows
@@ -40,7 +40,7 @@ def wall_anims_parse(raw):
                 contacts={CLASSES[i]: contacts[i] for i in range(3, 6)}, hand_overs=hand_overs, drops=drops,
                 drops_off_game_wall=drops_game, out_of_world=far_falls, view_flips=flips, recoveries=recoveries,
                 toggles=toggles, deferrals=deferrals,
-                seconds={CLASSES[i]: round(seconds[i], 1) for i in range(1, 6)}, max_view_tilt_degrees=round(max_tilt, 1),
+                seconds={CLASSES[i]: round(seconds[i], 1) for i in range(1, 6)}, max_yaw_jump_degrees=round(max_tilt, 1),
                 last_contact_speed=round(last_speed, 1), events_total=event_total, session_seconds=round(session_ms / 1000, 1),
                 events=events, hero_state_read=False,
                 note='the mod does not read the game hero state (HeroStateWallCrawl / WallRun / Perch); surfaces come from the swing bridge')
@@ -58,14 +58,14 @@ def wall_anims_snapshot(game, address):
 
 
 def wall_anims_line(record):
-    """The console's '79.6 WALL' line (wall_anims_snapshot), or None before anything happened."""
+    """The console's '79.7 WALL' line (wall_anims_snapshot), or None before anything happened."""
     if not record or not (record['events_total'] or record['toggles']):
         return None
     c, s = record['contacts'], record['seconds']
-    return (f"79.6 WALL (report): GAME WALL ANIMS {record['game_wall_anims'].upper()}"
+    return (f"79.7 WALL (report): GAME WALL ANIMS {record['game_wall_anims'].upper()}"
             f"{' (wanted ' + record['wanted'].upper() + ')' if record['wanted'] != record['game_wall_anims'] else ''}; "
             f"contacts own {c['own wall']} / game {c['game wall']} / floor {c['floor crawl']}; hand-overs {record['hand_overs']}; "
             f"drops {record['drops']} (off the game's wall {record['drops_off_game_wall']}); out-of-world? {record['out_of_world']}; "
-            f"view flips {record['view_flips']}; recoveries {record['recoveries']}; "
+            f"view yaw jumps put back {record['view_flips']}; recoveries {record['recoveries']}; "
             f"seconds own wall {s['own wall']}, game wall {s['game wall']}, floor crawl {s['floor crawl']}, air {s['air']}; "
-            f"max view tilt {record['max_view_tilt_degrees']} deg; the game's hero state is not read.")
+            f"largest yaw jump {record['max_yaw_jump_degrees']} deg; the game's hero state is not read.")

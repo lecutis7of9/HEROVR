@@ -91,6 +91,9 @@ jobs:
           & "$ws/tools/launcher/build.ps1" -Out "$ws/out/ci/SM2VRLauncher.exe"
           Set-Location $ws
           if (-not (Test-Path "$ws/out/ci/SM2VRLauncher.exe")) { throw 'Launcher compilation failed' }
+          # package.ps1 (79.1+) packs tools/launcher/SM2VRLauncher.exe into the mod zip.
+          New-Item -ItemType Directory -Force -Path "$ws/tools/launcher" | Out-Null
+          Copy-Item -LiteralPath "$ws/out/ci/SM2VRLauncher.exe" -Destination "$ws/tools/launcher/SM2VRLauncher.exe" -Force
           python -B "$ws/tools/launcher/tools/check-netfx.py" "$ws/tools/launcher/src"
           if ($LASTEXITCODE) { throw 'Launcher framework check failed' }
       - name: Package mod files with bundled Python and both renderers

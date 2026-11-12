@@ -4,7 +4,7 @@
 // 39.0") is kept for the changelog and the reports. docs/VERSIONING.md: the next builds are 0.0.6, 0.0.7...
 namespace spidy::version {
 #ifndef SPIDY_PUBLIC_VERSION
-#define SPIDY_PUBLIC_VERSION "0.0.79" // a build without CMake's definition (the strict checks)
+#define SPIDY_PUBLIC_VERSION "0.0.80" // a build without CMake's definition (the strict checks)
 #endif
 inline constexpr const char* number = SPIDY_PUBLIC_VERSION;
 inline constexpr const char* statusLine = "VERSION " SPIDY_PUBLIC_VERSION; // top right of the hologram's STATUS page
@@ -12,5 +12,5 @@ inline constexpr const char* statusLine = "VERSION " SPIDY_PUBLIC_VERSION; // to
 // this build's maker only. SpidyVR's author is credited in LICENSE, CREDITS.md and the source headers.
 inline constexpr const char* madeBy = "MADE BY AGENT MULDER";
 inline constexpr const char* madeByText = "Made by Agent Mulder";
-inline constexpr const char* build = "39.12"; // PORT-VERSION Update 39.12 (Version 0.0.79: Original/Revamped renderer selection and 70% temporal reconstruction).
+inline constexpr const char* build = "39.12"; // PORT-VERSION Update 39.12 (Version 0.0.80: Classic and Performance, same new gameplay).
 } // namespace spidy::version

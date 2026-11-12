@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
-project(Spidy VERSION 0.0.79 LANGUAGES C CXX)
+project(Spidy VERSION 0.0.80 LANGUAGES C CXX)
 # Every target on Windows: windows.h must never define min/max macros (they break std::min/std::max, MSVC C2589).
 if(WIN32)
   add_compile_definitions(NOMINMAX)
 endif()
 # The public version (semver, docs/VERSIONING.md): the launcher, the zip, the tag and VERSION all follow
-# this line; PORT-VERSION keeps the internal build ("Update 39.12"). Version 0.0.79 (tag v0.0.79) adds Original/Revamped native renderer selection and the tested 70% temporal upscaler.
+# this line; PORT-VERSION keeps the internal build ("Update 39.12"). Version 0.0.80 (tag v0.0.80) ships the new gameplay on both Classic (Original) and Performance, with Classic as the 0.0.78-style default.
 add_compile_definitions(SPIDY_PUBLIC_VERSION="${PROJECT_VERSION}")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

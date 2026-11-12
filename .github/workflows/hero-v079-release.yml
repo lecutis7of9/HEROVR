@@ -1,7 +1,7 @@
 name: HERO VR 0.0.79 public release - Original and Revamped
 on:
   push:
-    branches: [release/079-original-revamped, main]
+    branches: [release/079-original-revamped]
 permissions:
   contents: write
 

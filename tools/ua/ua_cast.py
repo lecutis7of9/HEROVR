@@ -563,8 +563,62 @@ def load_built(look, npz_path):
     while f'img{k}' in d:
         images.append(Image.fromarray(d[f'img{k}'], 'RGBA'))
         k += 1
-    return dict(look, frames=list(d['frames']), uv=d['uv'], image=d['image'], images=images,
-                seconds=float(d['seconds']))
+    frames = list(d['frames'])
+    lean = None
+    if not look.get('principal'):
+        frames, lean = straighten(frames)
+    return dict(look, frames=frames, uv=d['uv'], image=d['image'], images=images,
+                seconds=float(d['seconds']), lean=lean)
+
+
+# The background people's talking / waiting loops (EA_ZONE7 / EA_ZONE10) hold the whole body pitched 11 to 23 degrees
+# forward (the game's camera looks down from far above and never shows it; a pair is meant to lean in on each other).
+# Close up, in VR, that reads as hunched and leaning at odd angles. Each such look is tilted back, as a whole and by
+# one fixed angle for its loop (so its own motion stays), about its feet until its lean is `target` degrees (the
+# principals' own idles lean 4 to 9) - and put back on the floor.
+LEAN_TARGET = 5.0
+LEAN_ABOVE = 9.0
+
+
+def lean_of(frame):
+    """(degrees from vertical, horizontal lean direction (x, z) unit) of a posed frame (glTF metres): its head
+    (top 18 cm) over its feet (bottom 10 cm)."""
+    import numpy as np
+    P = np.asarray(frame, dtype=np.float64)
+    y = P[:, 1]
+    top, bot = P[y > y.max() - .18], P[y < y.min() + .10]
+    v = top.mean(0) - bot.mean(0)
+    h = float(np.hypot(v[0], v[2]))
+    ang = float(np.degrees(np.arctan2(h, v[1])))
+    return ang, (np.array([v[0], v[2]]) / h if h > 1e-6 else np.array([1.0, 0.0]))
+
+
+def straighten(frames, target=LEAN_TARGET, above=LEAN_ABOVE):
+    """frames (each (N, 3) glTF metres, y up, feet on y 0) -> (frames tilted back about the feet, the lean before) or
+    the same frames when the loop's mean lean is `above` degrees or less."""
+    import numpy as np
+    leans = [lean_of(f) for f in frames]
+    mean = float(np.mean([a for a, _ in leans]))
+    if not (mean > above):
+        return frames, mean
+    out = []
+    for f, (lean, dirv) in zip(frames, leans):
+        # tilt back to `target` plus a quarter of this frame's own sway (its motion stays, the hunch goes)
+        tilt = np.radians(max(lean - (target + .25 * (lean - mean)), 0.0))
+        axis = np.array([dirv[1], 0.0, -dirv[0]])          # horizontal, across the lean
+        c, s_ = np.cos(tilt), np.sin(tilt)
+        P = np.asarray(f, dtype=np.float64)
+        foot = P[P[:, 1] < P[:, 1].min() + .10].mean(0)
+        foot[1] = P[:, 1].min()
+        q = P - foot
+
+        def rot(qq, sg):                                   # Rodrigues about `axis`
+            return qq * c + np.cross(axis, qq) * (sg * s_) + np.outer(qq @ axis, axis) * (1 - c)
+        best = min((rot(q, 1), rot(q, -1)), key=lambda r: lean_of(r + foot)[0])  # the turn that stands the head up
+        R = best + foot
+        R[:, 1] -= R[:, 1].min()                           # back on the floor
+        out.append(R.astype(np.float32))
+    return out, mean
 
 
 # ---------------------------------------------------------------- talk.txt read back (previews, tests)

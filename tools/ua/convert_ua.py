@@ -10,7 +10,8 @@ writes the converted room into your HERO VR install. Nothing is sent anywhere; t
                                 --out "<HERO VR folder>/Models/UA/StarkTower"
                                 [--work <scratch dir>] [--previews]
 
---no-cast skips the characters, their lines and voices; --no-body the player's body (Models/UA/Body).
+--no-cast skips the characters, their lines and voices. (v4: no player body is built any more - MUA's Spider-Man
+is retired; in a UA place HERO VR shows the player's own SM2 hero, include/spidy/ua_body.hpp.)
 
 Needs: Python 3.10+ with numpy, pillow, pycdlib and raven-formats (pip install numpy pillow pycdlib raven-formats);
 Blender 4.4; Kaiko's
@@ -30,9 +31,6 @@ Writes into --out (exactly what HERO VR reads, Models/UA/StarkTower):
   Voice/     the lines' own voice clips (v0000.wav ...) from the hub's sound bank (SOUNDS/T/O/TOWN1_V.ENS;
              with --wad and no --sounds: subtitles only)
   report.txt what the converter did
-and beside it, Models/UA/Body/scene.glb: the player's own body in UA places - MUA1's Spider-Man (0901, from
-packages/generated/characters/spiderman_0901.fb) as a HERO VR suit (16 bones, tools/ua/ua_body.py), worn when
-no roster suit is (include/spidy/ua_body.hpp)
 and, with --previews, walk_overlay.png (the walk grid over the floor plan), eye-level renders, cast_hub.png (the
 hub with its characters) and cast_closeup.png (one character with a subtitle mock).
 Then start the game with ua_locations on (the default) and open the wrist's ULTIMATE ALLIANCE EXPANSION page.
@@ -137,30 +135,6 @@ def build_cast(a, pkg, work, out, env):
                 f'conversations, {n} lines, {len(index)} voice clips\n')
 
 
-def build_body(a, wad, work, body_out, env):
-    """The player's body in UA places (include/spidy/ua_body.hpp): MUA1's own Spider-Man (0901) from the disc, made
-    into a HERO VR suit at Models/UA/Body (Blender: build_body.py, then ua_body.make_suit)."""
-    import ua_body
-    import ua_extract
-    want = ua_body.BODY_PACKAGE.lower()
-    hits = [n for n in wad.names if n.replace('\\', '/').lower().endswith(want)]
-    if not hits:
-        print(f'no {ua_body.BODY_PACKAGE} on this disc: no body in UA places (the gloves instead)')
-        return None
-    pkg = work / 'pkgbody'
-    ua_extract.fb_unpack(wad.read(hits[0]), pkg / 'body')
-    actors = pkg / 'body' / 'actors'
-    skin, anim = actors / f'{ua_body.BODY_SKIN}.igb', actors / ua_body.BODY_ANIM
-    if not skin.exists() or not anim.exists():
-        print(f'{ua_body.BODY_PACKAGE}: {skin.name} or {anim.name} missing: no body in UA places')
-        return None
-    npz = work / 'body.npz'
-    run([a.blender, '-b', '--factory-startup', '--python', HERE / 'build_body.py', '--', skin, anim, npz], env)
-    notes = ua_body.make_suit(npz, body_out)[0]
-    print('body: ' + '; '.join(notes))
-    return notes
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     src = ap.add_mutually_exclusive_group(required=True)
@@ -173,7 +147,6 @@ def main():
     ap.add_argument('--previews', action='store_true', help='also render walk_overlay.png and eye-level views into --out')
     ap.add_argument('--sounds', help="the disc's hub sound bank (TOWN1_V.ENS) when --wad is used (voices)")
     ap.add_argument('--no-cast', action='store_true', help='leave out the characters and their conversations')
-    ap.add_argument('--no-body', action='store_true', help="leave out the player's body (Models/UA/Body)")
     ap.add_argument('--scale', type=float, default=0.0254,
                     help='metres per game unit (default 0.0254: Raven units are inches, a 72-unit hero ~ 1.83 m)')
     a = ap.parse_args()
@@ -221,11 +194,6 @@ def main():
 
         if not a.no_cast:
             build_cast(a, pkg / MAP, work, out, env)
-
-        if not a.no_body:
-            notes = build_body(a, wad, work, out.parent / 'Body', env)
-            with open(out / 'report.txt', 'a') as f:
-                f.write('body ' + ('; '.join(notes) if notes else 'none (gloves in UA places)') + '\n')
 
         if a.previews:
             grid = next(l for l in (room / 'room.txt').read_text().splitlines() if l.startswith('grid '))

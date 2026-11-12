@@ -8,9 +8,9 @@
 // two-bone arms to the grips, the fingers curling with the trigger and grip, the legs stepping with the walk), standing
 // on the room's floor under the eyes.
 //
-// Which body (pick): the hero's own worn suit when one is (the roster's - IRON MAN, CAP...), else the hub's UA body
-// (Models\UA\Body: the player's own MUA1 Spider-Man, converted from his disc by tools/ua/convert_ua.py - bring your own
-// game, never shipped), else the fallback gloves (glove_overlay) - never nothing while the hands are tracked.
+// Which body (pick): the hero's own worn suit when one is (the roster's - IRON MAN, CAP...), else (v4) the player's own SM2
+// Spider-Man, the game's, shown through the room (ua_body_cut.hpp), else nothing. The MUA1 Spider-Man avatar of v2 / v3
+// (Models\UA\Body) and the fallback gloves are gone: the owner wants only the real SM2 body.
 //
 // LATER (combat and powers): the avatar is one function of a Drive - the tracked poses plus what the hero is doing.
 // Today only the tracked poses and the fingers; a power (a web shot, a punch, a repulsor) would set the hand's pose or
@@ -24,22 +24,23 @@
 
 namespace spidy::ua_body {
 
-// Models\UA\Body (mesh_model::slotUaBody's folder; the converter writes it beside UA\StarkTower).
+// Models\UA\Body (mesh_model::slotUaBody's folder). RETIRED in v4: MUA1's own Spider-Man is no longer a body anywhere
+// (owner: only the real SM2 Spider-Man). The slot stays in the list (its numbers are the saved layout) but is never loaded
+// - not even from a v3 install's leftover folder - and the converter no longer builds it.
 inline constexpr const char* folder = "UA/Body";
 
-enum class Source : uint8_t { none, wornSuit, uaBody, gloves };
-inline constexpr const char* sourceNames[4] = {"none", "worn suit", "UA body", "gloves"};
+enum class Source : uint8_t { none, wornSuit, gameHero };
+inline constexpr const char* sourceNames[3] = {"none", "worn suit", "game hero"};
 
-// The body drawn in a UA place: the worn suit (ready to wear) first, then the UA body, then the gloves when the hands are
-// tracked. Outside a UA place: none from here (the worn suit's and the game's body are as they always were).
-constexpr Source pick(bool inUa, bool flatScreen, bool wornSuitReady, bool uaBodyReady, bool handsTracked) {
+// The body shown in a UA place (v4): the roster hero's worn suit (ready to wear) first; else the player's OWN SM2 hero, the
+// game's, posed by native_body and shown through the room by the cut (ua_body_cut.hpp), when native_body is drawing him;
+// else NOTHING - never a stand-in body (MUA's, gloves). Outside a UA place: none from here.
+constexpr Source pick(bool inUa, bool flatScreen, bool wornSuitReady, bool nativeBodyDrawn) {
     if (!inUa || flatScreen)
         return Source::none;
     if (wornSuitReady)
         return Source::wornSuit;
-    if (uaBodyReady)
-        return Source::uaBody;
-    return handsTracked ? Source::gloves : Source::none;
+    return nativeBodyDrawn ? Source::gameHero : Source::none;
 }
 
 // The bones drawn in first person in a UA place: the FULL BODY (no game body stands in there: the player looks down at

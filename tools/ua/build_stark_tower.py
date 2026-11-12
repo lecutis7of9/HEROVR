@@ -65,6 +65,60 @@ def bbox(o):
     return [min(p[i] for p in pts) for i in range(3)], [max(p[i] for p in pts) for i in range(3)]
 
 
+
+# ---- UA EXPANSION fix 4 (the missing entities): the map's props that are ENTITIES (the elevator doors, the lift, the
+# waterfall with its statue and pond, the bridge rail) are stored in __combined.igb once, at the engine's origin
+# (under the south end of the hub, below its lowest floor), and the engine puts a copy at each `entinst` of the
+# engb. Importing only the combined file left them there: the door openings stood open on the city, the lift's
+# round hatch was a hole and the waterfall's pond a crater. Each prototype (found by its import name AND its texture,
+# so another disc build leaves it alone with a warning) is copied to each of its instances. ----
+ENTITY_PARTS = {  # entity type -> [(import name, texture, triangles)]
+    'door': [('__combined_032', 'stk_door_logo', 15), ('__combined_033', 'stk_door_logo', 13)],
+    'doors_logo_stk_d_01': [('__combined_032', 'stk_door_logo', 15), ('__combined_033', 'stk_door_logo', 13)],
+    'lift': [('__combined_1337', 'u_platform_lift_gold_atl_m', 76), ('__combined_1336', 'console_lift_gold_stk_s', 200),
+             ('__combined_040', 'stk_floor_metal_alt_2', 26)],
+    'waterfall': [('__combined_021', 'waterfall_stk_water', 48), ('__combined_022', 'waterfall_stk_water', 45),
+                  ('__combined_023', 'waterfall_stk_water', 14), ('__combined_043', 'statue_women_stk', 1298)],
+    'bridge_railing': [('__combined_1355', 'stk_basic_2', 199), ('__combined_1356', 'stk_basic_2', 26),
+                       ('__combined_1357', 'stk_basic_2', 22)],
+}
+PLACED_PROTOS = set()
+
+
+def place_entities():
+    placed = []
+    for etype, parts in ENTITY_PARTS.items():
+        inst_el = insts.get(etype)
+        if inst_el is None:
+            continue
+        pos = vec(inst_el.get('pos'))
+        yaw = vec(inst_el.get('orient') or '0 0 0')[2]
+        for (name, tex, ntri) in parts:
+            src = bpy.data.objects.get(name)
+            if src is None or tex not in images_of(src):  # (ntri: the exported count, after the duplicate-face pass)
+                placed.append(f'{etype}: prototype {name} not as expected, skipped')
+                continue
+            cp = src.copy()
+            cp.data = src.data.copy()
+            bpy.context.scene.collection.objects.link(cp)
+            cp.name = f'ua_ent_{etype}_{name}'
+            mw = src.matrix_world.copy()
+            c, sn = math.cos(yaw), math.sin(yaw)
+            for v in cp.data.vertices:
+                w = mw @ v.co
+                v.co = mathutils.Vector((w.x * c - w.y * sn + pos[0], w.x * sn + w.y * c + pos[1], w.z + pos[2]))
+            cp.matrix_world = mathutils.Matrix.Identity(4)
+            PLACED_PROTOS.add(name)
+        placed.append(f'{etype} placed at {pos}')
+    for name in sorted(PLACED_PROTOS):  # the prototypes themselves (under the hub): gone
+        ob = bpy.data.objects.get(name)
+        if ob is not None:
+            bpy.data.objects.remove(ob, do_unlink=True)
+    return placed
+
+
+entity_notes = place_entities()
+
 # ---- the backdrop: anything far bigger than the hub (sky box, city ground, buildings) ----
 span = max(ext_hi[0] - ext_lo[0], ext_hi[1] - ext_lo[1])
 cx, cy = (ext_lo[0] + ext_hi[0]) / 2, (ext_lo[1] + ext_hi[1]) / 2
@@ -161,6 +215,18 @@ if not a.no_ceiling:
     x0, x1, y0, y1 = ext_lo[0], ext_hi[0], ext_lo[1], ext_hi[1]
     z = a.ceiling
     ceiling.append(box('ua_ceiling', (x0, y0, z + 6), (x1, y1, z + 18), panel, 240))  # its underside 6 u over the walls
+    # UA EXPANSION fix 4 (the gap between the north wall and the ceiling): the big north wall (the elevator / waterfall wall,
+    # y 2075..2100 u) is only 720 u high - MUA's own camera looks down from far above and never sees over it - while the ceiling
+    # grid and the glass sides stand to 960 u: 240 u (6 m) of open sky between the wall's top and the ceiling, the whole width.
+    # A bulkhead (the ceiling's own dark panel) closes it, flush with the wall's face, from just under its top to the ceiling.
+    wall_top = max((bbox(o)[1][2] for o in bpy.data.objects if o.type == 'MESH' and o.name.startswith('__combined_') and
+                    images_of(o) == ['stk_basic_2'] and bbox(o)[0][1] > 2000 and bbox(o)[1][1] < 2105 and bbox(o)[1][2] <= 740), default=0)
+    if wall_top > 0:
+        ceiling.append(box('ua_wall_bulkhead', (x0, 2075, wall_top - 4), (x1, 2100, z + 6), panel, 240))
+        ceiling.append(box('ua_wall_backing', (x0, 2092, wall_top - 60), (x1, 2100, wall_top), panel, 240))  # behind the arched caps' dips
+        entity_notes.append(f'north wall bulkhead: {wall_top:.0f} u up to the ceiling ({z + 6:.0f} u)')
+    else:
+        entity_notes.append('WARNING north wall not found: its gap to the ceiling stays open')
     step = 240
     gx = x0
     while gx <= x1 + 1:                           # gold beams both ways, hanging under the panels
@@ -302,6 +368,17 @@ room = {
          'prompt': "RETURN TO CITY - Wyatt Wingfoot's Quinjet (A or trigger)", 'pos_gltf': qpos},
     ],
 }
+# UA EXPANSION fix 4: the two places in this hub that lead on in MUA1 (the engb's own link triggers), each a point whose
+# prompt says where it goes. Both end in "COMING SOON" for now (hideout074::Action::comingSoon: any other action word):
+# their far sides (Iron Man's Lab, stark2) are not converted yet.
+for pid, ename, prompt, rad in (
+        ('arrival_lift', 'lift', "ARRIVAL LIFT - Stark Tower's elevator down (A or trigger) - the rest of the tower is coming soon", 2.6),
+        ('ironman_lab', 'link_stark2', "IRON MAN'S LAB - behind the waterfall (A or trigger) - coming soon", 3.0)):
+    ie = insts.get(ename)
+    if ie is not None:
+        pg = to_room(vec(ie.get('pos')))
+        room['points'].append({'id': pid, 'type': 'interact', 'action': 'to_' + pid, 'radius': rad, 'prompt': prompt,
+                               'pos_gltf': [pg[0], 0.0, pg[2]]})
 json.dump(room, open(os.path.join(a.out, 'room.json'), 'w'), indent=1)
 
 # ---- npcs.txt: the characters update's hooks (every spawner the engb places) ----
@@ -316,6 +393,6 @@ open(os.path.join(a.out, 'npcs.txt'), 'w', newline='\n').write('\n'.join(lines) 
 tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in everything)
 rep = [f'scale {S} m/unit, origin {O} (player_start_all01), start yaw {start_yaw:.1f}',
        f'objects {len(everything)} (walk {len(walk)}, backdrop {len(backdrop)}, ceiling {len(ceiling)}, window panes left out {len(panes)}), triangles {tris}',
-       *moved, f'npcs {len(lines) - 2}']
+       *entity_notes, *moved, f'npcs {len(lines) - 2}']
 open(os.path.join(a.out, 'report.txt'), 'w').write('\n'.join(rep) + '\n')
 print('\n'.join(rep))

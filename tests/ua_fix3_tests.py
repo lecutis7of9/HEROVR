@@ -1,6 +1,6 @@
 """ULTIMATE ALLIANCE EXPANSION fix 3 (Stark Tower test 2 feedback): the player's OWN SM2 hero in UA places (the game's
 body posed by native_body, shown through the room by a body-shaped depth cut; include/spidy/ua_body_cut.hpp, the
-renderer's setBodyCut) with the UA body only as the fallback, and the room's solid materials opaque (tools/ua/ua_alpha.py:
+renderer's setBodyCut; v4: no fallback body at all), and the room's solid materials opaque (tools/ua/ua_alpha.py:
 no stray alpha holes flickering in the furniture)."""
 import io, json, os, struct, sys, tempfile, unittest
 import numpy as np
@@ -17,13 +17,16 @@ class Wiring(unittest.TestCase):
     def test_native_body_wanted_in_ua(self):
         self.assertIn('gameBodyDrawn(values.body || strictBody || uaVisit.active(),', self.g)
 
-    def test_game_hero_over_the_ua_body(self):
-        self.assertIn('ua_body_cut::gameHero(uaHere, saved->flatScreen, native_body::drawn(),', self.g)
-        self.assertIn('const uint32_t bodySlot = uaGameHero ? 0u :', self.g)
+    def test_game_hero_never_given_up_and_no_stand_in(self):
+        # v4: the cut is asked for every frame his own hero is drawn; no 240-frame give-up, no MUA body, said when missing
+        self.assertIn('const bool uaGameHero = uaSource == ua_body::Source::gameHero;', self.g)
+        self.assertNotIn('uaCutGiveUp', self.g)
+        self.assertNotIn('uaCutMisses', self.g)
+        self.assertIn('const uint32_t bodySlot = uaSource == ua_body::Source::wornSuit ? wornNow : 0u;', self.g)
         self.assertIn('overlay.setBodyCut(std::move(cut));', self.g)
         self.assertIn('who.footY = rendered.anchor.y + travel.y;', self.g)
-        # the UA body never locks the game's body out
-        self.assertIn('!mesh_model::slotIsUaBody(ws))\n                                        suitShownAtMs.store', self.g)
+        self.assertIn('UA OWN HERO: ', self.g)
+        self.assertIn('UA BODY: not showing - ', self.g)
         # the scene depth asked for in UA places
         self.assertIn('(seeThroughCount || sunShadow || uaCutDepth) && !saved->stereoScreen', self.g)
 

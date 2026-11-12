@@ -37822,10 +37822,12 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         check(hero007::modelSinkBudget >= 3 * (size_t{mm::uaRoomTriangles} + size_t{ua_cast::drawBudget} + size_t{mm::drawTriangles}),
               "the model sink holds the room, its characters and the player's body");
         using S = ub::Source;
-        check(ub::pick(true, false, true, true, true) == S::wornSuit && ub::pick(true, false, false, true, true) == S::uaBody &&
-                  ub::pick(true, false, false, false, true) == S::gloves && ub::pick(true, false, false, false, false) == S::none,
-              "in a UA place: the worn suit, else the UA body, else the gloves");
-        check(ub::pick(false, false, true, true, true) == S::none && ub::pick(true, true, true, true, true) == S::none,
+        // v4: the worn roster suit, else his own SM2 hero (native_body drawing him), else NOTHING (no MUA body, no gloves)
+        check(ub::pick(true, false, true, true) == S::wornSuit && ub::pick(true, false, false, true) == S::gameHero &&
+                  ub::pick(true, false, false, false) == S::none && ub::pick(true, false, true, false) == S::wornSuit,
+              "in a UA place: the worn suit, else the player's own SM2 hero, else nothing");
+        check(ub::pick(false, false, true, true) == S::none && ub::pick(true, true, true, true) == S::none &&
+                  ub::pick(true, true, false, true) == S::none,
               "outside a UA place, or on the flat screen: nothing from here");
         check(ub::mask(0) == suit_wear::bodyBones && ub::mask(1) == suit_wear::bodyBones && ub::mask(2) == suit_wear::armBones &&
                   !(ub::mask(0) & (1u << suit_wear::boneHead)),
@@ -37902,10 +37904,15 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         bad = p;
         bad.eye.x = NAN;
         check(uc::capsules(bad, c) == 0, "a bad pose: no cut");
-        check(uc::gameHero(true, false, true, true) && !uc::gameHero(true, false, false, true) &&
-                  !uc::gameHero(true, false, true, false) && !uc::gameHero(false, false, true, true) &&
-                  !uc::gameHero(true, true, true, true),
-              "his own hero when native_body draws him and the cut can come through; else the UA body");
+        // v4: the cut is never given up and there is no stand-in; what is missing is named (why)
+        using W = uc::Why;
+        check(uc::why(false, true, true, 9, false) == W::notInUa && uc::why(true, false, true, 9, false) == W::heroNotPosed &&
+                  uc::why(true, true, true, 9, true) == W::cutFault && uc::why(true, true, false, 9, false) == W::notRequested &&
+                  uc::why(true, true, true, 0, false) == W::noDepth && uc::why(true, true, true, 1, false) == W::shown,
+              "the first thing missing is named: not in UA, hero not posed, cut off, not asked, no depth, shown");
+        check(std::string(uc::whyNames[static_cast<unsigned>(W::shown)]).size() > 10 &&
+                  std::string(uc::whyNames[static_cast<unsigned>(W::noDepth)]).find("depth") != std::string::npos,
+              "each reason has words for the log and the screen");
     });
     test("ULTIMATE ALLIANCE EXPANSION CHARACTERS: cast.txt, talk.txt, who is there, whom he talks to, the talk, the draw", [] {
         namespace mm = mesh_model;

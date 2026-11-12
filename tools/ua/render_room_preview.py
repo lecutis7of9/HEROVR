@@ -4,15 +4,16 @@ A shot: name:x,y,z:yaw_deg,pitch_deg[:lens_mm]  in room space (glTF: x right, y 
 (degrees from +x counter-clockwise seen from above), pitch up positive.
 A floor plan: plan:x0,z0,x1,z1:cut_y[:px_per_metre]  an orthographic view straight down over that room-space
 rectangle (the top of the image is z0, as make_hideout.py's walk.png), nothing above cut_y drawn."""
-import sys, math, bpy
+import sys, math, os, bpy
 argv = sys.argv[sys.argv.index('--') + 1:]
 glb, prefix, shots = argv[0], argv[1], argv[2:]
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=glb)
 sc = bpy.context.scene
-sc.render.engine = 'CYCLES'; sc.cycles.samples = 32; sc.cycles.device = 'CPU'; sc.cycles.use_denoising = False
+sc.render.engine = 'CYCLES'; sc.cycles.samples = int(os.environ.get('UA_SAMPLES', '32')); sc.cycles.device = 'CPU'; sc.cycles.use_denoising = False
 sc.view_settings.view_transform = 'Standard'
-sc.render.resolution_x, sc.render.resolution_y = 1280, 720
+RES = (int(os.environ.get('UA_RES_X', '1280')), int(os.environ.get('UA_RES_Y', '720')))
+sc.render.resolution_x, sc.render.resolution_y = RES
 w = bpy.data.worlds.new('w'); sc.world = w; w.use_nodes = True
 bg = w.node_tree.nodes['Background']; bg.inputs[0].default_value = (1, 1, 1, 1); bg.inputs[1].default_value = 1.0
 for shot in shots:
@@ -32,7 +33,7 @@ for shot in shots:
         sc.camera = ob
         sc.render.filepath = f'{prefix}{parts[0]}.png'
         bpy.ops.render.render(write_still=True)
-        sc.render.resolution_x, sc.render.resolution_y = 1280, 720
+        sc.render.resolution_x, sc.render.resolution_y = RES
         print('WROTE', sc.render.filepath)
         continue
     name, pos, ang = parts[0], [float(v) for v in parts[1].split(',')], [float(v) for v in parts[2].split(',')]

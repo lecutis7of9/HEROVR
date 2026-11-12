@@ -58,10 +58,8 @@ The converter does the following:
    the floor plan), `eye_window.png`, `eye_spawn.png`, `look_up.png`, `cast_hub.png` (the hub with its
    characters), `cast_floor.png` and `cast_closeup.png` (Nick Fury with a subtitle mock).
    `--no-cast` leaves the characters out.
-9. Builds **your body** for UA places (`tools/ua/build_body.py` in Blender, then `tools/ua/ua_body.py`): MUA's own
-   Spider-Man (the classic suit, `packages/generated/characters/spiderman_0901.fb`) on its own skeleton, made into a
-   HERO VR suit (the 16-bone skin the roster suits use) at `Models/UA/Body/scene.glb`, beside `UA/StarkTower`.
-   `--no-body` leaves it out (you get the fallback gloves instead).
+9. (v4: no body is built any more. MUA's Spider-Man avatar is retired; in a UA place you are your own SM2
+   hero, see **Your body** below.)
 
 ## Play
 
@@ -82,12 +80,12 @@ The converter does the following:
    - Hold B for 0.8 s
    - The page's button again (it reads **STARK TOWER - RETURN TO CITY**)
 
-**Your body.** In a UA place the game's own picture is hidden, and with it the game's body, so HERO VR draws you
-a body of its own. It follows your headset and both controllers: your arms reach your hands, your fingers curl
-with the trigger and grip, and your legs step when you walk. You stand on the room's floor. It uses the suit you
-wear if you wear a roster suit (IRON MAN, CAP and so on). Otherwise it uses the converted MUA Spider-Man
-(`Models/UA/Body`). If neither is there, you get the fallback gloves. You see the full body except the head and
-neck. With SUIT BODY OFF you still keep your arms and hands. Combat and powers do not drive it yet.
+**Your body (v4).** In a UA place the room is drawn over the game's picture. Your body there is, in this order: the
+roster suit you wear (IRON MAN, CAP and so on); else your OWN Spider-Man from Marvel's Spider-Man 2, the game's own
+model posed by the body module to your headset and controllers and shown through the room (see Fix 3 and Fix 4);
+else nothing. MUA's Spider-Man and the stand-in gloves are gone: you never see a body that is not the real one.
+If your own hero cannot show, the log says why (`UA OWN HERO: ...`, every 5 s) and a message appears in the headset
+after 6 s (`UA BODY: not showing - ...`). Combat and powers do not drive it yet.
 
 The page's button tells you why a press does nothing: **NOT CONVERTED** (run the converter, then restart) or
 **OFF** (`ua_locations` is off).
@@ -137,9 +135,7 @@ looking at him.
   volume round you (capsules: torso, arms to the controllers, legs to the game's ground; no head) and above your feet
   (`include/spidy/ua_body_cut.hpp`, `D3D12Renderer::setBodyCut`). Room furniture in front of you still covers him.
 - GAME BODY is switched on for the visit (whatever its setting); a worn HERO VR suit still wins, as outside.
-- **Fallback:** MUA Spider-Man (Models/UA/Body) only while the game's body is not drawn (its address checks failed,
-  a hero without one), or when the cut never comes through (no scene depth for ~3 s: the rest of the session).
-  The fallback no longer counts as a worn suit, so it never keeps the game's body off. The gloves only when neither shows.
+- (v3 had a fallback to MUA's body when the cut did not come through; v4 removed it, see Fix 4.)
 - **Flicker:** the IGB import marked every room material BLEND, so stray clear texels in solid furniture were cut as
   holes. `tools/ua/ua_alpha.py` (run by the converter) writes materials with under 2 % clear texels OPAQUE (their
   alpha ignored, no discard); the plants, leaves, water, glass and soft shadows keep their cut-outs.
@@ -162,3 +158,25 @@ looking at him.
   They have not been heard in the headset yet.
 - **Story state:** conversations that depend on story progress (the laptop, Hank Pym's helmet, the first-visit
   briefings) are left out, because the hub cannot know your progress.
+
+## Fix 4 (after Stark Tower test 3)
+
+- **The north wall, the elevator door and the round hatch.** In MUA1 the props that are *entities* (the doors, the
+  lift, the waterfall with its statue and pond, the bridge rail) are stored once at the engine's origin in
+  `__combined.igb`, and the engine places a copy at each `entinst` of the map's `.engb`. Importing only the combined
+  file left them under the hub, so the waterfall alcove (the "door") stood open on the city with a hole for its pond,
+  and the lift was a round hole with railings. The converter now copies each prototype to its instances
+  (`place_entities` in `tools/ua/build_stark_tower.py`, checked by name and texture).
+  The "door" is MUA1's waterfall wall: the way to Iron Man's Lab (`link_stark2`); the round hatch is the Act 1
+  arrival lift. Neither's far side is converted yet, so each has a point that says what it is and ends in COMING SOON.
+- **The gap above the north wall.** The wall's panels end 6.1 m up, the ceiling and the side glass stand at 12.2 m:
+  MUA's camera looks down from far above and never shows that strip. A bulkhead (the ceiling's own panel) now closes it.
+- **The S panels** are the game's own Art-Deco S tile in the game's own module layout; nothing was misplaced.
+- **Background people** (the office workers) hold their whole body pitched forward 10 to 23 degrees in the game's
+  talking and waiting loops (the game's camera never shows it). `tools/ua/ua_cast.py` stands each such loop up
+  (about 5 degrees left, the loop's own motion kept). The main characters are untouched.
+- **Your body:** see **Your body (v4)** above. MUA's Spider-Man (`Models/UA/Body`, `tools/ua/ua_body.py`) is removed
+  and never loaded, even from an older install's leftover folder. The cut is asked for every frame and no longer
+  gives up after 240 frames; the log names what is missing. Drawing the SM2 suit model ourselves needs the model
+  reader (`include/spidy/sm2_model.hpp`, CANDIDATE: its vertex layout and the GDeflate textures are not verified) and
+  is not done.

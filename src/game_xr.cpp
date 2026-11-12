@@ -888,10 +888,6 @@ void markModelMissing(uint32_t slot) {
 // the render thread after) and the wear's cost (the render thread's mean, microseconds a frame).
 std::atomic<uint32_t> wornSuitSlot{0};
 suit_wear::Rig suitRigs[mesh_model::suitSlots];
-// UA EXPANSION fix 2 (ua_body.hpp): the player's avatar in a UA place (Models\UA\Body), made ready at load like a
-// suit; uaBodyReady once it is (the render thread reads it after suitsRigged).
-suit_wear::Rig uaBodyRig;
-std::atomic<bool> uaBodyReady{false};
 std::atomic<uint32_t> suitWearMicros{0}, suitWearVertices{0};
 // 0.0.73 MP SOLO TEST: the player's action flags (mp::Action: flying, swinging, grapple, firing) for the packet,
 // set on the game thread, read on the render thread (mod-internal state - CONFIRMED, no game address).
@@ -2405,6 +2401,13 @@ DWORD runBody() {
                     game_prompts::note((std::string("0.0.74 test 1 HIDEOUTS OFF: ") + mesh_model::slotFolders[slot] + " not loaded").c_str());
                     continue;
                 }
+                // UA EXPANSION v4: MUA's Spider-Man (Models\UA\Body, v2 / v3's avatar) is retired - never loaded, not even from a
+                // v3 install's leftover folder (the owner wants only the real SM2 Spider-Man; ua_body.hpp).
+                if (mesh_model::slotIsUaBody(slot)) {
+                    models.meshes[slot] = {};
+                    models.status[slot] = mesh_model::notTried;
+                    continue;
+                }
                 // ULTIMATE ALLIANCE EXPANSION: UA LOCATIONS OFF, or the place not converted (bring your own game: no
                 // MODEL MISSING nag for a place the player has not built) - not loaded.
                 if (mesh_model::slotIsUa(slot)) {
@@ -2544,20 +2547,6 @@ DWORD runBody() {
                     rigged += ok;
                     if (m && !ok)
                         unrigged += (unrigged.empty() ? "" : ", ") + std::string(mesh_model::suitFolders[k]);
-                }
-                // UA EXPANSION fix 2: the UA place's avatar (the converted MUA1 body) made ready the same way.
-                uaBodyRig = {};
-                uaBodyReady = false;
-                if (const mesh_model::Mesh* ub = models.model(mesh_model::slotUaBody)) {
-                    bool ok = false;
-                    try {
-                        ok = suit_wear::makeRig(*ub, uaBodyRig, "UA_Body");
-                    } catch (...) {
-                        uaBodyRig = {};
-                    }
-                    uaBodyReady = ok;
-                    consoleLine(std::string("UA EXPANSION: the player's body (UA/Body) ") +
-                                (ok ? "ready, " + std::to_string(ub->triangles()) + " triangles" : "NOT WEARABLE (its skin did not rig)"));
                 }
                 suitsRigged = true;
                 consoleLine("SUITS: " + std::to_string(rigged) + " of " + std::to_string(mesh_model::suitSlots) + " ready to wear" +
@@ -14437,10 +14426,10 @@ DWORD runBody() {
                     // Version 0.0.72 GAME BODY fallback (spec point 3): while the hero is not drawn as the
                     // body (the game's switch hides him), a glove on each tracked controller (glove_overlay.hpp).
                     // Test build 10: never over a shown suit; always for BATMAN without one (suit_wear::glovesShown).
-                    // UA EXPANSION fix 2 (ua_body::pick): in a UA place with no body drawn (no suit, no UA body), the gloves.
+                    // UA EXPANSION v4: no stand-in gloves in a UA place (only his own SM2 hands, or nothing: ua_body::pick).
                     if (suit_wear::glovesShown(strictBody, hero_modes::gameBodyShown(heroNow()), flatScreen, native_body::drawn(),
-                                               suitShownNow()) ||
-                        (uaVisit.active() && !flatScreen && !native_body::drawn() && !suitShownNow())) // UA fix 3: not over his own hands
+                                               suitShownNow()) &&
+                        !uaVisit.active())
                         for (unsigned i = 0; i < 2; ++i) {
                             saved.gloveOn[i] = frame.hands[i].valid && validTrackedPose(frame.hands[i].grip) ? 1.f : 0.f;
                             saved.gloveFist[i] = gloveFist[i];
@@ -16903,33 +16892,26 @@ DWORD runBody() {
                         bool suitWorn = false;
                         suit_wear::BoneMove clawMoves[suit_wear::bones]; // 0.0.73 test 5 CLAW BONE: the suit's bones now
                         bool clawMovesOk = false;
-                        // UA EXPANSION fix 2 (ua_body.hpp): in a UA place the player always has a body - the worn suit,
-                        // else the converted UA body (Models\UA\Body) standing on the room's floor (ua_body::pick).
+                        // UA EXPANSION v4 (ua_body.hpp, ua_body_cut.hpp): in a UA place the body is the worn roster suit, else the
+                        // player's OWN SM2 hero (the game's, posed by native_body, shown through the room by the cut below), else
+                        // NOTHING - MUA's stand-in body and the gloves are gone. v3 gave the cut up for the session after 240
+                        // requested frames that drew nothing and showed MUA's body (the owner saw it, never his own SM2 one); v4
+                        // keeps asking every frame, so a late depth capture or a hiccup recovers by itself, and says what is
+                        // missing (below) instead of falling back silently.
                         const bool uaHere = saved->hideoutAway && saved->hideoutView.ua;
                         const uint32_t wornNow = wornSuitSlot.load();
                         const bool wornReady = mesh_model::slotIsSuit(wornNow) && suitsRigged.load() &&
                                                suitRigs[wornNow - mesh_model::slotSuitFirst].ok;
-                        const ua_body::Source uaSource =
-                            ua_body::pick(uaHere, saved->flatScreen, wornReady,
-                                          uaBodyReady.load() && suitsRigged.load() && mesh_model::library().model(mesh_model::slotUaBody),
-                                          false);
-                        // UA EXPANSION fix 3 (ua_body_cut.hpp): the player's OWN hero (the game's, posed by native_body)
-                        // instead of the UA body, shown through the room by the cut (below); the UA body only while the
-                        // game's is not drawn (its checks failed, a hero without one) or the cut never comes through.
-                        static uint64_t uaCutSeen = 0;
-                        static uint32_t uaCutMisses = 0;
-                        static bool uaCutRequested = false;
-                        if (uaCutRequested) { // the last frame's cut: drawn, or one more miss
-                            const uint64_t drawnNow = overlay.bodyCutDrawn();
-                            uaCutMisses = drawnNow > uaCutSeen ? 0u : std::min<uint32_t>(uaCutMisses + 1, 100000u);
-                            uaCutSeen = drawnNow;
-                        }
-                        constexpr uint32_t uaCutGiveUp = 240; // ~2.7 s at 90 Hz with no cut drawn: the UA body for the session
-                        const bool uaGameHero = uaSource == ua_body::Source::uaBody &&
-                                                ua_body_cut::gameHero(uaHere, saved->flatScreen, native_body::drawn(),
-                                                                      overlay.bodyCutFault().empty() && uaCutMisses < uaCutGiveUp);
-                        uaCutRequested = false;
-                        const uint32_t bodySlot = uaGameHero ? 0u : uaSource == ua_body::Source::uaBody ? mesh_model::slotUaBody : wornNow;
+                        const bool nativeDrawn = native_body::drawn();
+                        const ua_body::Source uaSource = ua_body::pick(uaHere, saved->flatScreen, wornReady, nativeDrawn);
+                        static uint64_t uaCutAtEntry = 0;      // overlay.bodyCutDrawn() when this UA visit began
+                        static bool uaCutWasHere = false, uaCutAsked = false;
+                        static uint64_t uaCutNoteMs = 0, uaCutLogMs = 0, uaCutSince = 0;
+                        if (uaHere && !uaCutWasHere)
+                            uaCutAtEntry = overlay.bodyCutDrawn(), uaCutSince = GetTickCount64(), uaCutLogMs = uaCutNoteMs = 0;
+                        uaCutWasHere = uaHere;
+                        const bool uaGameHero = uaSource == ua_body::Source::gameHero;
+                        const uint32_t bodySlot = uaSource == ua_body::Source::wornSuit ? wornNow : 0u;
                         if (uaGameHero && validTrackedPose(rendered.headPose)) {
                             ua_body_cut::Player who;
                             who.eye = rendered.headPose.position + travel;
@@ -16949,16 +16931,37 @@ DWORD runBody() {
                             cut.footY = who.footY;
                             if (!cut.proxies.empty()) {
                                 overlay.setBodyCut(std::move(cut));
-                                uaCutRequested = true;
+                                uaCutAsked = true;
                             }
                         }
+                        if (uaHere && !saved->flatScreen) { // what stops his own hero showing, said (every 5 s in the log, once on screen)
+                            const uint64_t nowMs = GetTickCount64();
+                            const auto why = ua_body_cut::why(true, nativeDrawn, uaCutAsked, overlay.bodyCutDrawn() - uaCutAtEntry,
+                                                              !overlay.bodyCutFault().empty());
+                            const bool needHero = uaSource == ua_body::Source::gameHero || uaSource == ua_body::Source::none;
+                            if (needHero && !wornReady && (!uaCutLogMs || nowMs - uaCutLogMs >= 5000)) {
+                                uaCutLogMs = nowMs;
+                                const auto nb = native_body::status();
+                                consoleLine(std::string("UA OWN HERO: ") + ua_body_cut::whyNames[static_cast<unsigned>(why)] +
+                                            "; cuts drawn " + std::to_string(overlay.bodyCutDrawn() - uaCutAtEntry) +
+                                            (overlay.bodyCutFault().empty() ? std::string() : " (" + overlay.bodyCutFault() + ")") +
+                                            "; native_body drawn " + (nativeDrawn ? "yes" : "NO") + ", state " + std::to_string(nb.state) +
+                                            ", problem " + std::to_string(nb.problem) + ", hero jobs " + std::to_string(nb.heroJobs) +
+                                            ", solved " + std::to_string(nb.solved));
+                            }
+                            if (needHero && !wornReady && why != ua_body_cut::Why::shown && !uaCutNoteMs && nowMs - uaCutSince > 6000) {
+                                uaCutNoteMs = nowMs; // the owner would otherwise see an empty room and no word
+                                game_prompts::note((std::string("UA BODY: not showing - ") + ua_body_cut::whyNames[static_cast<unsigned>(why)]).c_str());
+                            }
+                        }
+                        uaCutAsked = false;
                         if (const uint32_t ws = bodySlot; !saved->flatScreen &&
-                                                          (mesh_model::slotIsSuit(ws) || mesh_model::slotIsUaBody(ws)) &&
+                                                          mesh_model::slotIsSuit(ws) &&
                                                           overlay.modelReady() && validTrackedPose(rendered.headPose)) {
                             const auto suitStart = std::chrono::steady_clock::now();
                             try {
                                 suitMesh = mesh_model::library().model(ws);
-                                suitRig = mesh_model::slotIsUaBody(ws) ? &uaBodyRig : &suitRigs[ws - mesh_model::slotSuitFirst];
+                                suitRig = &suitRigs[ws - mesh_model::slotSuitFirst];
                                 if (suitMesh && suitRig->ok) {
                                     suit_wear::Tracked t;
                                     const Quat turn = trackingTurn(rendered.swing);
@@ -17094,11 +17097,8 @@ DWORD runBody() {
                                     if (suitWorn && suitRig->hasCape)
                                         suit_wear::cape(*suitRig, mv, live, capeSpread, suitSkinned);
                                     // Test build 10 ONE BODY: drawn, it stands in for the game's body (suitShownAtMs).
-                                    // UA EXPANSION fix 3: the UA body never stands in for the game's (its stamp would keep
-                                    // the player's own hero off - the cut shows him whenever native_body draws him).
                                     if (suitWorn && mask &&
-                                        suit_wear::draw(modelVertices, hero007::modelSinkBudget, *suitMesh, *suitRig, suitSkinned, mask) &&
-                                        !mesh_model::slotIsUaBody(ws))
+                                        suit_wear::draw(modelVertices, hero007::modelSinkBudget, *suitMesh, *suitRig, suitSkinned, mask))
                                         suitShownAtMs.store(GetTickCount64(), std::memory_order_relaxed);
                                 }
                             } catch (...) {

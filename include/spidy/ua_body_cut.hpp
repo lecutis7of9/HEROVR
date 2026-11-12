@@ -124,10 +124,29 @@ inline void appendProxies(std::vector<Vertex>& out, const Capsule* c, int n) {
     }
 }
 
-// Which body shows in a UA place: the game's own hero when native_body draws him (the cut on, no avatar), else the
-// avatar (ua_body::pick: the worn suit, the converted MUA body, the gloves).
-constexpr bool gameHero(bool inUa, bool flatScreen, bool nativeBodyDrawn, bool sceneDepth) {
-    return inUa && !flatScreen && nativeBodyDrawn && sceneDepth;
+// v3 gave the cut up for the session once 240 requested frames had drawn nothing and then showed MUA's body instead
+// (ua_body::Source::uaBody). v4 never gives up and has no stand-in: the cut is asked for every frame the game's hero is
+// drawn (ua_body::pick -> gameHero) and the room alone covers him until the cut comes through. What stops him showing is
+// said, not hidden: ua_body_cut::why() names the first thing missing, game_xr.cpp logs it and puts it on screen.
+enum class Why : uint8_t { shown, notInUa, notRequested, noDepth, cutFault, heroNotPosed };
+inline constexpr const char* whyNames[6] = {"his own hero is shown through the room",
+                                            "not in a UA place",
+                                            "no cut requested yet (head or hands not tracked)",
+                                            "the cut was requested but the game's depth never arrived (scene depth capture)",
+                                            "the renderer switched the cut off (see the fault)",
+                                            "native_body is not posing the game's hero (the game's body switch, the rig or a job that does not run)"};
+// The first thing missing, given: in a UA place, native_body drawing the hero, a cut requested lately, the cuts the
+// renderer drew since entering, the renderer's fault (non-empty = off).
+constexpr Why why(bool inUa, bool nativeBodyDrawn, bool requested, uint64_t drawnSinceEntering, bool fault) {
+    if (!inUa)
+        return Why::notInUa;
+    if (!nativeBodyDrawn)
+        return Why::heroNotPosed;
+    if (fault)
+        return Why::cutFault;
+    if (!requested)
+        return Why::notRequested;
+    return drawnSinceEntering > 0 ? Why::shown : Why::noDepth;
 }
 
 } // namespace spidy::ua_body_cut

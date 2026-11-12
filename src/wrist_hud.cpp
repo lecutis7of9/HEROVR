@@ -702,6 +702,8 @@ const char* labelOf(Control c) {
         return "BODY ANIMATIONS";
     case Control::vrJitter:
         return "EYE JITTER";
+    case Control::gameWallAnims:
+        return "GAME WALL ANIMS";
     case Control::flyMode:
         return "FLY MODE";
     case Control::flyVignette:
@@ -966,7 +968,7 @@ constexpr SectionDef powersSections[] = {
 constexpr SectionDef vrSections[] = {
     {"BODY AND VIEW", C::none, C::none, "", "", "SETTINGS", -1,
      {C::combatCrawlCap, C::combatWallTilt, C::combatHandFlips, C::npcFade, C::playOnMonitor, C::combatSpiderClimbOnly,
-      C::combatGameBody, C::bodyAnimations, C::combatCalibLook, C::combatWeaponCollision}},
+      C::combatGameBody, C::bodyAnimations, C::gameWallAnims, C::combatCalibLook, C::combatWeaponCollision}}, // 79.6: + GAME WALL ANIMS
     {"WEBS", C::webStyle, C::webColor, "", "", nullptr, -1,
      {C::thickness, C::speed, C::webStyle, C::webColor, C::reticles, C::combatWebRope}},
     {"HOLOGRAM", C::hudHeight, C::hudScale, "", "", nullptr, -1,
@@ -2585,6 +2587,7 @@ std::string buttonValue(const View& view, Control c) {
            : c == Control::doubleHealth ? std::string(view.doubleHealth ? "ON" : "OFF")
            : c == Control::bodyAnimations ? std::string(view.bodyAnimations ? "DYNAMIC" : "CLASSIC")
            : c == Control::vrJitter     ? std::string(jitter_check::rowText[std::min<uint32_t>(view.vrJitterLevel, jitter_check::levels - 1)])
+           : c == Control::gameWallAnims ? std::string(view.gameWallAnims == 0 ? "OFF" : view.gameWallAnims == 2 ? "ON (WAITING)" : view.gameWallAnims == 3 ? "ON (RECOVER)" : "ON")
            : c == Control::flyMode      ? std::string(extras385::fly::speedName(view.flyMode))
            : c == Control::flyVignette  ? std::string(view.flyVignette ? "ON" : "OFF")
            : c == Control::flyRoll      ? std::string(extras385::fly::rollName(view.flyRoll))
@@ -3481,6 +3484,8 @@ const char* helpText(Control c) {
         return extras385::double_health::help;
     case Control::bodyAnimations:
         return "DYNAMIC adds wall, swing and flip poses; CLASSIC does not.";
+    case Control::gameWallAnims:
+        return "ON: the game's own wall crawl and wall run animations take you on walls (the game's crawl, hand climb, level view). OFF: HEROVR's wall run, as before. ON waits until you leave a wall HEROVR holds. A drop off a wall puts HEROVR's wall back for a while.";
     case Control::vrJitter:
         return "Each press: OFF > LOW > MED > FULL. OFF holds the eyes' TAA still (no far shake, rougher edges); FULL is the biggest sample walk (sharpest, far buildings may shake).";
     case Control::flyMode:
@@ -3867,6 +3872,8 @@ const char* shortName(Control c) {
         return "BODY ANIM";
     case Control::vrJitter:
         return "JITTER";
+    case Control::gameWallAnims:
+        return "WALL ANIM";
     case Control::flyMode:
         return "FLY";
     case Control::flyVignette:
@@ -4587,6 +4594,9 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
                 break;
             case Control::vrJitter:
                 r.vrJitter = true;
+                break;
+            case Control::gameWallAnims:
+                r.gameWallAnims = true;
                 break;
             case Control::flyMode:
                 r.flyMode = true;

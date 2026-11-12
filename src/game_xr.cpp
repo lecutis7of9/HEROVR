@@ -10,6 +10,7 @@
 #endif
 #include "spidy/thor_grip.hpp"
 #include "spidy/jitter_check.hpp" // 79.4 EYE JITTER levels, JITTER CHECK
+#include "spidy/wall_anims.hpp" // 79.6 GAME WALL ANIMS and its WALL WATCH
 #include "spidy/mirror_guard.hpp"
 #include "spidy/mirror_props074.hpp" // 0.0.74 test 10 MIRROR PROPS
 #include "spidy/glove_overlay.hpp" // Version 0.0.72 GAME BODY fallback gloves
@@ -712,6 +713,8 @@ DWORD WINAPI SpidyVrJitter(void* off);  // 0.0.76 FAR SHAKE: vr_jitter, 0 on, 1 
 DWORD WINAPI SpidyVrJitterLevel(void* level); // 79.4: 0 off, 1 low, 2 med, 3 full, 4 e5d2746; bit 8: from the hologram
 uint32_t SpidyVrJitterLevelNow();
 extern spidy::jitter_check::Data SpidyJitterCheckData; // 79.4 JITTER CHECK (stereo_probe.cpp)
+// 79.6 WALL WATCH: the record for the report (tools/wall_anims_record.py), read-only; written by the VR loop.
+__declspec(dllexport) spidy::wall_anims::Data SpidyWallAnimsData;
 // 79.5 BUILD TAG: the string tools/build_tag.py reads out of the DLL FILE ('HEROVR-BUILD-TAG <version> <test number> <commit>'),
 // so the launcher, the console and the report name the build that runs without trusting any other file in the folder
 // (79.4's session ran the 79.3 DLL from a folder that was never updated, and nothing said so).
@@ -1231,6 +1234,10 @@ combat_input::Config combatConfig() {
 // Update 37.2: wall_crawl 0 by default again (Update 36's swing wall run; the game's crawl
 // turned the view upright/inverted on walls in run371).
 std::atomic<bool> climbOn{hand_crawl::Config{}.on}, gameWallCrawl{false}, wallCrawlChanged{};
+// 79.6 GAME WALL ANIMS (live.txt game_wall_anims, the wrist row): wanted by the player; the loop applies it (wall_crawl 1 +
+// hand_climb 1 + wall_view level) when no swing wall holds him, and shows 0 OFF, 1 ON, 2 ON waiting, 3 ON recovering.
+std::atomic<bool> gameWallAnimsWanted{false};
+std::atomic<uint32_t> gameWallAnimsShown{0};
 // Update 37.2: WALL BODY (wall_body.hpp; live.txt wall_body), default OFF: the drawn body lies
 // against a wall instead of standing out from it (only the picture).
 std::atomic<bool> wallBodyOn{wall_body::defaultOn};
@@ -2550,6 +2557,9 @@ DWORD runBody() {
             modelsAdopted = true;
         };
         consoleLine(std::string("79.5 BUILD TAG: ") + SpidyBuildTag + " (this line is in the DLL that is running; a console without it is an older build)");
+        consoleLine("HERO VR 79.6 TEST (includes 79.5): GAME WALL ANIMS (VR SETTINGS > BODY AND VIEW; live.txt game_wall_anims, OFF the default) "
+                    "turns the game's own wall crawl, wall run and hand climb on, the view level; '79.6 WALL' lines in this console log each wall contact, "
+                    "hand-over, drop and view flip (79.5 flips left stick, Web Line release latch + aim marker, BUILD TAG)");
         consoleLine("HERO VR 79.5 TEST (includes 79.4): EYE JITTER is a level (VR SETTINGS > GRAPHICS > EYE JITTER: OFF / LOW 0.10 px / MED 0.22 px / "
                     "FULL 0.44 px, MED the default; live.txt vr_jitter), with a 10 s '79.4 JITTER CHECK' line in this console");
         consoleLine("MODELS (79.3 LAZY): not read at start - plain SPIDER-MAN needs none; read when another hero, the roster, "
@@ -3493,6 +3503,14 @@ DWORD runBody() {
             InterlockedIncrement64(&SpidyXrData.sequence);
         }
         game_swing::Data swingState;
+        // 79.6 GAME WALL ANIMS: the watch, and what the loop applied.
+        wall_anims::Watch wallWatch;
+        std::vector<wall_anims::Note> wallNotes;
+        double wallClock = 0, wallFallbackUntil = 0, wallSummaryAt = 0;
+        float wallLineBudget = 6.f;
+        uint32_t wallSummaryRevision = 0;
+        bool wallAnimsOn = false, wallDeferredSaid = false, wallPriorClimb = true, wallAutoOff = false;
+        uint32_t wallPriorView = 0;
         // HERO VR 0.0.77 CUT6 SWING START (swing077.hpp): one player record held in VR play before the start, a
         // "not now" refusal tried again, only a real one off for the session.
         swing077::StartGate swingGate;
@@ -4999,6 +5017,14 @@ DWORD runBody() {
                                     SpidyFarShadows(reinterpret_cast<void*>(uintptr_t{far_shadows::nextMode})) == 0 &&
                                     far_shadows::modeOf(SpidyFarShadowsNow()) != far_shadows::off)
                                     farShadowsArm = true;
+                                if (result.gameWallAnims) { // 79.6 GAME WALL ANIMS: the next press flips it; the loop applies it
+                                    const bool next = !gameWallAnimsWanted.load();
+                                    gameWallAnimsWanted = next;
+                                    wristChanged |= 1u << 23; // SpidyHudSettings 3 bit 23, 10 bit 5
+                                    message(3, 0, next ? "HEROVR GAME WALL ANIMS: ON (applies off the swing's wall)"
+                                                       : "HEROVR GAME WALL ANIMS: OFF (HEROVR's wall run)");
+                                    consoleLine(std::string("79.6 WALL: GAME WALL ANIMS ") + (next ? "ON" : "OFF") + " from the hologram");
+                                }
                                 if (result.vrJitter) { // 79.2b (t2169): EYE JITTER, live; the launcher keeps it in live.txt
                                     // 79.4 (t2188): the next level (OFF > LOW > MED > FULL > OFF; the hidden e5d2746 goes to OFF).
                                     const uint32_t next = jitter_check::nextLevel(SpidyVrJitterLevelNow());
@@ -8384,6 +8410,106 @@ DWORD runBody() {
                     }
                     controls(keys);
                     askingGame = false;
+                    { // 79.6 GAME WALL ANIMS and its WALL WATCH (see include/spidy/wall_anims.hpp)
+                        wallClock += frame.seconds;
+                        const bool wantWall = gameWallAnimsWanted.load();
+                        const auto applyWall = [&](bool on) {
+                            if (on) {
+                                wallPriorClimb = climbOn.load();
+                                wallPriorView = wallViewNow.load();
+                                gameWallCrawl = true; // wall_crawl 1: the game's own crawl and wall run take the walls
+                                climbOn = true;       // hand_climb 1
+                                handClimbAsked = 1;
+                                wallViewNow = 0;      // wall_view level: the horizon stays world-up
+                            } else {
+                                gameWallCrawl = false; // wall_crawl 0: HEROVR's wall, as before
+                                climbOn = wallPriorClimb;
+                                handClimbAsked = wallPriorClimb ? 1 : 0;
+                                wallViewNow = wallPriorView;
+                            }
+                            wallCrawlChanged = true;
+                            wallAnimsOn = on;
+                            wallFallbackUntil = 0;
+                            wallDeferredSaid = false;
+                            wallWatch.add(wallNotes, wall_anims::toggle, wallClock, on ? 1.f : 0.f);
+                        };
+                        if (wantWall && !wallAnimsOn) {
+                            if (swingState.wall == 1) { // on HEROVR's own wall: the swap waits until he is off it
+                                if (!wallDeferredSaid) {
+                                    wallDeferredSaid = true;
+                                    wallWatch.add(wallNotes, wall_anims::deferred, wallClock);
+                                }
+                            } else {
+                                applyWall(true);
+                            }
+                        } else if (!wantWall && wallAnimsOn) {
+                            applyWall(false);
+                        }
+                        if (!wantWall)
+                            wallDeferredSaid = false;
+                        if (wallAnimsOn && wallFallbackUntil > 0 && wallClock >= wallFallbackUntil && swingState.wall != 1 &&
+                            swingState.wall != 2) { // the recovery over: the game's wall again
+                            wallFallbackUntil = 0;
+                            gameWallCrawl = true;
+                            wallCrawlChanged = true;
+                            consoleLine("79.6 WALL: RECOVER over, the game's wall animations are back");
+                        }
+                        LARGE_INTEGER wallNow{};
+                        QueryPerformanceCounter(&wallNow);
+                        wall_anims::Input win;
+                        win.session = wallClock;
+                        win.enabled = wallAnimsOn && wallFallbackUntil == 0;
+                        win.surface = swingState.wall;
+                        win.airborne = game_swing::airborne(swingState, wallNow.QuadPart, frequency.QuadPart);
+                        win.grounded = swingState.grounded != 0;
+                        win.owned = swingState.owned != 0;
+                        win.webbed = swingState.webs[0].attached != 0 || swingState.webs[1].attached != 0;
+                        win.intent = aNow || (keys & swingJumpKey) != 0 || chargeJump.charging() || leap.leap > 0 ||
+                                     swingState.takeoff != 0 || win.webbed;
+                        win.y = swingState.position.y;
+                        win.vy = swingState.velocity.y;
+                        win.speed = std::sqrt(swingState.velocity.x * swingState.velocity.x + swingState.velocity.y * swingState.velocity.y +
+                                              swingState.velocity.z * swingState.velocity.z);
+                        win.collisionFlags = swingState.collisionFlags;
+                        win.tiltDegrees = motion.active ? motion.viewTilt * 57.2957795f : 0.f;
+                        const wall_anims::Action wallAct = wallWatch.update(static_cast<float>(frame.seconds), win, wallNotes);
+                        if (wallAct.levelView)
+                            rig.diedOrRespawned(); // the view flipped on a wall: level it (GameTrackingRig, as a respawn)
+                        if (wallAct.recover && wallAnimsOn && wallFallbackUntil == 0) {
+                            wallFallbackUntil = wallClock + wall_anims::fallbackSeconds; // HEROVR's wall holds him meanwhile
+                            gameWallCrawl = false;
+                            wallCrawlChanged = true;
+                        }
+                        if (wallAct.autoOff && !wallAutoOff) {
+                            wallAutoOff = true;
+                            gameWallAnimsWanted = false;
+                            wristChanged |= 1u << 23;
+                            message(3, 0, "HEROVR GAME WALL ANIMS: OFF (dropped off the game's wall 3 times)");
+                        }
+                        wallLineBudget = std::min(6.f, wallLineBudget + static_cast<float>(frame.seconds) * 1.2f);
+                        for (const auto& n : wallNotes) {
+                            const bool chatty = n.kind == wall_anims::contact || n.kind == wall_anims::leave ||
+                                                n.kind == wall_anims::handOver;
+                            const std::string line = wall_anims::text(n);
+                            if (chatty && wallLineBudget < 1.f)
+                                continue;
+                            if (chatty)
+                                wallLineBudget -= 1.f;
+                            consoleLine(line);
+                        }
+                        wallNotes.clear();
+                        const uint32_t wallFlags = (wallAnimsOn ? 1u : 0u) | (wantWall ? 2u : 0u) |
+                                                   (wantWall && !wallAnimsOn ? 4u : 0u) | (wallFallbackUntil > 0 ? 8u : 0u) |
+                                                   (wallAutoOff ? 16u : 0u);
+                        wallWatch.flags(wallFlags);
+                        gameWallAnimsShown = !wallAnimsOn ? (wantWall ? 2u : 0u) : wallFallbackUntil > 0 ? 3u : 1u;
+                        if (wallWatch.revision() != wallSummaryRevision && wallClock - wallSummaryAt >= 20.0) {
+                            wallSummaryRevision = wallWatch.revision();
+                            wallSummaryAt = wallClock;
+                            consoleLine(wall_anims::summary(wallWatch.data()));
+                        }
+                        SpidyWallAnimsData = wallWatch.data();
+                    }
                     if (padInstalled) {
                         // The same walking and jumping on the virtual Xbox
                         // controller: after the VR menus, the game plays the
@@ -18039,6 +18165,7 @@ DWORD runBody() {
                                             hud.doubleHealth = doubleHealthOn.load(); // 0.0.76 DOUBLE HEALTH
                                             hud.bodyAnimations = values.legAnimations; // 0.0.79.1 wrist toggle
                                             hud.vrJitterLevel = static_cast<uint8_t>(SpidyVrJitterLevelNow()); // 79.4 EYE JITTER
+                                            hud.gameWallAnims = static_cast<uint8_t>(gameWallAnimsShown.load()); // 79.6 GAME WALL ANIMS
                                             hud.flyMode = flyModeNow.load();
                                             hud.flyVignette = flyVignetteOn.load();
                                             hud.flyRoll = flyRollNow.load();
@@ -19113,6 +19240,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidySeeThroughDepth(void* v) { re
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDiagLogs(void* v) { return setLive(v, 0, 1, 5593, diagLogsNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCutNote(void* v) { return setLive(v, 0, 1, 5594, cutNoteNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWallView(void* v) { return setLive(v, 0, 1, 5595, wallViewNow, asU32); }
+// 79.6 GAME WALL ANIMS (include/spidy/wall_anims.hpp), live.txt game_wall_anims 0 off (the default) / 1 on.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGameWallAnims(void* v) { return setLive(v, 0, 1, 5660, gameWallAnimsWanted, asBool); }
+// (79.6 WALL WATCH's record, SpidyWallAnimsData, is defined with the exports at the top of this file.)
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyLedgeJump(void* v) { return setLive(v, 0, 1, 5596, ledgeJumpNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunchWeb(void* v) { return setLive(v, 0, 1, 5597, punchWebNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyThrowWatch(void* v) { return setLive(v, 0, 1, 5598, throwWatchNow, asU32); }
@@ -19987,8 +20117,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
     case 3:
         // The 20 settings' bits, and Update 19's song (20), music volume (27) and visualizer (28).
         // Version 0.0.62: LENS FLARES (29), kept for the next start. 0.0.7: MIRROR VIEW (21), the same.
-        // 79.2b: EYE JITTER (22), kept in live.txt as vr_jitter.
-        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29 | 1u << 22));
+        // 79.2b: EYE JITTER (22), kept in live.txt as vr_jitter. 79.6: GAME WALL ANIMS (23), game_wall_anims.
+        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29 | 1u << 22 | 1u << 23));
     case 4: // Update 21: sharpening 0-200 in bits 0-7, the reticles shown in bit 8 (Update 16: 0-6 and 7)
         return marker | std::min<DWORD>(native_gpu::eyeSharpen(), 255) | (reticlesShown.load() ? 1u : 0u) << 8;
     case 5: // Update 17: the hologram's height, size, text size, theme and text colour
@@ -20012,7 +20142,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
              // 0.0.7: MIRROR VIEW (bit 1: 0 OFF, 1 TEST), the same (an older launcher reads bit 0 only)
         // 79.4: bits 2-4 EYE JITTER's level (live.txt vr_jitter: 0 off, 1 low, 2 med, 3 full, 4 e5d2746).
         return marker | std::min<DWORD>(c38(combat38::lensFlares), 1) | std::min<DWORD>(c38(combat38::mirrorView), 1) << 1 |
-               std::min<DWORD>(SpidyVrJitterLevelNow(), 4) << 2;
+               std::min<DWORD>(SpidyVrJitterLevelNow(), 4) << 2 | (gameWallAnimsWanted.load() ? 1u : 0u) << 5; // 79.6: bit 5 GAME WALL ANIMS
     default:
         return 3970;
     }

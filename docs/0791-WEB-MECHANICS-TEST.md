@@ -227,3 +227,30 @@ showed and what 79.5 changes. CONFIRMED = from that report or the code; COMPILED
    hand off the surface: in the 79.4 report 14 of 26 gestures were cancelled), a **green ring / red cross marker** shows the second spot while
    the grip is held (valid / not valid), a short **haptic tick** when it turns valid, a cancel says **why** (`79.5 WEBLINE: cancelled #n - ...`),
    and the native L2 + Y timings are trimmed from 0.26 s to 0.18 s (settle .04, Y .10, tail .04).
+
+## 79.6 (includes everything in 79.5): GAME WALL ANIMS
+
+User (t2190): "can you just use the games own animations for wall runs and climb please". Status: COMPILED in CI only; not
+headset-verified. Nothing in this build reads or forces the game's own hero state.
+
+- **Where**: wrist hologram > VR SETTINGS > BODY AND VIEW > **GAME WALL ANIMS** (OFF / ON). It is also `live.txt game_wall_anims = off | on`
+  (live; kept between sessions like EYE JITTER via `SpidyHudSettings`: changed-mask bit 23, selector 10 bit 5).
+- **OFF (the default)** is 79.5's wall handling exactly: HEROVR's own wall (the body held off the wall, the game's actor in its AIR state; the game's
+  wall states never run). Nothing is applied while it is OFF.
+- **ON** sets `wall_crawl 1` (the game's own crawl, `Settings.walls = 0`: the swing no longer takes walls, so the game's own
+  `HeroStateWallCrawl` / `HeroStateWallRun` states and animations run), `hand_climb 1` (the hand pull, the stick as plan B) and `wall_view 0` (level: the
+  horizon stays world-up). Turning ON while HEROVR's own wall holds you waits (`DEFERRED` line, the row reads `ON (WAITING)`) until you are off it.
+  Turning OFF puts `wall_crawl 0` and the hand climb / wall view you had before back.
+- **Safety (ON only)**: a **drop** (off the game's wall with no jump / web / leap in the 0.5 s before, then falling faster than 3 m/s 0.4 s later, no web held)
+  is logged, puts HEROVR's own wall back for 15 s (`RECOVER`; the row reads `ON (RECOVER)`), and a **third** drop in a session turns GAME WALL ANIMS back OFF
+  (`AUTO-OFF`). A fall of 80 m or more with no web is logged `OUT OF WORLD?` (log only: there is no teleport / respawn here). A **view flip** (the view
+  more than 80 degrees from level for 0.25 s while on a wall) is leveled (`GameTrackingRig::diedOrRespawned`, the death / respawn level; 2 s cooldown)
+  and logged. The existing WALL TILT SAFE guard (60 degrees) still runs.
+- **Diagnostics**: `include/spidy/wall_anims.hpp` Watch. Console lines `79.6 WALL <session s>: CONTACT / HAND-OVER / LEFT / DROP / OUT OF WORLD? / VIEW FLIP /
+  TOGGLE / DEFERRED / RECOVER / AUTO-OFF ...` (contact, leave and hand-over lines are rate-limited to a burst of 6, then 1 per 0.8 s; everything is still
+  counted) and a `79.6 WALL: GAME WALL ANIMS ON|OFF; contacts own / game / floor; hand-overs; drops; ...` summary every 20 s while something changed, and at the
+  session's end `79.6 WALL (report): ...`. The report has a `wall_anims` field (counts, seconds per surface kind, the last 24 events with session seconds).
+- **Not read**: the game's hero state (WallCrawl / WallRun / Perch). The surface kind comes from the swing bridge (none / HEROVR's wall / the game's crawl /
+  a floor crawl), with the game's collision flags and the speed on each contact line. Whether a given moment is the game's crawl or its wall run is not
+  separated, and 79.6 has not been seen on a headset: whether the game's wall run takes over at speed, the earlier run371 view inversion, and the hand-over
+  from a swing are what the test must show.

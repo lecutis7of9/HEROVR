@@ -43,6 +43,7 @@ from sm1style_record import sm1style_snapshot, sm1style_line  # 0.0.76 EYE HISTO
 import pose_check_record  # 0.0.76 POSE CHECK
 import jitter_log_record  # 0.0.76 JITTER FIX
 import jitter_check_record  # 79.4 JITTER CHECK
+import wall_anims_record  # 79.6 WALL WATCH
 import build_tag  # 79.5 BUILD TAG: which build the injected DLL is, from the file itself
 import vr_aa_record  # 0.0.76 SPIDY TAA
 import taa_watch_record  # 0.0.76 TAA WATCH
@@ -3180,6 +3181,7 @@ def session(a, startup, session_off=()):
                       pose_check_record.EXPORT,  # 0.0.76 POSE CHECK: absent from an older module
                       jitter_log_record.EXPORT,  # 0.0.76 JITTER FIX
                       jitter_check_record.EXPORT,  # 79.4 JITTER CHECK: absent from an older module
+                      wall_anims_record.EXPORT,  # 79.6 WALL WATCH: absent from an older module
                       vr_aa_record.EXPORT,  # 0.0.76 SPIDY TAA
                       taa_watch_record.EXPORT,  # 0.0.76 TAA WATCH
                       taa_frame_log_record.EXPORT,  # 0.0.76 TAA FRAME LOG: absent from an older module
@@ -3288,6 +3290,7 @@ def session(a, startup, session_off=()):
         # 0.0.76 SPIDY TAA TUNE: the vr_aa and jitter records kept from the samples too (the 11:26 report, written
         # after the game was closed, had neither: they were only read at a normal stop).
         vr_aa_last = jitter_log_last = jitter_check_last = None
+        wall_anims_last = None  # 79.6 WALL WATCH: wall_anims_snapshot, kept from the samples
         taa_watch_last = None  # 0.0.76 TAA WATCH: taa_watch_snapshot, kept from the samples
         taa_watch_said = 0  # 10 s windows already printed
         depth_check_last = None  # 0.0.76 A-depth CHECKED: taa_depth_check_snapshot, kept from the samples
@@ -3613,7 +3616,7 @@ def session(a, startup, session_off=()):
                         render_memory=render_memory, timing=timing, network=links, eye_history=history_last,
                         sm1style_eyes=sm1style_last,
                         pose_check=pose_check_last,
-                        vr_aa=vr_aa_last, jitter_log=jitter_log_last, jitter_check=jitter_check_last,
+                        vr_aa=vr_aa_last, jitter_log=jitter_log_last, jitter_check=jitter_check_last, wall_anims=wall_anims_last,
                         taa_watch=taa_watch_record.taa_watch_report(taa_watch_last),
                         taa_frame_log=dict(most_still=taa_frame_log_record.taa_frame_log_report(frame_log_best),
                                            last=taa_frame_log_record.taa_frame_log_report(frame_log_last)),
@@ -3683,6 +3686,8 @@ def session(a, startup, session_off=()):
                         print(said, flush=True)
                     if (said := jitter_log_record.jitter_log_line(result.get('jitter_log'))):
                         print(said, flush=True)
+                    if (said := wall_anims_record.wall_anims_line(result.get('wall_anims'))):
+                        print(said, flush=True)  # 79.6 WALL WATCH: the session's end (the DLL prints each event as '79.6 WALL ...')
                     if (said := jitter_check_record.jitter_check_line(result.get('jitter_check'))):
                         print(said, flush=True)  # 79.4 JITTER CHECK: the session's end, with each level change's second
                     if (said := vr_aa_record.vr_aa_line(result.get('vr_aa'))):
@@ -4030,6 +4035,8 @@ def session(a, startup, session_off=()):
                     # 79.4 JITTER CHECK: kept each sample (the DLL's console prints its own line every 10 s too).
                     jitter_check_last = (jitter_check_record.jitter_check_snapshot(
                         game, xr.get(jitter_check_record.EXPORT), sample.get('seconds')) or jitter_check_last)
+                    wall_anims_last = (wall_anims_record.wall_anims_snapshot(game, xr.get(wall_anims_record.EXPORT))
+                                       or wall_anims_last)  # 79.6 WALL WATCH
                     # Update 34.2: ENGINE TAA's record each sample, a console line when its state or mode changes.
                     if (taa := engine_taa_snapshot(game, xr['SpidyEngineTaaData'])):
                         said = (taa['state'], taa['reason'], taa['jitter_mode'], taa['jitter_scale'])
@@ -4308,6 +4315,8 @@ def session(a, startup, session_off=()):
             or jitter_log_last,
             jitter_check=jitter_check_record.jitter_check_snapshot(game, xr.get(jitter_check_record.EXPORT))
             or jitter_check_last,
+            wall_anims=wall_anims_record.wall_anims_snapshot(game, xr.get(wall_anims_record.EXPORT))
+            or wall_anims_last,  # 79.6 WALL WATCH ('79.6 WALL' in the report)
             vr_aa=vr_aa_record.vr_aa_snapshot(game, xr.get(vr_aa_record.EXPORT)) or vr_aa_last,
             taa_watch=taa_watch_record.taa_watch_report(
                 taa_watch_record.taa_watch_snapshot(game, xr.get(taa_watch_record.EXPORT)) or taa_watch_last),

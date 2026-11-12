@@ -9,6 +9,7 @@
 #define SPIDY_TEST_VERSION "0.0.74"
 #endif
 #include "spidy/thor_grip.hpp"
+#include "spidy/jitter_check.hpp" // 79.4 EYE JITTER levels, JITTER CHECK
 #include "spidy/mirror_guard.hpp"
 #include "spidy/mirror_props074.hpp" // 0.0.74 test 10 MIRROR PROPS
 #include "spidy/glove_overlay.hpp" // Version 0.0.72 GAME BODY fallback gloves
@@ -708,6 +709,9 @@ uint32_t SpidyEngineTaaNow();           // Update 34: engine_taa::pack(state, re
 DWORD WINAPI SpidyEngineTaaJitter(void* mode); // Update 34.2: engine_taa::JitterMode, 4 the next
 uint32_t SpidyEngineTaaJitterNow();     // Update 34.2
 DWORD WINAPI SpidyVrJitter(void* off);  // 0.0.76 FAR SHAKE: vr_jitter, 0 on, 1 off (stereo_probe.cpp)
+DWORD WINAPI SpidyVrJitterLevel(void* level); // 79.4: 0 off, 1 low, 2 med, 3 full, 4 e5d2746; bit 8: from the hologram
+uint32_t SpidyVrJitterLevelNow();
+extern spidy::jitter_check::Data SpidyJitterCheckData; // 79.4 JITTER CHECK (stereo_probe.cpp)
 uint32_t SpidyVrJitterNow();            // bit 0 vr_jitter off, bit 1 vr_game_jitter off
 DWORD WINAPI SpidyShadowCamera(void* mode); // Update 31
 DWORD WINAPI SpidyFarShadows(void* mode); // Update 35: far_shadows::Mode, 3 the next, 4 off (slow)
@@ -2541,6 +2545,8 @@ DWORD runBody() {
             consoleLine(line);
             modelsAdopted = true;
         };
+        consoleLine("HERO VR 79.4 TEST: EYE JITTER is a level (VR SETTINGS > GRAPHICS > EYE JITTER: OFF / LOW 0.10 px / MED 0.22 px / "
+                    "FULL 0.44 px, MED the default; live.txt vr_jitter), with a 10 s '79.4 JITTER CHECK' line in this console");
         consoleLine("MODELS (79.3 LAZY): not read at start - plain SPIDER-MAN needs none; read when another hero, the roster, "
                     "a vehicle / hideout hero or PLAYER 2's props first need them");
         spidy::export_guard::phase("init: OpenXR runtime selection / session start");
@@ -4038,6 +4044,29 @@ DWORD runBody() {
                 launcherVerdict = launcher_watch::launcherClosed;
                 break;
             }
+            // 79.4 JITTER CHECK (t2188): every 10 s a line of what the eyes' lens stored against what the game's TemporalAa
+            // jobs read, and a line for each EYE JITTER level change with the session's seconds (the hologram's or live.txt's).
+            {
+                static uint64_t checkAt{}, checkStart{};
+                static uint32_t changesSaid{};
+                const uint64_t now = GetTickCount64();
+                if (!checkStart)
+                    checkStart = now;
+                const auto& check = SpidyJitterCheckData;
+                const uint32_t count = std::min<uint32_t>(check.changeCount, jitter_check::changeCapacity);
+                for (; changesSaid < count; ++changesSaid) {
+                    const auto& change = check.changes[changesSaid];
+                    char said[160];
+                    sprintf_s(said, "79.4 JITTER LEVEL at %.1f s: %s (up to %.2f px) from %s", change.tickMs >= checkStart ? (change.tickMs - checkStart) / 1000.0 : 0.0,
+                              jitter_check::names[change.level < jitter_check::levels ? change.level : 0],
+                              jitter_check::maxStoredPixels(change.level), change.source == 2 ? "the hologram" : change.source == 1 ? "live.txt / the launcher" : "the start");
+                    consoleLine(said);
+                }
+                if (check.eyes[0].lens && now - checkAt >= 10000) {
+                    checkAt = now;
+                    consoleLine(jitter_check::summaryLine(check));
+                }
+            }
             // 79.3 LAZY MODELS: asked for (another hero, the roster, a model or PLAYER 2's props) - the worker starts;
             // once it is done its models are adopted here, between two frames.
             if (!modelsAdopted.load(std::memory_order_relaxed)) {
@@ -4961,11 +4990,15 @@ DWORD runBody() {
                                     far_shadows::modeOf(SpidyFarShadowsNow()) != far_shadows::off)
                                     farShadowsArm = true;
                                 if (result.vrJitter) { // 79.2b (t2169): EYE JITTER, live; the launcher keeps it in live.txt
-                                    const uintptr_t off = (SpidyVrJitterNow() & 1u) ? 0u : 1u;
-                                    if (SpidyVrJitter(reinterpret_cast<void*>(off)) == 0) {
-                                        wristChanged |= 1u << 22; // SpidyHudSettings 3 bit 22, 10 bit 2
-                                        message(3, 0, off ? "HEROVR EYE JITTER: OFF (eyes' TAA held still)"
-                                                          : "HEROVR EYE JITTER: ON (TAA sample walk)");
+                                    // 79.4 (t2188): the next level (OFF > LOW > MED > FULL > OFF; the hidden e5d2746 goes to OFF).
+                                    const uint32_t next = jitter_check::nextLevel(SpidyVrJitterLevelNow());
+                                    if (SpidyVrJitterLevel(reinterpret_cast<void*>(uintptr_t{next} | 0x100u)) == 0) {
+                                        wristChanged |= 1u << 22; // SpidyHudSettings 3 bit 22, 10 bits 2-4
+                                        char said[96];
+                                        sprintf_s(said, "HEROVR EYE JITTER: %s (up to %.2f px)", jitter_check::names[next],
+                                                  jitter_check::maxStoredPixels(next));
+                                        message(3, 0, said);
+                                        consoleLine(std::string("79.4 EYE JITTER ") + said + " from the hologram");
                                     }
                                 }
                                 if (result.eyeBloom) // Update 36: EYE BLOOM, the next mode (it reverts on its own)
@@ -17960,7 +17993,7 @@ DWORD runBody() {
                                             hud.invincibleNa = invincibleNa.load() != 0;
                                             hud.doubleHealth = doubleHealthOn.load(); // 0.0.76 DOUBLE HEALTH
                                             hud.bodyAnimations = values.legAnimations; // 0.0.79.1 wrist toggle
-                                            hud.vrJitterOff = (SpidyVrJitterNow() & 1u) != 0; // 79.2b EYE JITTER
+                                            hud.vrJitterLevel = static_cast<uint8_t>(SpidyVrJitterLevelNow()); // 79.4 EYE JITTER
                                             hud.flyMode = flyModeNow.load();
                                             hud.flyVignette = flyVignetteOn.load();
                                             hud.flyRoll = flyRollNow.load();
@@ -19932,9 +19965,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
         return marker | std::min<DWORD>(sessionFpsHigh.load(), 2047) | std::min<DWORD>(sessionFpsLow.load(), 2047) << 11;
     case 10: // Version 0.0.62: LENS FLARES (0 GAME, 1 OFF IN VR), for live.txt and the next start;
              // 0.0.7: MIRROR VIEW (bit 1: 0 OFF, 1 TEST), the same (an older launcher reads bit 0 only)
-        // 79.2b: bit 2 EYE JITTER (live.txt vr_jitter: 0 on, 1 off).
+        // 79.4: bits 2-4 EYE JITTER's level (live.txt vr_jitter: 0 off, 1 low, 2 med, 3 full, 4 e5d2746).
         return marker | std::min<DWORD>(c38(combat38::lensFlares), 1) | std::min<DWORD>(c38(combat38::mirrorView), 1) << 1 |
-               (SpidyVrJitterNow() & 1u) << 2;
+               std::min<DWORD>(SpidyVrJitterLevelNow(), 4) << 2;
     default:
         return 3970;
     }

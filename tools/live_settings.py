@@ -201,8 +201,11 @@ SETTINGS = {
                          "making them again, to stop them flickering; only changes anything with far_shadows at "
                          "eyes+cache, the default; 0 off, the default) - live, no restart needed"),
     # 0.0.76 FAR SHAKE (include/spidy/sm1style.hpp eyeJitterFor, gameViewJitter): live, never persisted.
-    'vr_jitter': ((0, 1), 'SpidyVrJitter', "VR JITTER {} (0 on: the eyes' TAA sample walk, sharpest bricks; 1 off: "
-                 "one fixed offset instead, a test for the far shake, a little softer) - live, no restart needed"),
+    # 79.4 (t2188): a level, not on / off (include/spidy/jitter_check.hpp): 0 off, 1 low (about 0.10 px), 2 med (0.22 px, the
+    # default), 3 full (0.44 px), 4 e5d2746 (0.88 px, the old walk; here only). 'on' is full. Live; the hologram's EYE JITTER row.
+    'vr_jitter': ((0, 4), 'SpidyVrJitterLevel', "VR JITTER {} (0 off: one fixed offset, no far shake, rougher edges; 1 low, "
+                 "about 0.10 px; 2 med, 0.22 px, the default; 3 full, 0.44 px, the sharpest the far shake allowed; "
+                 "4 e5d2746, 0.88 px, the old walk) - live, no restart needed"),
     'vr_game_jitter': ((0, 1), 'SpidyVrGameJitter', "VR GAME JITTER {} (1 off, the default since 0.0.76 JITTER "
                       "FIX: the game's own unseen head views give the lens no jitter instead of feeding its stored "
                       "jitter back in, which doubled it and flipped it upside down; 0 keep: c71a59c's doubled jitter, "
@@ -915,7 +918,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'vr_render': ('native', 'upscaled'),  # 0.0.76 VISUAL
                 'vr_ss': ('off', '125', '150', '110'),  # 0.0.76 SPIDY TAA TUNE (110: A-depth TRACE D, a test)
                 'vr_sfx_layer': ('on', 'off'),  # 0.0.76 SFX DIAG (0 on, the default)
-                'vr_jitter': ('on', 'off'), 'vr_game_jitter': ('keep', 'off'),  # 0.0.76 FAR SHAKE (JITTER FIX: off, 1, the default)
+                'vr_jitter': ('off', 'low', 'med', 'full', 'e5d2746'), 'vr_game_jitter': ('keep', 'off'),  # 79.4: levels (med, 2, the default); 0.0.76 FAR SHAKE (JITTER FIX: off, 1, the default)
                 'vr_taa_depth': ('off', 'on', 'auto'),  # 0.0.76 A-depth (off, 0, the default)
                 'vr_taa_seam': ('off', 'on'),  # 0.0.76 SEAM TRACE (off, 0, the default)
                 'vr_shadow_stable': ('off', 'on'),  # 0.0.76 SHADOW STABLE (off, 0, the default)
@@ -1017,7 +1020,8 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'vr_render': {'native': 0, 'upscaled': 1, '100': 0, '67': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
            'vr_ss': {'off': 0, '100': 0, '125': 1, '150': 2, '110': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 SPIDY TAA TUNE
            'vr_sfx_layer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 SFX DIAG: 0 on default
-           'vr_jitter': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 FAR SHAKE
+           'vr_jitter': {'off': 0, 'low': 1, 'med': 2, 'medium': 2, 'full': 3, 'on': 3, 'e5d2746': 4, 'e5d': 4, 'old': 4,
+                         '0': 0, '1': 1, '2': 2, '3': 3, '4': 4},  # 79.4 EYE JITTER levels ('on' = full)
            'vr_taa_jitter': {'on': 0, 'off': 1, 'fixed': 2, 'half': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 TAA JITTER
            'vr_game_jitter': {'keep': 0, 'on': 0, 'game': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 JITTER FIX: 1 off default
            'vr_taa_depth': {'off': 0, 'on': 1, 'auto': 2, '0': 0, '1': 1, '2': 2},  # 0.0.76 A-depth: 0 off default
@@ -1556,7 +1560,7 @@ def decode_hud_settings(selector, code):
     if selector == 10:  # Version 0.0.62: LENS FLARES (0 game, 1 off in vr); 0.0.7: MIRROR VIEW in bit 1
         return {'lens_flares': ('game', 'off_in_vr')[min(code & 1, 1)],
                 'mirror_view': ('off', 'test')[code >> 1 & 1],
-                'vr_jitter': ('on', 'off')[code >> 2 & 1]}  # 79.2b: EYE JITTER
+                'vr_jitter': ('off', 'low', 'med', 'full', 'e5d2746')[min(code >> 2 & 7, 4)]}  # 79.4: EYE JITTER level (bits 2-4)
     if selector == CHANGED_SELECTOR:
         changed = {CONTROL_KEYS[bit]: True for bit in CONTROL_KEYS if code >> bit & 1}
         if changed.pop('web_color', None):
@@ -2141,6 +2145,46 @@ def migrate_078_cutscenes(path):
 
 
 HEADER += MIGRATED_078_CUTSCENES + '\n'
+
+
+# 79.4 (t2188): EYE JITTER became a level (off / low / med / full) with MED the default. The 79.2b hologram toggle kept
+# its on / off in live.txt (the test default, off, was written back at the first press), so a live.txt from 79.2b / 79.3
+# holds a vr_jitter the player never chose as a level: it is set to med once; a value chosen after the marker stays.
+JITTER_DEFAULT_794 = 'med'
+MIGRATED_794_JITTER = ('# 79.4: vr_jitter is a level now (off, low, med, full), med the default; an older build\'s on / off '
+                       'was set to med once (migrated; a value chosen after this line stays)')
+
+
+def migrate_794_jitter(path):
+    """79.4, once: an existing live.txt without the MIGRATED_794_JITTER marker whose vr_jitter line is there (on or off
+    of 79.2b / 79.3) is set to med; the marker is added either way. No live.txt: nothing (med applies; HEADER carries
+    the marker). The line to show, or None. Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_794_JITTER in text:
+        return None
+    try:
+        old = parse(text)[0].get('vr_jitter')
+        changed = old is not None and old != JITTER_DEFAULT_794
+        if changed:
+            text = write_back(text, {'vr_jitter': JITTER_DEFAULT_794})
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_794_JITTER + '\n')
+    except (OSError, ValueError):
+        return None
+    if not changed:
+        return None
+    return (f'live.txt: vr_jitter {old} set once to {JITTER_DEFAULT_794}, the 79.4 default (off, low, med, full: change it '
+            'in the hologram, VR SETTINGS > GRAPHICS > EYE JITTER, or here, and it stays).')
+
+
+HEADER += MIGRATED_794_JITTER + '\n'
 
 
 # 0.0.73 lights (the owner after test 4: "street lights still flicker and headlights still ghosting"; his

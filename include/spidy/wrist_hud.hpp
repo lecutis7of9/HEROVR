@@ -578,7 +578,8 @@ enum class Control : uint8_t {
     // 0.0.79.1 Dynamic Body lives on HEROVR's own wrist holo,
     // never on the SM1 game Settings tab.
     bodyAnimations,
-    // HERO VR 79.2b (t2169): EYE JITTER, VR SETTINGS > GRAPHICS: live.txt vr_jitter (ON / OFF), live and kept.
+    // HERO VR 79.2b (t2169): EYE JITTER, VR SETTINGS > GRAPHICS: live.txt vr_jitter, live and kept. 79.4 (t2188): a cycle,
+    // OFF > LOW 0.10 PX > MED 0.22 PX > FULL 0.44 PX (jitter_check.hpp), MED the default.
     vrJitter,
 };
 constexpr int controls = 250; // 79.2b: + EYE JITTER; // 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 PICTURE 72: - IMAGE, IMAGE STYLE, STREAMER MODE / SMOOTH / EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (0.0.72's picture); 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING (the uint8_t Control is full); 0.0.73: + COMING SOON; // 0.0.73 MPSUIT: + PLAYER 2 BODY; // 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; // 0.0.73 AA: + SHARPEN MATCH; // 0.0.73 test 6: + MP SOLO TEST (mp-solo-test merged); // 0.0.73 test 5: + HERO HANDS (IRON MAN), GRAPPLE AIM (DAREDEVIL), CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH (WOLVERINE); // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; // 0.0.73: + IMAGE; // 0.0.73 test 3: + VAN PEDALS; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
@@ -1034,7 +1035,7 @@ struct View {
     bool invincible{}, invincibleNa{}, flyVignette{}, symbiote{}, padMode{}, padByPrompt{}, monitorArmed{};
     bool doubleHealth{}; // 0.0.76 DOUBLE HEALTH on
     bool bodyAnimations{}; // 0.0.79.1 Dynamic Body selected in VR SETTINGS
-    bool vrJitterOff{};    // 79.2b EYE JITTER: live.txt vr_jitter = off in force
+    uint8_t vrJitterLevel = 2; // 79.4 EYE JITTER: the level in force (jitter_check::Level, 2 MED the default)
     uint32_t flyMode{};        // extras385::fly::Speed
     uint32_t flyRoll = 1;      // extras385::fly::RollMode (1 COMFORT, the default)
     bool flyAutoLevel = true;
@@ -1179,7 +1180,7 @@ class Menu {
         bool invincible{}, flyMode{}, flyVignette{}, symbiote{};    // Update 38.5 EXTRAS: pressed
         bool doubleHealth{};                                        // 0.0.76 DOUBLE HEALTH pressed
         bool bodyAnimations{};                                      // 0.0.79.1 BODY ANIMATIONS pressed
-        bool vrJitter{};                                            // 79.2b EYE JITTER pressed (on/off)
+        bool vrJitter{};                                            // 79.2b EYE JITTER pressed (the next level, 79.4)
         bool flyRoll{}, flyRollSpeed{}, flyAutoLevel{};             // Update 38.5: FLY ROLL pressed, ROLL SPEED moved
         bool padMode{}, promptHandling{}, playOnMonitor{};
         bool gestureMoves{};                                        // Update 38.5: GESTURE MOVES pressed

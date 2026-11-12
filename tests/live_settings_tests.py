@@ -114,11 +114,13 @@ class HologramPersistence(unittest.TestCase):
         self.assertIsNone(live.decode_hud_settings(11, self.M))
         # Version 0.0.62: selector 10 is the hologram's LENS FLARES
         # 0.0.7 MIRROR PERSIST FIX: selector 10 carries MIRROR VIEW in bit 1 too
-        self.assertEqual(live.decode_hud_settings(10, self.M), {'lens_flares': 'game', 'mirror_view': 'off', 'vr_jitter': 'on'})
-        self.assertEqual(live.decode_hud_settings(10, self.M | 1), {'lens_flares': 'off_in_vr', 'mirror_view': 'off', 'vr_jitter': 'on'})
-        self.assertEqual(live.decode_hud_settings(10, self.M | 3), {'lens_flares': 'off_in_vr', 'mirror_view': 'test', 'vr_jitter': 'on'})
-        # 79.2b (t2169): bit 2 the hologram's EYE JITTER (vr_jitter)
-        self.assertEqual(live.decode_hud_settings(10, self.M | 4)['vr_jitter'], 'off')
+        # 79.4 (t2188): bits 2-4 the hologram's EYE JITTER level (vr_jitter: 0 off, 1 low, 2 med, 3 full, 4 e5d2746)
+        med = 2 << 2
+        self.assertEqual(live.decode_hud_settings(10, self.M | med), {'lens_flares': 'game', 'mirror_view': 'off', 'vr_jitter': 'med'})
+        self.assertEqual(live.decode_hud_settings(10, self.M | 1 | med), {'lens_flares': 'off_in_vr', 'mirror_view': 'off', 'vr_jitter': 'med'})
+        self.assertEqual(live.decode_hud_settings(10, self.M | 3 | med), {'lens_flares': 'off_in_vr', 'mirror_view': 'test', 'vr_jitter': 'med'})
+        self.assertEqual([live.decode_hud_settings(10, self.M | level << 2)['vr_jitter'] for level in range(5)],
+                         ['off', 'low', 'med', 'full', 'e5d2746'])
         self.assertIsNone(live.decode_hud_settings(10, 1))
 
     def test_sharpen_and_reticles(self):

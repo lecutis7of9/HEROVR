@@ -118,6 +118,7 @@
 #include "spidy/fly_boost.hpp"
 #include "spidy/engine_taa.hpp"
 #include "spidy/sm1style.hpp"
+#include "spidy/jitter_check.hpp" // 79.4 EYE JITTER levels, JITTER CHECK
 #include "spidy/vr_aa.hpp"
 #include "spidy/taa_watch.hpp"
 #include "spidy/taa_depth.hpp"
@@ -36905,6 +36906,22 @@ int main() {
             check(steady[0] == s1::steadyJitter && steady[1] == s1::steadyJitter && steady[0] != 0 &&
                       s1::steadyJitter < 1e-5f && walk[0] == .3f && walk[1] == -.2f,
                   "FAR SHAKE: vr_jitter off is fixed and non-zero");
+            // 79.4 EYE JITTER levels: the largest offset the lens stores (2x the walk given, in eye pixels) is about 0.10 / 0.22 /
+            // 0.44 / 0.88 px; MED by default; the press goes OFF > LOW > MED > FULL > OFF and the hidden e5d2746 to OFF.
+            namespace jc = spidy::jitter_check;
+            check(jc::defaultLevel == jc::med && std::fabs(jc::maxStoredPixels(jc::low) - .10f) < .01f &&
+                      std::fabs(jc::maxStoredPixels(jc::med) - .22f) < .01f && std::fabs(jc::maxStoredPixels(jc::full) - .4375f) < .001f &&
+                      std::fabs(jc::maxStoredPixels(jc::e5d2746) - .875f) < .001f && jc::maxStoredPixels(jc::off) == 0 &&
+                      jc::nextLevel(jc::off) == jc::low && jc::nextLevel(jc::low) == jc::med && jc::nextLevel(jc::med) == jc::full &&
+                      jc::nextLevel(jc::full) == jc::off && jc::nextLevel(jc::e5d2746) == jc::off &&
+                      jc::levelFromLegacy(0) == jc::full && jc::levelFromLegacy(1) == jc::off,
+                  "79.4 EYE JITTER: the levels' sizes, MED the default, the cycle");
+            const float sent[2]{1e-4f, -2e-4f}, made[2]{2e-4f, 4e-4f};
+            const float lensJob[2]{2e-4f, 4e-4f}, twiceJob[2]{2e-4f, -4e-4f}, onceJob[2]{1e-4f, -2e-4f}, otherJob[2]{3e-4f, 1e-4f};
+            check(jc::classify(lensJob, sent, made) == jc::lens && jc::classify(twiceJob, sent, made) == jc::twice &&
+                      jc::classify(onceJob, sent, made) == jc::once && jc::classify(otherJob, sent, made) == jc::none &&
+                      sizeof(jc::Data) == 1024,
+                  "79.4 JITTER CHECK: a job's jitter is told from the lens's stored pair, twice or once what was given");
             check(s1::gameViewJitter(true, .0024f) == 0 && s1::gameViewJitter(false, .0024f) == .0024f,
                   "GHOST FIX: the game view keeps its jitter unless off");
             // EYE HISTORY CHECK: own only when the history set is the current one, not the main set, not the other's.

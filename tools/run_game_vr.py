@@ -42,6 +42,7 @@ from probe_stereo_gpu import MAX_EYE_SIZE, discover_queue, snapshot as gpu_snaps
 from sm1style_record import sm1style_snapshot, sm1style_line  # 0.0.76 EYE HISTORY CHECK
 import pose_check_record  # 0.0.76 POSE CHECK
 import jitter_log_record  # 0.0.76 JITTER FIX
+import jitter_check_record  # 79.4 JITTER CHECK
 import vr_aa_record  # 0.0.76 SPIDY TAA
 import taa_watch_record  # 0.0.76 TAA WATCH
 import taa_frame_log_record  # 0.0.76 TAA FRAME LOG
@@ -3174,6 +3175,7 @@ def session(a, startup, session_off=()):
             optional=(window_probe.EXPORT,
                       pose_check_record.EXPORT,  # 0.0.76 POSE CHECK: absent from an older module
                       jitter_log_record.EXPORT,  # 0.0.76 JITTER FIX
+                      jitter_check_record.EXPORT,  # 79.4 JITTER CHECK: absent from an older module
                       vr_aa_record.EXPORT,  # 0.0.76 SPIDY TAA
                       taa_watch_record.EXPORT,  # 0.0.76 TAA WATCH
                       taa_frame_log_record.EXPORT,  # 0.0.76 TAA FRAME LOG: absent from an older module
@@ -3226,6 +3228,9 @@ def session(a, startup, session_off=()):
         migrated_078 = live_settings.migrate_078_cutscenes(ROOT/'live.txt')
         if migrated_078:
             print(migrated_078, flush=True)
+        migrated_794 = live_settings.migrate_794_jitter(ROOT/'live.txt')  # 79.4: EYE JITTER's level, med once
+        if migrated_794:
+            print(migrated_794, flush=True)
         # 0.0.7 MIRROR PERSIST FIX: what is made when VR starts (MIRROR VIEW TEST) is set before the start.
         for name, value in live_settings.vr_start_settings(ROOT/'live.txt').items():
             _, export, text = live_settings.SETTINGS[name]
@@ -3278,7 +3283,7 @@ def session(a, startup, session_off=()):
         pose_check_last = None  # 0.0.76 POSE CHECK: pose_check_snapshot, kept from the samples
         # 0.0.76 SPIDY TAA TUNE: the vr_aa and jitter records kept from the samples too (the 11:26 report, written
         # after the game was closed, had neither: they were only read at a normal stop).
-        vr_aa_last = jitter_log_last = None
+        vr_aa_last = jitter_log_last = jitter_check_last = None
         taa_watch_last = None  # 0.0.76 TAA WATCH: taa_watch_snapshot, kept from the samples
         taa_watch_said = 0  # 10 s windows already printed
         depth_check_last = None  # 0.0.76 A-depth CHECKED: taa_depth_check_snapshot, kept from the samples
@@ -3604,7 +3609,7 @@ def session(a, startup, session_off=()):
                         render_memory=render_memory, timing=timing, network=links, eye_history=history_last,
                         sm1style_eyes=sm1style_last,
                         pose_check=pose_check_last,
-                        vr_aa=vr_aa_last, jitter_log=jitter_log_last,
+                        vr_aa=vr_aa_last, jitter_log=jitter_log_last, jitter_check=jitter_check_last,
                         taa_watch=taa_watch_record.taa_watch_report(taa_watch_last),
                         taa_frame_log=dict(most_still=taa_frame_log_record.taa_frame_log_report(frame_log_best),
                                            last=taa_frame_log_record.taa_frame_log_report(frame_log_last)),
@@ -3674,6 +3679,8 @@ def session(a, startup, session_off=()):
                         print(said, flush=True)
                     if (said := jitter_log_record.jitter_log_line(result.get('jitter_log'))):
                         print(said, flush=True)
+                    if (said := jitter_check_record.jitter_check_line(result.get('jitter_check'))):
+                        print(said, flush=True)  # 79.4 JITTER CHECK: the session's end, with each level change's second
                     if (said := vr_aa_record.vr_aa_line(result.get('vr_aa'))):
                         print(said, flush=True)
                     for said in taa_watch_record.taa_watch_lines(result.get('taa_watch'))[:2]:
@@ -4016,6 +4023,9 @@ def session(a, startup, session_off=()):
                             sfx_moments_said = sfx_last['moments_noted']
                     jitter_log_last = (jitter_log_record.jitter_log_snapshot(game, xr.get(jitter_log_record.EXPORT))
                                        or jitter_log_last)
+                    # 79.4 JITTER CHECK: kept each sample (the DLL's console prints its own line every 10 s too).
+                    jitter_check_last = (jitter_check_record.jitter_check_snapshot(
+                        game, xr.get(jitter_check_record.EXPORT), sample.get('seconds')) or jitter_check_last)
                     # Update 34.2: ENGINE TAA's record each sample, a console line when its state or mode changes.
                     if (taa := engine_taa_snapshot(game, xr['SpidyEngineTaaData'])):
                         said = (taa['state'], taa['reason'], taa['jitter_mode'], taa['jitter_scale'])
@@ -4292,6 +4302,8 @@ def session(a, startup, session_off=()):
             or pose_check_last,
             jitter_log=jitter_log_record.jitter_log_snapshot(game, xr.get(jitter_log_record.EXPORT))
             or jitter_log_last,
+            jitter_check=jitter_check_record.jitter_check_snapshot(game, xr.get(jitter_check_record.EXPORT))
+            or jitter_check_last,
             vr_aa=vr_aa_record.vr_aa_snapshot(game, xr.get(vr_aa_record.EXPORT)) or vr_aa_last,
             taa_watch=taa_watch_record.taa_watch_report(
                 taa_watch_record.taa_watch_snapshot(game, xr.get(taa_watch_record.EXPORT)) or taa_watch_last),

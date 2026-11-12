@@ -10,6 +10,7 @@
 #define SPIDY_TEST_VERSION "0.0.74"
 #endif
 #include "spidy/wrist_hud.hpp"
+#include "spidy/jitter_check.hpp" // 79.4 EYE JITTER levels
 #include "spidy/version.hpp"
 #include "spidy/extras385.hpp"
 #include "spidy/gestures385.hpp"
@@ -2581,7 +2582,7 @@ std::string buttonValue(const View& view, Control c) {
            : c == Control::invincible   ? std::string(view.invincible ? "ON" : "OFF")
            : c == Control::doubleHealth ? std::string(view.doubleHealth ? "ON" : "OFF")
            : c == Control::bodyAnimations ? std::string(view.bodyAnimations ? "DYNAMIC" : "CLASSIC")
-           : c == Control::vrJitter     ? std::string(view.vrJitterOff ? "OFF" : "ON")
+           : c == Control::vrJitter     ? std::string(jitter_check::rowText[std::min<uint32_t>(view.vrJitterLevel, jitter_check::levels - 1)])
            : c == Control::flyMode      ? std::string(extras385::fly::speedName(view.flyMode))
            : c == Control::flyVignette  ? std::string(view.flyVignette ? "ON" : "OFF")
            : c == Control::flyRoll      ? std::string(extras385::fly::rollName(view.flyRoll))
@@ -3479,7 +3480,7 @@ const char* helpText(Control c) {
     case Control::bodyAnimations:
         return "DYNAMIC adds wall, swing and flip poses; CLASSIC does not.";
     case Control::vrJitter:
-        return "OFF holds the eyes' TAA still (try it if far buildings shake); ON the TAA sample walk (sharper edges).";
+        return "Each press: OFF > LOW > MED > FULL. OFF holds the eyes' TAA still (no far shake, rougher edges); FULL is the biggest sample walk (sharpest, far buildings may shake).";
     case Control::flyMode:
         return extras385::fly::help;
     case Control::flyVignette:

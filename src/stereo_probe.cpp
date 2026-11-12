@@ -5,6 +5,7 @@
 #include "spidy/engine_taa.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/sm1style.hpp" // 0.0.74 test 10 SM1STYLE
+#include "spidy/jitter_check.hpp" // 79.4 JITTER CHECK, EYE JITTER levels
 #include "spidy/jitter_log.hpp" // 0.0.76 JITTER FIX
 #include "spidy/cutscene077.hpp" // HERO VR 0.0.77 CUTSCENES
 #include "spidy/cutscene077_gate.hpp" // HERO VR 0.0.77 CUTFIX
@@ -392,10 +393,126 @@ std::atomic<uintptr_t> sm1Jobs[2]{};
 } // namespace
 extern "C" {
 __declspec(dllexport) spidy::sm1style::Data SpidySm1StyleData;
+// 79.4 JITTER CHECK (include/spidy/jitter_check.hpp): what each eye's lens stored against what the game's TemporalAa
+// jobs read, the left-right difference, the other TemporalAa jobs, and EYE JITTER's level changes (read-only).
+__declspec(dllexport) spidy::jitter_check::Data SpidyJitterCheckData;
 // 0.0.76 JITTER FIX (include/spidy/jitter_log.hpp): each view's lens jitter, its first 200 frames (read-only).
 __declspec(dllexport) spidy::jitter_log::Data SpidyJitterLogData;
 }
 namespace {
+// 79.4 JITTER CHECK: the last 16 frames' lens jitter per eye (the game thread writes, the render thread's TemporalAa
+// reads; one small lock), and the level's changes.
+SRWLOCK jitterCheckLock = SRWLOCK_INIT;
+struct JitterRing {
+    uint64_t seq{};
+    uint64_t at[spidy::jitter_check::ringSize]{};
+    float sent[spidy::jitter_check::ringSize][2]{}, made[spidy::jitter_check::ringSize][2]{};
+} jitterRing[2];
+void jitterCheckChange(uint32_t level, uint32_t source) { // jitterCheckLock held
+    auto& d = SpidyJitterCheckData;
+    d.level = level;
+    if (d.changeCount < spidy::jitter_check::changeCapacity) {
+        auto& c = d.changes[d.changeCount];
+        c.tickMs = GetTickCount64();
+        c.level = level;
+        c.source = source;
+        ++d.changeCount;
+    }
+}
+// An eye's lens was given `sent` and stored `made` (the descriptor's +0x428 / +0x42c).
+void jitterCheckLens(unsigned eye, const float sent[2], const float* made) {
+    if (eye > 1)
+        return;
+    namespace jc = spidy::jitter_check;
+    auto& d = SpidyJitterCheckData;
+    AcquireSRWLockExclusive(&jitterCheckLock);
+    if (!d.startTickMs) {
+        d.startTickMs = GetTickCount64();
+        jitterCheckChange(d.level, 0);
+    }
+    d.lastTickMs = GetTickCount64();
+    auto& e = d.eyes[eye];
+    auto& r = jitterRing[eye];
+    const float m[2]{made[0x428 / 4], made[0x42c / 4]};
+    const uint32_t at = static_cast<uint32_t>(r.seq % jc::ringSize);
+    r.at[at] = ++r.seq;
+    r.sent[at][0] = sent[0], r.sent[at][1] = sent[1];
+    r.made[at][0] = m[0], r.made[at][1] = m[1];
+    ++e.lens;
+    if (jc::almost(m[0], 2 * sent[0]) && jc::almost(m[1], -2 * sent[1]))
+        ++e.lensRule;
+    e.sent[0] = sent[0], e.sent[1] = sent[1];
+    e.made[0] = m[0], e.made[1] = m[1];
+    e.maxSent = std::max({e.maxSent, std::fabs(sent[0]), std::fabs(sent[1])});
+    ReleaseSRWLockExclusive(&jitterCheckLock);
+}
+// A TemporalAa run of an eye's job read `jitter` (+0x428 / +0x42c of the job).
+void jitterCheckRun(unsigned eye, const float jitter[2]) {
+    if (eye > 1)
+        return;
+    namespace jc = spidy::jitter_check;
+    auto& d = SpidyJitterCheckData;
+    AcquireSRWLockExclusive(&jitterCheckLock);
+    auto& e = d.eyes[eye];
+    auto& r = jitterRing[eye];
+    ++e.runs;
+    e.job[0] = jitter[0], e.job[1] = jitter[1];
+    e.maxJob = std::max({e.maxJob, std::fabs(jitter[0]), std::fabs(jitter[1])});
+    if (jitter[0] == 0 && jitter[1] == 0)
+        ++e.jobZero;
+    jc::Match best = jc::none;
+    uint32_t lag = 0;
+    for (uint32_t k = 0; k < jc::ringSize && k < r.seq; ++k) {
+        const uint32_t at = static_cast<uint32_t>((r.seq - 1 - k) % jc::ringSize);
+        const auto match = jc::classify(jitter, r.sent[at], r.made[at]);
+        if (match != jc::none && (best == jc::none || match == jc::lens)) {
+            best = match;
+            lag = k;
+            if (match == jc::lens)
+                break;
+        }
+    }
+    switch (best) {
+    case jc::lens:
+        ++e.matchLens;
+        ++e.lag[lag];
+        break;
+    case jc::twice:
+        ++e.matchTwice;
+        break;
+    case jc::once:
+        ++e.matchOnce;
+        break;
+    default:
+        ++e.matchNone;
+    }
+    const auto& o = d.eyes[1 - eye];
+    if (o.runs) {
+        const float diff = std::max(std::fabs(jitter[0] - o.job[0]), std::fabs(jitter[1] - o.job[1]));
+        e.lrDiffMax = std::max(e.lrDiffMax, diff);
+    }
+    d.lastTickMs = GetTickCount64();
+    ReleaseSRWLockExclusive(&jitterCheckLock);
+}
+// A TemporalAa run of a job that is not an eye's: the game's own views and any other layer (first 8 jobs).
+void jitterCheckOther(uintptr_t job, const float jitter[2], uint32_t aa) {
+    namespace jc = spidy::jitter_check;
+    auto& d = SpidyJitterCheckData;
+    AcquireSRWLockExclusive(&jitterCheckLock);
+    jc::Other* at = nullptr;
+    for (uint32_t i = 0; i < d.otherCount; ++i)
+        if (d.others[i].job == job)
+            at = &d.others[i];
+    if (!at && d.otherCount < jc::otherJobs)
+        at = &d.others[d.otherCount++], at->job = job;
+    if (at) {
+        ++at->runs;
+        at->jitter[0] = jitter[0], at->jitter[1] = jitter[1];
+        at->aa = aa;
+    } else
+        ++d.otherDropped;
+    ReleaseSRWLockExclusive(&jitterCheckLock);
+}
 std::atomic<uint32_t> jitterLogReserved{0};
 void logJitter(uint32_t view, const float* stored, float x, float y, const float* made) {
     const float from[2]{stored[0x428 / 4], stored[0x42c / 4]}, to[2]{made[0x428 / 4], made[0x42c / 4]};
@@ -440,7 +557,10 @@ std::atomic<float> gameJitter[2]{}, eyeJitterSent[2]{};
 // 79.2b (t2168/t2169): vr_jitter OFF is the default in this test build. t2165 halved the eyes' walk and the far
 // buildings still shook (user, 2429458), so the eyes' lens now holds one fixed 1e-6 NDC offset unless live.txt or the
 // hologram (VR SETTINGS > GRAPHICS > EYE JITTER) says ON; the game's TAA still runs (it skips only a zero jitter).
-std::atomic<uint32_t> eyeJitterOff{1}, gameViewJitterOff{1};
+// 79.4 (t2188): EYE JITTER is a level now (jitter_check.hpp: off, low 0.10 px, med 0.22 px, full 0.44 px, e5d2746 0.88 px),
+// MED by default; eyeJitterOff is kept in step (1 only at level off) for the paths and exports that knew on / off.
+std::atomic<uint32_t> eyeJitterOff{0}, gameViewJitterOff{1};
+std::atomic<uint32_t> eyeJitterLevel{spidy::jitter_check::defaultLevel};
 // Update 34.2: ENGINE TAA's jitter mode and scale (engine_taa::JitterMode), live, never
 // kept; and what it did, for the report (SpidyEngineTaaData, tools/run_game_vr.py).
 // Update 37: NONE by default (the run36 closing setting).
@@ -2193,6 +2313,13 @@ void temporalAa(void* a, void* b, void* c, void* d) {
         if (sm1Jobs[i].load(std::memory_order_relaxed) == job)
             eye = i;
     if (eye < 0) {
+        if (job) { // 79.4 JITTER CHECK: a job that is not an eye's (the game's own views, any other layer)
+            float other[2]{};
+            uint32_t otherAa{};
+            read(job + spidy::engine_taa::jobJitter, other, sizeof other);
+            read(base + mt::jobAaGlobal, &otherAa, 4);
+            jitterCheckOther(job, other, otherAa);
+        }
         originalTemporalAa(a, b, c, d);
         return;
     }
@@ -2208,6 +2335,7 @@ void temporalAa(void* a, void* b, void* c, void* d) {
     const uintptr_t previous = pointer(job + mt::jobPrevious);
     read(job + mt::jobCut, &cut, 1);
     read(job + spidy::engine_taa::jobJitter, jitter, sizeof jitter);
+    jitterCheckRun(static_cast<unsigned>(eye), jitter); // 79.4 JITTER CHECK
     // 0.0.76 EYE HISTORY CHECK (mt::ownHistory): the eye's sets, the game's main set and the other eye's set.
     const uintptr_t eyeSet = pointer(job + mt::jobSet);
     const uintptr_t mainSet = pointer(base + mt::mainSetGlobal);
@@ -2664,9 +2792,12 @@ std::array<float, 2> eyeJitter() {
         // passed -0.000326, stored -0.000651 NDC at 2688 = -0.875 px), twice the game TAA's own sub-pixel walk.
         // Halved here, so each eye's game TAA gets the game's own +-0.5 px convention. vr_jitter = off still
         // holds one fixed offset instead (live, no restart).
+        // 79.4 (t2188): the walk is scaled by EYE JITTER's level (jitter_check.hpp: low 0.115, med 0.25, full 0.5 = the
+        // halved walk above, e5d2746 1.0); level off is eyeJitterOff (the fixed offset below).
         auto walk = spidy::sm1style::jitter(frameIndex, config.width, render[0], render[1]);
-        walk[0] *= .5f;
-        walk[1] *= .5f;
+        const uint32_t level = std::min<uint32_t>(eyeJitterLevel.load(std::memory_order_relaxed), spidy::jitter_check::levels - 1);
+        walk[0] *= spidy::jitter_check::scales[level];
+        walk[1] *= spidy::jitter_check::scales[level];
         const auto j = spidy::sm1style::eyeJitterFor(eyeJitterOff.load(std::memory_order_relaxed) != 0, walk);
         eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
         eyeJitterSent[1].store(j[1], std::memory_order_relaxed);
@@ -3228,6 +3359,8 @@ void placeEyes() {
                         jitter[0], jitter[1], false, false);
                     logJitter((index ? spidy::jitter_log::eyeRight : spidy::jitter_log::eyeLeft) | 0x100u, main.values,
                               jitter[0], jitter[1], descriptor.values);
+                    if (eyeTemporal.load() & 1)
+                        jitterCheckLens(index, jitter.data(), descriptor.values); // 79.4 JITTER CHECK
                     reinterpret_cast<SetPose>(base + 0x2c76310)(&descriptor, pose.data(), 0);
                 }
                 submitEye(eye, descriptor); // 0.0.74 test 10 WINDOW EDGES
@@ -3266,6 +3399,7 @@ void placeEyes() {
             near_clip::noteEyeLens(nearZ, main.farZ()); // 0.0.76 A-depth CHECKED: the depth check's near and far
             logJitter(index ? spidy::jitter_log::eyeRight : spidy::jitter_log::eyeLeft, main.values, jitter[0],
                       jitter[1], descriptor.values);
+            jitterCheckLens(index, jitter.data(), descriptor.values); // 79.4 JITTER CHECK
             if (controlled && desired.enabled == 1)
                 recordLens(index, descriptor,
                            {std::tan(fov[0]), std::tan(fov[1]), -std::tan(fov[3]), -std::tan(fov[2])});
@@ -4870,13 +5004,32 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaaJitter(void* mode) {
 // 0.0.76 FAR SHAKE: live.txt vr_jitter (0 on, 1 off: one fixed tiny offset, so the
 // game's TAA still runs) and vr_game_jitter (1 off, the default since 0.0.76 JITTER FIX: the head views pass
 // 0 to the lens; 0 keep: c71a59c's stored pair, which the lens doubled). Refused (4605, 4606) above 1.
+// 79.4 (t2188): EYE JITTER's level: 0 off, 1 low (about 0.10 px), 2 med (0.22, the default), 3 full (0.44, the halved walk),
+// 4 e5d2746 (0.88, the old walk; live.txt only); bit 8 set: it came from the hologram (the JITTER CHECK says which).
+// Refused (4605) above 4. SpidyVrJitter keeps the old on / off numbers (0 on = full, 1 off) for an older launcher.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyVrJitterLevel(void* value) {
+    const auto raw = reinterpret_cast<uintptr_t>(value);
+    const uint32_t level = static_cast<uint32_t>(raw & 0xff);
+    if (level >= spidy::jitter_check::levels || (raw & ~uintptr_t{0x1ff}))
+        return 4605;
+    const uint32_t before = eyeJitterLevel.exchange(level);
+    eyeJitterOff = level == spidy::jitter_check::off ? 1u : 0u;
+    if (before != level) {
+        AcquireSRWLockExclusive(&jitterCheckLock);
+        jitterCheckChange(level, raw & 0x100 ? 2 : 1);
+        ReleaseSRWLockExclusive(&jitterCheckLock);
+    }
+    char line[96];
+    std::snprintf(line, sizeof line, "79.4 EYE JITTER: %s (%.2f px)\n", spidy::jitter_check::names[level],
+                  spidy::jitter_check::maxStoredPixels(level));
+    OutputDebugStringA(line);
+    return 0;
+}
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyVrJitter(void* value) {
     const auto v = reinterpret_cast<uintptr_t>(value);
     if (v > 1)
         return 4605;
-    eyeJitterOff = static_cast<uint32_t>(v);
-    OutputDebugStringA(v ? "VR JITTER: off (fixed)\n" : "VR JITTER: on\n");
-    return 0;
+    return SpidyVrJitterLevel(reinterpret_cast<void*>(uintptr_t{spidy::jitter_check::levelFromLegacy(static_cast<uint32_t>(v))}));
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyVrGameJitter(void* value) {
     const auto v = reinterpret_cast<uintptr_t>(value);
@@ -4888,6 +5041,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyVrGameJitter(void* value) {
 }
 extern "C" uint32_t SpidyVrJitterNow() {
     return eyeJitterOff.load() | gameViewJitterOff.load() << 1;
+}
+extern "C" uint32_t SpidyVrJitterLevelNow() { // 79.4: 0 off .. 4 e5d2746
+    return eyeJitterLevel.load();
 }
 extern "C" uint32_t SpidyEngineTaaJitterNow() {
     return engineTaaJitterMode.load();

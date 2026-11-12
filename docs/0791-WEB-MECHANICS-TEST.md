@@ -180,3 +180,27 @@ VR SETTINGS > GRAPHICS > EYE JITTER to ON and look again, then back to OFF. Say 
 Test: start as SPIDER-MAN, play 3 minutes in a street (console: no MODELS lines but `not read at start`). Say whether
 the lag / audio stutter is still there. Then switch to another hero once (models read then) and play 1 minute.
 Collect reports.
+
+## 79.4 (t2188): EYE JITTER levels, JITTER CHECK (on top of 79.3 ed073f7)
+
+The 79.3 report (ed073f7) showed EYE JITTER OFF all session (one fixed 1e-6 offset): the far-building shake was gone and
+the aliasing / shimmer / slight ghosting was back, the game's TAA having no sub-pixel walk to gather. The e5d2746 walk
+(about 0.88 px) shook far buildings, and the halved walk (about 0.44 px) still did. This build makes the size a level.
+
+- Where: wrist hologram > VR SETTINGS > GRAPHICS > EYE JITTER (the last row; the row's value shows the level). Each press:
+  OFF > LOW 0.10 px > MED 0.22 px > FULL 0.44 px > OFF. Live, kept in live.txt (`vr_jitter = off | low | med | full`).
+  MED is the default. `vr_jitter = on` still means FULL. `vr_jitter = e5d2746` (about 0.88 px, the old full walk) is the
+  hidden fifth level, live.txt only; one press from it goes to OFF. A live.txt from 79.2b / 79.3 (on / off) is set to
+  med once.
+- Sizes are the largest offset the eye's lens stores, in eye pixels over the Halton (2, 3) walk of 8 phases (the lens
+  stores twice the jitter it is given): 2 * scale * 0.4375 px with scale 0.115 / 0.25 / 0.5 / 1.0.
+- Nothing else changed: vr_aa = game, the game's TAA in both eyes, lazy models, the 79.3 TAA counter.
+- JITTER CHECK: the console prints `79.4 JITTER CHECK` every 10 s (level; per eye the lens jitter given and stored, the
+  share of TemporalAa runs whose job read it equal to the stored pair - expected, the lens stores 2x, -2y - to twice or once
+  what was given or neither; the left-right job difference; the other TemporalAa jobs, e.g. the game's own views) and
+  `79.4 JITTER LEVEL at N s` for each level change. The report JSON has `jitter_check` (the same, plus each change with its
+  session second and whether it came from the hologram or live.txt; `other_jobs` lists any TemporalAa job that is not an
+  eye's, which is where a distant layer would show if it has its own job; none is named as far-LOD by the game).
+
+Test (about 5 minutes in a street): start as SPIDER-MAN; with MED look at far buildings, turn your head slowly; step the
+row LOW / MED / FULL / OFF and say, per level, which shakes and which shimmers. Collect reports.

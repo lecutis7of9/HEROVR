@@ -3485,7 +3485,7 @@ const char* helpText(Control c) {
     case Control::bodyAnimations:
         return "DYNAMIC adds wall, swing and flip poses; CLASSIC does not.";
     case Control::gameWallAnims:
-        return "ON: the game's own wall crawl and wall run animations take you on walls (the game's crawl, hand climb, level view). OFF: HEROVR's wall run, as before. ON waits until you leave a wall HEROVR holds. A drop off a wall puts HEROVR's wall back for a while.";
+        return "ON: the game's own wall crawl and run animations take you on walls. OFF: HEROVR's wall run. A drop off a wall brings HEROVR's wall back for a while.";
     case Control::vrJitter:
         return "Each press: OFF > LOW > MED > FULL. OFF holds the eyes' TAA still (no far shake, rougher edges); FULL is the biggest sample walk (sharpest, far buildings may shake).";
     case Control::flyMode:

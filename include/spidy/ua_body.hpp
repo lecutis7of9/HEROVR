@@ -8,8 +8,8 @@
 // two-bone arms to the grips, the fingers curling with the trigger and grip, the legs stepping with the walk), standing
 // on the room's floor under the eyes.
 //
-// Which body (pick): the hero's own worn suit when one is (the roster's - IRON MAN, CAP...), else (v4) the player's own SM2
-// Spider-Man, the game's, shown through the room (ua_body_cut.hpp), else nothing. The MUA1 Spider-Man avatar of v2 / v3
+// Which body (pick): the hero's own worn suit when one is (the roster's - IRON MAN, CAP...), else (v6) a stand-in roster suit
+// (standInSlot), else the player's own SM2 Spider-Man, the game's, shown through the room (ua_body_cut.hpp), else nothing. The MUA1 Spider-Man avatar of v2 / v3
 // (Models\UA\Body) and the fallback gloves are gone: the owner wants only the real SM2 body.
 //
 // LATER (combat and powers): the avatar is one function of a Drive - the tracked poses plus what the hero is doing.
@@ -17,6 +17,7 @@
 // curl in its Drive (suit_wear::Tracked's palm / curl / open fields, as IRON MAN's repulsor already does outside),
 // with no change to how the body is chosen or placed. Pure (no Windows, no D3D): the tests check it.
 #include "math.hpp"
+#include "mesh_model.hpp"
 #include "suit_wear.hpp"
 
 #include <cmath>
@@ -29,17 +30,47 @@ namespace spidy::ua_body {
 // - not even from a v3 install's leftover folder - and the converter no longer builds it.
 inline constexpr const char* folder = "UA/Body";
 
-enum class Source : uint8_t { none, wornSuit, gameHero };
-inline constexpr const char* sourceNames[3] = {"none", "worn suit", "game hero"};
+enum class Source : uint8_t { none, wornSuit, gameHero, standInSuit };
+inline constexpr const char* sourceNames[4] = {"none", "worn suit", "game hero", "stand-in suit"};
 
-// The body shown in a UA place (v4): the roster hero's worn suit (ready to wear) first; else the player's OWN SM2 hero, the
-// game's, posed by native_body and shown through the room by the cut (ua_body_cut.hpp), when native_body is drawing him;
-// else NOTHING - never a stand-in body (MUA's, gloves). Outside a UA place: none from here.
-constexpr Source pick(bool inUa, bool flatScreen, bool wornSuitReady, bool nativeBodyDrawn) {
+// UA EXPANSION v6 (owner: "no body in the tower now"): his own SM2 Spider-Man shown through the room by the cut (ua_body_cut.hpp)
+// has failed in every test, and the game ships no SM2 suit model to wear instead. Until the SM2 suit is extracted from the game
+// files (tools/ua/extract_sm2_suit.py), a roster suit stands in as the body: the first of these (indexes into
+// mesh_model::suitFolders) that is loaded and rigged. DAREDEVIL's red full-face suit first (the nearest to Spider-Man's
+// red and blue), then CAPTAIN AMERICA's (the Avengers'), then the others.
+inline constexpr uint32_t standInSuits[6] = {10, 8, 11, 9, 0, 4};
+constexpr bool sameName(const char* a, const char* b) {
+    while (*a && *a == *b)
+        ++a, ++b;
+    return *a == *b;
+}
+static_assert(sameName(mesh_model::suitFolders[standInSuits[0]], "Suit_daredevil_1") &&
+                  sameName(mesh_model::suitFolders[standInSuits[1]], "Suit_captainAmerica_1") &&
+                  sameName(mesh_model::suitFolders[standInSuits[2]], "Suit_daredevil_3") &&
+                  sameName(mesh_model::suitFolders[standInSuits[3]], "Suit_captainAmerica_2") &&
+                  sameName(mesh_model::suitFolders[standInSuits[4]], "Suit_batman_1") &&
+                  sameName(mesh_model::suitFolders[standInSuits[5]], "Suit_ironMan_1"),
+              "the stand-in suits' indexes follow mesh_model::suitFolders");
+// The slot of the stand-in suit (0: none is ready). `ready(k)`: suit k (an index into suitFolders) is loaded and rigged.
+template <class Ready>
+inline uint32_t standInSlot(Ready ready) {
+    for (const uint32_t k : standInSuits)
+        if (ready(k))
+            return mesh_model::slotSuitFirst + k;
+    return 0;
+}
+
+// The body shown in a UA place (v6): the roster hero's worn suit (ready to wear) first; else a STAND-IN roster suit (standInSlot,
+// ready: loaded and rigged) - it always shows, no cut needed; else, only when none exists, the player's OWN SM2 hero (the game's,
+// posed by native_body, shown through the room by the cut: it has never come through in a test); else nothing. Never MUA's body
+// or gloves. Outside a UA place: none from here.
+constexpr Source pick(bool inUa, bool flatScreen, bool wornSuitReady, bool standInReady, bool nativeBodyDrawn) {
     if (!inUa || flatScreen)
         return Source::none;
     if (wornSuitReady)
         return Source::wornSuit;
+    if (standInReady)
+        return Source::standInSuit;
     return nativeBodyDrawn ? Source::gameHero : Source::none;
 }
 

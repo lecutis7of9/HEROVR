@@ -65,7 +65,7 @@ class Cast(unittest.TestCase):
 class Body(unittest.TestCase):
     def test_only_his_own_sm2_hero(self):
         b = src('include/spidy/ua_body.hpp')
-        self.assertIn('enum class Source : uint8_t { none, wornSuit, gameHero };', b)
+        self.assertIn('enum class Source : uint8_t { none, wornSuit, gameHero, standInSuit };', b)
         self.assertNotIn('uaBody', b)
         c = src('include/spidy/ua_body_cut.hpp')
         self.assertIn('enum class Why : uint8_t', c)

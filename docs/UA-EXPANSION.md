@@ -207,3 +207,30 @@ sphere hides what is past 190 m, so each place sees only itself). Characters of 
   raised (`uaRoomTriangles` 300,000, `uaCastTriangles` 260,000, `maxCapTriangles`, `mostSourceTriangles`). The hologram is an
   opaque model (the game draws it translucent). The Act 5 maps (`act5/doomstark/doomstark1a`, `1b`, `2`: Doom's occupation of
   the tower) are combat levels, not converted. The C++ was only compiled by CI, not tried in a headset.
+
+## v6: textures on the cast, the lab's roof and windows, a body again
+
+Owner's v5 test: "textures on characters missing, Iron Man's Lab is whack, no skyline in the window, walls don't meet the
+ceiling, also no body in the tower now".
+
+- **White characters = the texture array was full.** All models share ONE texture array (`mesh_model::prepareTextures`,
+  slots in order, equal images share a layer), capped at `mostTextureLayers`. The models in the package hold 303 distinct
+  images (bikes 50, Batcave 35, suits ~50, hammers, van, Batmobiles, the room 84, the cast 3) against a cap of 256; the UA
+  slots load LAST, so the cast's three atlas pages found the array full ("drawn in its material colour": white). The cap is 400
+  now (loader and renderer share the one number; at 512 px about 1.4 MB a layer, 303 layers about 425 MB).
+- **Iron Man's Lab.** The hub's ceiling default (960 units over the player start) put the lab's ceiling 24.5 m up over walls of
+  9 m (pillars 12.2 m): a floating grid, open streaky sky between. The lab's ceiling is at 12.4 m now and a skirt of the
+  ceiling's panel (outside every wall, from 2 m up) closes the sides and the window bay above its lattice (6 m). The lab's
+  window glass has no texture, so drawn it was an opaque white wall in front of the skyline: it is left out like the hub's
+  panes (kept for the walk grid), and the city shows through the gold lattice. Fifteen prototype objects stored at the
+  engine's origin (a hanging light 26 m up, a second hologram, a lift disc, comics...) were left over 18 m south of the lab:
+  removed (`unplaced prototypes ... removed` in the build log; the hub's origin is its real south end and is left alone).
+- **The body.** His own SM2 hero through the cut never came through in a test, and the game has no SM2 suit model we can draw
+  yet. `ua_body::pick` is now: the worn roster suit; else a STAND-IN roster suit (`ua_body::standInSlot`: DAREDEVIL's red
+  suit first, CAPTAIN AMERICA's next...), posed to the head and both hands by `suit_wear` like any worn suit; else, only if
+  no suit is loaded, the old cut path. The log says `UA BODY: stand-in suit Suit_daredevil_1`.
+- **The real SM2 body** needs the suit's mesh from the game files. `include/spidy/sm2_model.hpp` reads the container and the
+  skeleton but its vertex and index layouts are CANDIDATE (from Rift Apart): nothing here can verify them without a Spider-Man 2
+  install. `tools/ua/sm2_body_check/SM2-BODY-CHECK.cmd` runs the read-only check on the user's PC (Python 3 + the game; it
+  writes `sm2model.json`: sections, sizes and counts only, no geometry). With that report the layouts are fixed and the
+  converter can write the suit as a `Models\Suits` folder.

@@ -16939,7 +16939,14 @@ DWORD runBody() {
                         const bool wornReady = mesh_model::slotIsSuit(wornNow) && suitsRigged.load() &&
                                                suitRigs[wornNow - mesh_model::slotSuitFirst].ok;
                         const bool nativeDrawn = native_body::drawn();
-                        const ua_body::Source uaSource = ua_body::pick(uaHere, saved->flatScreen, wornReady, nativeDrawn);
+                        // v6: no SM2 suit model exists to wear and the cut has never shown his own hero: a roster suit stands in
+                        const uint32_t standInSlot = uaHere && !wornReady && suitsRigged.load()
+                                                         ? ua_body::standInSlot([&](uint32_t k) {
+                                                               return mesh_model::library().model(mesh_model::slotSuitFirst + k) != nullptr &&
+                                                                      suitRigs[k].ok;
+                                                           })
+                                                         : 0u;
+                        const ua_body::Source uaSource = ua_body::pick(uaHere, saved->flatScreen, wornReady, standInSlot != 0, nativeDrawn);
                         static uint64_t uaCutAtEntry = 0;      // overlay.bodyCutDrawn() when this UA visit began
                         static bool uaCutWasHere = false, uaCutAsked = false;
                         static uint64_t uaCutNoteMs = 0, uaCutLogMs = 0, uaCutSince = 0;
@@ -16947,7 +16954,19 @@ DWORD runBody() {
                             uaCutAtEntry = overlay.bodyCutDrawn(), uaCutSince = GetTickCount64(), uaCutLogMs = uaCutNoteMs = 0;
                         uaCutWasHere = uaHere;
                         const bool uaGameHero = uaSource == ua_body::Source::gameHero;
-                        const uint32_t bodySlot = uaSource == ua_body::Source::wornSuit ? wornNow : 0u;
+                        const uint32_t bodySlot = uaSource == ua_body::Source::wornSuit      ? wornNow
+                                                  : uaSource == ua_body::Source::standInSuit ? standInSlot
+                                                                                             : 0u;
+                        {   // said once per visit: which body the player has in there
+                            static bool uaBodyTold = false;
+                            if (uaHere && !saved->flatScreen && bodySlot && !uaBodyTold) {
+                                uaBodyTold = true;
+                                consoleLine(std::string("UA BODY: ") + ua_body::sourceNames[static_cast<unsigned>(uaSource)] + " " +
+                                            mesh_model::suitFolders[bodySlot - mesh_model::slotSuitFirst]);
+                            }
+                            if (!uaHere)
+                                uaBodyTold = false;
+                        }
                         if (uaGameHero && validTrackedPose(rendered.headPose)) {
                             ua_body_cut::Player who;
                             who.eye = rendered.headPose.position + travel;

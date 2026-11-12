@@ -26,7 +26,7 @@ class Wiring(unittest.TestCase):
         self.assertIn('model_origin::shift(textured, modelOrigin, modelShifted_);', r)
 
     def test_body_drawn_in_ua(self):
-        self.assertIn('ua_body::pick(uaHere, saved->flatScreen, wornReady, nativeDrawn)', self.g)
+        self.assertIn('ua_body::pick(uaHere, saved->flatScreen, wornReady, standInSlot != 0, nativeDrawn)', self.g)
         self.assertIn('suitRig = &suitRigs[ws - mesh_model::slotSuitFirst];', self.g)
         self.assertIn('t.feet = ua_body::feet(t.eye, saved->hideoutFloor + travel.y, ua_expansion::eyeHeight);', self.g)
         # v4: MUA's body is gone - no rig, never loaded (even from a v3 install's leftover folder), no gloves in UA places

@@ -37854,13 +37854,19 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         check(hero007::modelSinkBudget >= 3 * (size_t{mm::uaRoomTriangles} + size_t{ua_cast::drawBudget} + size_t{mm::drawTriangles}),
               "the model sink holds the room, its characters and the player's body");
         using S = ub::Source;
-        // v4: the worn roster suit, else his own SM2 hero (native_body drawing him), else NOTHING (no MUA body, no gloves)
-        check(ub::pick(true, false, true, true) == S::wornSuit && ub::pick(true, false, false, true) == S::gameHero &&
-                  ub::pick(true, false, false, false) == S::none && ub::pick(true, false, true, false) == S::wornSuit,
-              "in a UA place: the worn suit, else the player's own SM2 hero, else nothing");
-        check(ub::pick(false, false, true, true) == S::none && ub::pick(true, true, true, true) == S::none &&
-                  ub::pick(true, true, false, true) == S::none,
+        // v6: the worn roster suit, else a stand-in roster suit, else (none ready) his own SM2 hero, else nothing
+        check(ub::pick(true, false, true, false, true) == S::wornSuit && ub::pick(true, false, false, false, true) == S::gameHero &&
+                  ub::pick(true, false, false, false, false) == S::none && ub::pick(true, false, true, true, false) == S::wornSuit &&
+                  ub::pick(true, false, false, true, true) == S::standInSuit && ub::pick(true, false, false, true, false) == S::standInSuit,
+              "in a UA place: the worn suit, else the stand-in suit, else the player's own SM2 hero, else nothing");
+        check(ub::pick(false, false, true, true, true) == S::none && ub::pick(true, true, true, true, true) == S::none &&
+                  ub::pick(true, true, false, true, true) == S::none,
               "outside a UA place, or on the flat screen: nothing from here");
+        check(ub::standInSlot([](uint32_t) { return false; }) == 0 &&
+                  ub::standInSlot([](uint32_t) { return true; }) == mm::slotSuitFirst + 10 &&
+                  ub::standInSlot([](uint32_t k) { return k == 8; }) == mm::slotSuitFirst + 8 &&
+                  ub::standInSlot([](uint32_t k) { return k == 7; }) == 0,
+              "the stand-in: DAREDEVIL's suit first, CAPTAIN AMERICA's next, only the listed suits, none ready: 0");
         check(ub::mask(0) == suit_wear::bodyBones && ub::mask(1) == suit_wear::bodyBones && ub::mask(2) == suit_wear::armBones &&
                   !(ub::mask(0) & (1u << suit_wear::boneHead)),
               "the full body (never the head over the eyes); SUIT BODY OFF keeps the hands");

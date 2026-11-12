@@ -22,7 +22,7 @@ class Wiring(unittest.TestCase):
         self.assertIn('const bool uaGameHero = uaSource == ua_body::Source::gameHero;', self.g)
         self.assertNotIn('uaCutGiveUp', self.g)
         self.assertNotIn('uaCutMisses', self.g)
-        self.assertIn('const uint32_t bodySlot = uaSource == ua_body::Source::wornSuit ? wornNow : 0u;', self.g)
+        self.assertIn('const uint32_t bodySlot = uaSource == ua_body::Source::wornSuit      ? wornNow', self.g)
         self.assertIn('overlay.setBodyCut(std::move(cut));', self.g)
         self.assertIn('who.footY = rendered.anchor.y + travel.y;', self.g)
         self.assertIn('UA OWN HERO: ', self.g)

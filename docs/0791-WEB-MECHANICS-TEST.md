@@ -294,3 +294,16 @@ Request: "just make me a build with the current public classic render pipeline i
 - **Stealth**: a prompt's named button still goes out through `NamedPress` (X = Square, Y = Triangle, claimed controls win over every other use of the
   button). New: with an enemy within 30 m a plain Y no longer starts `InteractStep` (the turn toward the gaze and the walk), which would spoil a takedown
   approach when the prompt was not read; the Y itself is sent as before.
+
+## 79.10 (includes everything in 79.9): stash door pull + WEB LINE MARKER toggle
+
+Holo footer: **0.0.79.10 TEST 10**.
+
+- **Prowler stash doors / web-yank interacts:** the 79.9 card "GAME: Y / PRESS Y (THE SCENE ASKS)" was a false
+  `CineApproachPrompt` detection (report game-vr-20261112-042721: Y reached the game 1654 frames, no native prompt,
+  nothing happened). Those doors open with the game's **L1+R1** after the L2 scan / L2+R2 code minigame (Digital Trends,
+  Twinfinite, Game8). The card is now **GAME: LB+RB / HOLD RIGHT STICK CLICK / TWO-HAND YANK**. Right stick click or a
+  two-hand yank (or both web buttons and a yank) sends L1+R1. Stand where the game wants you (beside, above or below
+  the door). Scene "press Y" cards still come from `CineQTEBeginAction`. This stash-door change is untested in a headset.
+- **WEB LINE MARKER** (VR SETTINGS > BODY AND VIEW, after GAME WALL ANIMS; `live.txt webline_marker`): **ON** the
+  default (the 40 px disc / red cross and preview line). OFF hides the marker. Live, kept in live.txt.

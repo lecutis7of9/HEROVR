@@ -598,6 +598,10 @@ SETTINGS = {
     'game_wall_anims': ((0, 1), 'SpidyGameWallAnims', "GAME WALL ANIMS {} (0 off, the default: HEROVR's own wall run; 1 on: the "
                         "game's own wall crawl, wall run and hand climb animations take you on walls, the view level) - live, "
                         "no restart needed"),
+    # 79.10: the Web Line's 40 px disc / red cross. 0 on (the default), 1 off. Wrist row WEB LINE MARKER (VR SETTINGS >
+    # BODY AND VIEW). Live; kept in live.txt.
+    'webline_marker': ((0, 1), 'SpidyWeblineMarkerMode', "WEB LINE MARKER {} (0 on, the default: the 40 px disc / red cross at "
+                       "the Web Line's second spot, with a preview line; 1 off: no marker) - live, no restart needed"),
     'cut_note': ((0, 1), 'SpidyCutNote', "CUT NOTE {} (0 off, the default: why a scene is on the flat screen goes to "
                  "the log only; 1 on: also a line along the VR screen's top, as cut6) - live, no restart needed"),
     'wall_view': ((0, 1), 'SpidyWallView', "WALL VIEW {} (0 level, the default: the horizon stays world-up while you "
@@ -852,6 +856,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'cut_note': ('off', 'on'),  # HERO VR 0.0.77 CUT7
                 'wall_view': ('level', 'turned'),  # HERO VR 0.0.77 CUT7
                 'game_wall_anims': ('off', 'on'),  # 79.6 GAME WALL ANIMS
+                'webline_marker': ('on', 'off'),  # 79.10 WEB LINE MARKER (0 on, 1 off)
                 'ledge_jump': ('all', 'game'),  # HERO VR 0.0.77 CUT7
                 'punch_web': ('on', 'off'),  # HERO VR 0.0.77 CUT7
                 'throw_watch': ('on', 'off'),  # HERO VR 0.0.77 CUT8
@@ -1147,6 +1152,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'cut_note': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
            'wall_view': {'level': 0, 'turned': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
            'game_wall_anims': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 79.6 GAME WALL ANIMS
+           'webline_marker': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 79.10 WEB LINE MARKER
            'ledge_jump': {'all': 0, 'game': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
            'punch_web': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
            'throw_watch': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT8
@@ -1429,7 +1435,8 @@ PERSISTED = ('web_width', 'web_speed', 'aa', 'history', 'reach', 'monitor', 'sha
              'lens_flares',  # Version 0.0.62: the hologram's LENS FLARES (RESTART: kept for the next start)
              'mirror_view',  # 0.0.7 MIRROR PERSIST FIX: the hologram's MIRROR VIEW (RESTART), the same
              'vr_jitter',  # 79.2b (t2169): the hologram's EYE JITTER (live), kept and applied at the next start
-             'game_wall_anims')  # 79.6: the hologram's GAME WALL ANIMS (live), kept and applied at the next start
+             'game_wall_anims',  # 79.6: the hologram's GAME WALL ANIMS (live), kept and applied at the next start
+             'webline_marker')  # 79.10: the hologram's WEB LINE MARKER (live), ON the default, kept in live.txt
 # Update 23: live.txt-only settings (no hologram control) also applied when a session starts, so they keep.
 START_ONLY = ('web_start', 'trail')  # Update 34.2: trail kept from live.txt
 # Update 37: every new live.txt setting applies at the start too (a file written before the launch
@@ -1545,14 +1552,15 @@ CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach
                 29: 'lens_flares',  # Version 0.0.62: the hologram's LENS FLARES (RESTART), kept in live.txt
                 21: 'mirror_view',  # 0.0.7: MIRROR VIEW (RESTART), kept in live.txt (was lost at every restart)
                 22: 'vr_jitter',  # 79.2b (t2169): VR SETTINGS > GRAPHICS > EYE JITTER, live, kept in live.txt
-                23: 'game_wall_anims'}  # 79.6: VR SETTINGS > BODY AND VIEW > GAME WALL ANIMS, live, kept in live.txt
+                23: 'game_wall_anims',  # 79.6: VR SETTINGS > BODY AND VIEW > GAME WALL ANIMS, live, kept in live.txt
+                24: 'webline_marker'}  # 79.10: VR SETTINGS > BODY AND VIEW > WEB LINE MARKER, live, kept in live.txt
 # Update 18: WEB COLOR sets the chosen style's shade; the launcher keeps every style's.
 WEB_COLOR_KEYS = tuple(f'web_color_{style}' for style in WEB_STYLES)
 SELECTOR = {'web_width': 0, 'web_speed': 0, 'aa': 1, 'history': 1, 'reach': 1, 'monitor': 1, 'supersample': 2,
             'sharpen': 4, 'reticles': 4, 'hud_height': 5, 'hud_scale': 5, 'hud_text': 5, 'hud_theme': 5,
             'hud_text_color': 5, 'web_style': 6, **{key: 6 for key in WEB_COLOR_KEYS},
             'music_volume': 7, 'music_visualizer': 7, 'music_track': 7, 'lens_flares': 10,
-            'mirror_view': 10, 'vr_jitter': 10, 'game_wall_anims': 10}
+            'mirror_view': 10, 'vr_jitter': 10, 'game_wall_anims': 10, 'webline_marker': 10}
 CHANGED_SELECTOR = 3
 MARKER = 1 << 30
 SUPERSAMPLES = (100, 200)
@@ -1579,7 +1587,8 @@ def decode_hud_settings(selector, code):
         return {'lens_flares': ('game', 'off_in_vr')[min(code & 1, 1)],
                 'mirror_view': ('off', 'test')[code >> 1 & 1],
                 'vr_jitter': ('off', 'low', 'med', 'full', 'e5d2746')[min(code >> 2 & 7, 4)],  # 79.4: EYE JITTER level (bits 2-4)
-                'game_wall_anims': ('off', 'on')[code >> 5 & 1]}  # 79.6: GAME WALL ANIMS (bit 5)
+                'game_wall_anims': ('off', 'on')[code >> 5 & 1],  # 79.6: GAME WALL ANIMS (bit 5)
+                'webline_marker': ('on', 'off')[code >> 6 & 1]}  # 79.10: WEB LINE MARKER (bit 6, 0 on)
     if selector == CHANGED_SELECTOR:
         changed = {CONTROL_KEYS[bit]: True for bit in CONTROL_KEYS if code >> bit & 1}
         if changed.pop('web_color', None):

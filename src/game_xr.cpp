@@ -1241,6 +1241,8 @@ std::atomic<bool> climbOn{hand_crawl::Config{}.on}, gameWallCrawl{false}, wallCr
 // hand_climb 1 + wall_view level) when no swing wall holds him, and shows 0 OFF, 1 ON, 2 ON waiting, 3 ON recovering.
 std::atomic<bool> gameWallAnimsWanted{false};
 std::atomic<uint32_t> gameWallAnimsShown{0};
+// 79.10 WEB LINE MARKER: live.txt webline_marker, 0 on (the default), 1 off.
+std::atomic<uint32_t> weblineMarkerNow{0};
 // Update 37.2: WALL BODY (wall_body.hpp; live.txt wall_body), default OFF: the drawn body lies
 // against a wall instead of standing out from it (only the picture).
 std::atomic<bool> wallBodyOn{wall_body::defaultOn};
@@ -2563,6 +2565,7 @@ DWORD runBody() {
             modelsAdopted = true;
         };
         consoleLine(std::string("79.5 BUILD TAG: ") + SpidyBuildTag + " (this line is in the DLL that is running; a console without it is an older build)");
+        consoleLine("HERO VR 79.10 TEST (includes 79.9): Prowler stash doors and other web-yank interacts use L1+R1, not Y (HOLD RIGHT STICK CLICK or a two-hand yank / both web buttons); the false GAME: Y card from CineApproachPrompt is gone. WEB LINE MARKER (VR SETTINGS > BODY AND VIEW; live.txt webline_marker, ON the default) hides the 40 px disc / red cross when off");
         consoleLine("HERO VR 79.9 TEST (includes 79.8): CAMERA GESTURE: the LEFT trigger pulled at the LEFT side of the head is Peter's camera gadget (the game's "
                     "D-pad Up held, CANDIDATE) or the second spider's Prowler scan (the game's L2 held while the game names L2; live.txt camera_hero); the RIGHT trigger at the "
                     "head is the scan as before; Y near an enemy goes out plain (no turn / walk toward the gaze) so a stealth takedown is not spoiled");
@@ -5041,6 +5044,13 @@ DWORD runBody() {
                                     message(3, 0, next ? "HEROVR GAME WALL ANIMS: ON (applies off the swing's wall)"
                                                        : "HEROVR GAME WALL ANIMS: OFF (HEROVR's wall run)");
                                     consoleLine(std::string("79.7 WALL: GAME WALL ANIMS ") + (next ? "ON" : "OFF") + " from the hologram");
+                                }
+                                if (result.weblineMarker) { // 79.10 WEB LINE MARKER: the next press flips it (0 on, 1 off)
+                                    const uint32_t next = weblineMarkerNow.load() ? 0u : 1u;
+                                    weblineMarkerNow = next;
+                                    wristChanged |= 1u << 24; // SpidyHudSettings 3 bit 24, 10 bit 6
+                                    message(3, 0, next ? "HEROVR WEB LINE MARKER: OFF" : "HEROVR WEB LINE MARKER: ON");
+                                    consoleLine(std::string("79.10 WEB LINE MARKER ") + (next ? "OFF" : "ON") + " from the hologram");
                                 }
                                 if (result.vrJitter) { // 79.2b (t2169): EYE JITTER, live; the launcher keeps it in live.txt
                                     // 79.4 (t2188): the next level (OFF > LOW > MED > FULL > OFF; the hidden e5d2746 goes to OFF).
@@ -16615,6 +16625,8 @@ DWORD runBody() {
                                 appendAimMarker(translucent, mark, viewer, pixelAngle * markerPixels,
                                                 saved->uiStyle);
                         for (const auto& line : weblineDraw) {
+                            if (weblineMarkerNow.load() != 0)
+                                continue; // 79.10: live.txt webline_marker / WEB LINE MARKER off: no disc or preview
                             if (line.hasFrom && !line.aimOnly &&
                                 appendWeblinePreview(translucent, line.from, line.point, line.valid, viewer,
                                                      pixelAngle * markerPixels))
@@ -18259,6 +18271,7 @@ DWORD runBody() {
                                             hud.bodyAnimations = values.legAnimations; // 0.0.79.1 wrist toggle
                                             hud.vrJitterLevel = static_cast<uint8_t>(SpidyVrJitterLevelNow()); // 79.4 EYE JITTER
                                             hud.gameWallAnims = static_cast<uint8_t>(gameWallAnimsShown.load()); // 79.6 GAME WALL ANIMS
+                                            hud.weblineMarker = weblineMarkerNow.load() == 0 ? 1 : 0; // 79.10: 1 ON, 0 OFF
                                             hud.flyMode = flyModeNow.load();
                                             hud.flyVignette = flyVignetteOn.load();
                                             hud.flyRoll = flyRollNow.load();
@@ -19335,6 +19348,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyCutNote(void* v) { return set
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWallView(void* v) { return setLive(v, 0, 1, 5595, wallViewNow, asU32); }
 // 79.6 GAME WALL ANIMS (include/spidy/wall_anims.hpp), live.txt game_wall_anims 0 off (the default) / 1 on.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyGameWallAnims(void* v) { return setLive(v, 0, 1, 5660, gameWallAnimsWanted, asBool); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeblineMarkerMode(void* v) { return setLive(v, 0, 1, 5662, weblineMarkerNow, asU32); }
 // (79.6 WALL WATCH's record, SpidyWallAnimsData, is defined with the exports at the top of this file.)
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyLedgeJump(void* v) { return setLive(v, 0, 1, 5596, ledgeJumpNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunchWeb(void* v) { return setLive(v, 0, 1, 5597, punchWebNow, asU32); }
@@ -20213,7 +20227,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
         // The 20 settings' bits, and Update 19's song (20), music volume (27) and visualizer (28).
         // Version 0.0.62: LENS FLARES (29), kept for the next start. 0.0.7: MIRROR VIEW (21), the same.
         // 79.2b: EYE JITTER (22), kept in live.txt as vr_jitter. 79.6: GAME WALL ANIMS (23), game_wall_anims.
-        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29 | 1u << 22 | 1u << 23));
+        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29 | 1u << 22 | 1u << 23 | 1u << 24));
     case 4: // Update 21: sharpening 0-200 in bits 0-7, the reticles shown in bit 8 (Update 16: 0-6 and 7)
         return marker | std::min<DWORD>(native_gpu::eyeSharpen(), 255) | (reticlesShown.load() ? 1u : 0u) << 8;
     case 5: // Update 17: the hologram's height, size, text size, theme and text colour
@@ -20237,7 +20251,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
              // 0.0.7: MIRROR VIEW (bit 1: 0 OFF, 1 TEST), the same (an older launcher reads bit 0 only)
         // 79.4: bits 2-4 EYE JITTER's level (live.txt vr_jitter: 0 off, 1 low, 2 med, 3 full, 4 e5d2746).
         return marker | std::min<DWORD>(c38(combat38::lensFlares), 1) | std::min<DWORD>(c38(combat38::mirrorView), 1) << 1 |
-               std::min<DWORD>(SpidyVrJitterLevelNow(), 4) << 2 | (gameWallAnimsWanted.load() ? 1u : 0u) << 5; // 79.6: bit 5 GAME WALL ANIMS
+               std::min<DWORD>(SpidyVrJitterLevelNow(), 4) << 2 | (gameWallAnimsWanted.load() ? 1u : 0u) << 5 | // 79.6: bit 5 GAME WALL ANIMS
+               (weblineMarkerNow.load() ? 1u : 0u) << 6; // 79.10: bit 6 WEB LINE MARKER (0 on, 1 off)
     default:
         return 3970;
     }

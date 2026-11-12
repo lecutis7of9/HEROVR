@@ -21,8 +21,9 @@
 namespace spidy::story077d {
 // marker (HERO VR 0.0.77 INTERACT CARDS AND WAYPOINT, story077g.hpp): never a card - a candidate place of the
 // current objective for the yellow waypoint, and logged.
-// cine (CUT5, CANDIDATE): a scene's own "press Y" offer (CineApproachPrompt / CineQTEBeginAction - cut4's stuck
-// save sat 66-94 s by one): within its reach of the hero, on him too, a screen card and the game's Y routed.
+// cine (CUT5): a scene's own "press Y" offer (CineQTEBeginAction). CineApproachPrompt was also listed here as
+// CANDIDATE; 79.10 remaps it to an LB+RB pull (Prowler stash doors open with L1+R1, not Y: 79.9 report
+// game-vr-20261112-042721 sent Y 1654 frames with no effect).
 enum Where : uint32_t { screen = 0, object = 1, watchOnly = 2, marker = 3, cine = 4 };
 struct Kind {
     const char* cls;  // decorated RTTI name (exact)
@@ -82,7 +83,7 @@ inline constexpr Kind kinds[] = {
     {".?AVSimplePrompt@@", "", "", watchOnly, 0, 0},
     {".?AVTutorialContextualPrompt@@", "", "", watchOnly, 0, 0},
     {".?AVStateContextPromptAction@@", "", "", watchOnly, 0, 0},
-    {".?AVCineApproachPrompt@@", "Y", "PRESS Y (THE SCENE ASKS)", cine, 0, 4},
+    {".?AVCineApproachPrompt@@", "LB+RB", "HOLD RIGHT STICK CLICK / TWO-HAND YANK", object, 0, 10},
     {".?AVSandFragmentOffer@@", "", "", watchOnly, 0, 0},
     {".?AVSandFragment@@", "", "", watchOnly, 0, 0},
     // HERO VR 0.0.77 INTERACT CARDS (CANDIDATE kinds; the class names and their bases are CONFIRMED in
@@ -136,7 +137,7 @@ inline bool interactKind(uint32_t i) {
         return false;
     for (const char* c : {".?AVVehiclePushable@@", ".?AVWaterPipe@@", ".?AVEnviroInteractBase@@",
                           ".?AVInteractLocationOffer@@", ".?AVPickupCarryableOffer@@", ".?AVHoldOffer@@",
-                          ".?AVInWorldInteractOffer@@", ".?AVProximityOffer@@"})
+                          ".?AVInWorldInteractOffer@@", ".?AVProximityOffer@@", ".?AVCineApproachPrompt@@"})
         if (!std::strcmp(k->cls, c))
             return true;
     return false;

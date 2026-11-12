@@ -582,8 +582,9 @@ enum class Control : uint8_t {
     // OFF > LOW 0.10 PX > MED 0.22 PX > FULL 0.44 PX (jitter_check.hpp), MED the default.
     vrJitter,
     gameWallAnims, // 79.6 GAME WALL ANIMS (VR SETTINGS > BODY AND VIEW): the game's own wall crawl / run, live.txt game_wall_anims
+    weblineMarker, // 79.10 WEB LINE MARKER (VR SETTINGS > BODY AND VIEW): the 40 px Web Line disc / cross, live.txt webline_marker, ON the default
 };
-constexpr int controls = 251; // 79.2b: + EYE JITTER; // 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 PICTURE 72: - IMAGE, IMAGE STYLE, STREAMER MODE / SMOOTH / EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (0.0.72's picture); 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING (the uint8_t Control is full); 0.0.73: + COMING SOON; // 0.0.73 MPSUIT: + PLAYER 2 BODY; // 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; // 0.0.73 AA: + SHARPEN MATCH; // 0.0.73 test 6: + MP SOLO TEST (mp-solo-test merged); // 0.0.73 test 5: + HERO HANDS (IRON MAN), GRAPPLE AIM (DAREDEVIL), CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH (WOLVERINE); // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; // 0.0.73: + IMAGE; // 0.0.73 test 3: + VAN PEDALS; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
+constexpr int controls = 252; // 79.2b: + EYE JITTER; // 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 PICTURE 72: - IMAGE, IMAGE STYLE, STREAMER MODE / SMOOTH / EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (0.0.72's picture); 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING (the uint8_t Control is full); 0.0.73: + COMING SOON; // 0.0.73 MPSUIT: + PLAYER 2 BODY; // 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; // 0.0.73 AA: + SHARPEN MATCH; // 0.0.73 test 6: + MP SOLO TEST (mp-solo-test merged); // 0.0.73 test 5: + HERO HANDS (IRON MAN), GRAPPLE AIM (DAREDEVIL), CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH (WOLVERINE); // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; // 0.0.73: + IMAGE; // 0.0.73 test 3: + VAN PEDALS; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
 // Version 0.0.72: + 40 combat rows, + 2 sections; build 6: + THOR HAMMER MODEL, THOR FLIGHT
 constexpr int combatControls = 163; // HERO VR 0.0.78: + PUNISHER ARSENAL, SCOPE ZOOM, MAG EJECT (live.txt only); 0.0.76 MP WORLD: + PLAYER 2 PLACE (live.txt only); 0.0.74 test 10 PICTURE 72: the nine 0.0.73 picture switches 0.0.72 never had taken out; 0.0.74 test 10: + GLIDE TILT (live.txt only); 0.0.74 test 10: + QUICK HOOK, GRAPPLE YANK, SURE GRAPPLE, BELT ZONES; 0.0.74 test 10: + ENTRY FACING, HIDEOUT HOLD; 0.0.74 test 10: + THROW BY SWING (live.txt only); 0.0.74 test 10: the 0.0.74 tests' picture / AA options taken out (the 0.0.73 picture again); 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING, BATMOBILE, BATMOBILE CHOICE; 0.0.73: + MP SOLO TEST, PLAYER 2 BODY, COMING SOON; // 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; // 0.0.73 AA: + SHARPEN MATCH; // 0.0.73 test 6: + MP SOLO TEST (mp-solo-test merged); // 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; // 0.0.73: + IMAGE; // 0.0.73 test 3: + VAN PEDALS; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // combat38::options (checked in wrist_hud.cpp); build 9: + SUIT BODY
 // 0.0.74 test 1: the options with a wrist row (the uint8_t Control is full; BATMOBILE and
@@ -614,7 +615,7 @@ static_assert(static_cast<int>(Control::colorStrength) >= maskedControls, "a liv
 static_assert(static_cast<int>(Control::foveaInner) >= maskedControls, "a live slider past the mask");
 static_assert(static_cast<int>(Control::heroTabSpider) >= maskedControls, "only presses past the mask");
 static_assert(static_cast<int>(Control::section0) >= maskedControls, "only presses past the mask");
-static_assert(static_cast<int>(Control::gameWallAnims) == controls - 1);
+static_assert(static_cast<int>(Control::weblineMarker) == controls - 1);
 // Each the value of the live.txt key it is named for, as the mod runs now.
 struct Settings {
     float widthCm = 1.3f; // web_width
@@ -1038,6 +1039,7 @@ struct View {
     bool bodyAnimations{}; // 0.0.79.1 Dynamic Body selected in VR SETTINGS
     uint8_t vrJitterLevel = 2; // 79.4 EYE JITTER: the level in force (jitter_check::Level, 2 MED the default)
     uint8_t gameWallAnims{};   // 79.6 GAME WALL ANIMS: 0 OFF, 1 ON, 2 ON waiting (on the swing's wall), 3 ON recovering (HEROVR's wall for a while)
+    uint8_t weblineMarker = 1; // 79.10 WEB LINE MARKER: 0 OFF, 1 ON (the default)
     uint32_t flyMode{};        // extras385::fly::Speed
     uint32_t flyRoll = 1;      // extras385::fly::RollMode (1 COMFORT, the default)
     bool flyAutoLevel = true;
@@ -1184,6 +1186,7 @@ class Menu {
         bool bodyAnimations{};                                      // 0.0.79.1 BODY ANIMATIONS pressed
         bool vrJitter{};                                            // 79.2b EYE JITTER pressed (the next level, 79.4)
         bool gameWallAnims{};                                       // 79.6 GAME WALL ANIMS pressed
+        bool weblineMarker{};                                       // 79.10 WEB LINE MARKER pressed
         bool flyRoll{}, flyRollSpeed{}, flyAutoLevel{};             // Update 38.5: FLY ROLL pressed, ROLL SPEED moved
         bool padMode{}, promptHandling{}, playOnMonitor{};
         bool gestureMoves{};                                        // Update 38.5: GESTURE MOVES pressed

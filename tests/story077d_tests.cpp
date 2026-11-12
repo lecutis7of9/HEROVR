@@ -142,6 +142,23 @@ int main() {
     check(bossYOn == 0 && bossCardMetres >= 200.f, "boss Y card: on by default, 200 m");
     // The settings: the full frame off by default, the cards on.
     check(windowOff == 0 && cardsOn == 0, "defaults: no full frame, cards on");
+    // 79.10: CineApproachPrompt is an LB+RB pull (Prowler stash doors), not a cine Y card.
+    const int approach = kindNamed(".?AVCineApproachPrompt@@"), cineY = kindNamed(".?AVCineQTEBeginAction@@");
+    check(approach >= 0 && cineY >= 0, "approach / cine Y kinds");
+    check(kinds[approach].where == object && pullKind(static_cast<uint32_t>(approach)) &&
+              interactKind(static_cast<uint32_t>(approach)) && !cineKind(static_cast<uint32_t>(approach)) &&
+              !std::strcmp(gameLine(approach), "LB+RB") &&
+              !std::strcmp(vrLine(approach), "HOLD RIGHT STICK CLICK / TWO-HAND YANK"),
+          "CineApproachPrompt is an LB+RB pull, not cine Y");
+    check(cineKind(static_cast<uint32_t>(cineY)) && !std::strcmp(vrLine(cineY), "PRESS Y (THE SCENE ASKS)"),
+          "CineQTEBeginAction stays the scene's Y card");
+    Seen stash[1]{};
+    stash[0] = Seen{51, {103.5f, 0, 100}, 30.f, static_cast<uint32_t>(approach), true, true}; // 3.5 m, already there
+    check(choose(stash, 1, hero, true, out) == 1 && out[0].onObject && out[0].id == 51 &&
+              !std::strcmp(gameLine(out[0].kind), "LB+RB"),
+          "a CineApproachPrompt 3.5 m away: an LB+RB object card, not PRESS Y");
+    stash[0].world = {120, 0, 100}; // 20 m
+    check(choose(stash, 1, hero, true, out) == 0, "CineApproachPrompt 20 m: none");
     if (failures)
         std::printf("%d failure(s)\n", failures);
     else

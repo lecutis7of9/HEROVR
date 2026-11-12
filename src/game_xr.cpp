@@ -3506,7 +3506,7 @@ DWORD runBody() {
         // 79.6 GAME WALL ANIMS: the watch, and what the loop applied.
         wall_anims::Watch wallWatch;
         std::vector<wall_anims::Note> wallNotes;
-        double wallClock = 0, wallFallbackUntil = 0, wallSummaryAt = 0;
+        double wallAnimsClock = 0, wallFallbackUntil = 0, wallSummaryAt = 0;
         float wallLineBudget = 6.f;
         uint32_t wallSummaryRevision = 0;
         bool wallAnimsOn = false, wallDeferredSaid = false, wallPriorClimb = true, wallAutoOff = false;
@@ -8411,7 +8411,7 @@ DWORD runBody() {
                     controls(keys);
                     askingGame = false;
                     { // 79.6 GAME WALL ANIMS and its WALL WATCH (see include/spidy/wall_anims.hpp)
-                        wallClock += frame.seconds;
+                        wallAnimsClock += frame.seconds;
                         const bool wantWall = gameWallAnimsWanted.load();
                         const auto applyWall = [&](bool on) {
                             if (on) {
@@ -8431,13 +8431,13 @@ DWORD runBody() {
                             wallAnimsOn = on;
                             wallFallbackUntil = 0;
                             wallDeferredSaid = false;
-                            wallWatch.add(wallNotes, wall_anims::toggle, wallClock, on ? 1.f : 0.f);
+                            wallWatch.add(wallNotes, wall_anims::toggle, wallAnimsClock, on ? 1.f : 0.f);
                         };
                         if (wantWall && !wallAnimsOn) {
                             if (swingState.wall == 1) { // on HEROVR's own wall: the swap waits until he is off it
                                 if (!wallDeferredSaid) {
                                     wallDeferredSaid = true;
-                                    wallWatch.add(wallNotes, wall_anims::deferred, wallClock);
+                                    wallWatch.add(wallNotes, wall_anims::deferred, wallAnimsClock);
                                 }
                             } else {
                                 applyWall(true);
@@ -8447,7 +8447,7 @@ DWORD runBody() {
                         }
                         if (!wantWall)
                             wallDeferredSaid = false;
-                        if (wallAnimsOn && wallFallbackUntil > 0 && wallClock >= wallFallbackUntil && swingState.wall != 1 &&
+                        if (wallAnimsOn && wallFallbackUntil > 0 && wallAnimsClock >= wallFallbackUntil && swingState.wall != 1 &&
                             swingState.wall != 2) { // the recovery over: the game's wall again
                             wallFallbackUntil = 0;
                             gameWallCrawl = true;
@@ -8457,7 +8457,7 @@ DWORD runBody() {
                         LARGE_INTEGER wallNow{};
                         QueryPerformanceCounter(&wallNow);
                         wall_anims::Input win;
-                        win.session = wallClock;
+                        win.session = wallAnimsClock;
                         win.enabled = wallAnimsOn && wallFallbackUntil == 0;
                         win.surface = swingState.wall;
                         win.airborne = game_swing::airborne(swingState, wallNow.QuadPart, frequency.QuadPart);
@@ -8476,7 +8476,7 @@ DWORD runBody() {
                         if (wallAct.levelView)
                             rig.diedOrRespawned(); // the view flipped on a wall: level it (GameTrackingRig, as a respawn)
                         if (wallAct.recover && wallAnimsOn && wallFallbackUntil == 0) {
-                            wallFallbackUntil = wallClock + wall_anims::fallbackSeconds; // HEROVR's wall holds him meanwhile
+                            wallFallbackUntil = wallAnimsClock + wall_anims::fallbackSeconds; // HEROVR's wall holds him meanwhile
                             gameWallCrawl = false;
                             wallCrawlChanged = true;
                         }
@@ -8503,9 +8503,9 @@ DWORD runBody() {
                                                    (wallAutoOff ? 16u : 0u);
                         wallWatch.flags(wallFlags);
                         gameWallAnimsShown = !wallAnimsOn ? (wantWall ? 2u : 0u) : wallFallbackUntil > 0 ? 3u : 1u;
-                        if (wallWatch.revision() != wallSummaryRevision && wallClock - wallSummaryAt >= 20.0) {
+                        if (wallWatch.revision() != wallSummaryRevision && wallAnimsClock - wallSummaryAt >= 20.0) {
                             wallSummaryRevision = wallWatch.revision();
-                            wallSummaryAt = wallClock;
+                            wallSummaryAt = wallAnimsClock;
                             consoleLine(wall_anims::summary(wallWatch.data()));
                         }
                         SpidyWallAnimsData = wallWatch.data();

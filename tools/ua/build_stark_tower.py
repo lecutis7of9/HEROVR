@@ -132,6 +132,19 @@ def place_entities():
         ob = bpy.data.objects.get(name)
         if ob is not None:
             bpy.data.objects.remove(ob, do_unlink=True)
+    # v6: every other prototype is stored there too (the lab's comics, skill pickups, a hanging light, a second hologram,
+    # a lift disc: entities the engine spawns or scripts use). Nothing of them belongs to the room: they hung in the sky
+    # south of the lab (and under the hub). Whatever is left small and round the engine's origin goes.
+    strays = []
+    for ob in list(bpy.data.objects):
+        if a.place != 'stark2' or ob.type != 'MESH' or ob.name.startswith('ua_'):  # (the hub's origin is among its real south end: left alone)
+            continue
+        lo, hi = bbox(ob)
+        if abs((lo[0] + hi[0]) / 2) < 300 and abs((lo[1] + hi[1]) / 2) < 300 and max(hi[0] - lo[0], hi[1] - lo[1]) < 500:
+            strays.append(f'{ob.name} ({len(ob.data.polygons)} faces)')
+            bpy.data.objects.remove(ob, do_unlink=True)
+    if strays:
+        placed.append(f'{len(strays)} unplaced prototypes at the engine origin removed: ' + ', '.join(strays))
     return placed
 
 
@@ -170,9 +183,12 @@ for o in backdrop:
 # walk.glb so the walk grid still stops at the walls. ----
 panes = []
 for o in bpy.data.objects:
-    if o not in backdrop and images_of(o) == ['stk_floor_glass']:
+    # v6: the lab's own window glass has NO texture (a plain material): drawn it is an opaque white wall in front of the
+    # skyline ("flat white behind the orange lattice"), so it goes the same way
+    if o not in backdrop and o.type == 'MESH' and (images_of(o) == ['stk_floor_glass'] or (a.place == 'stark2' and not images_of(o))):
         lo, hi = bbox(o)
-        if min(hi[0] - lo[0], hi[1] - lo[1]) < 12 and hi[2] - lo[2] > 200:  # thin and tall: a wall pane
+        if (min(hi[0] - lo[0], hi[1] - lo[1]) < 12 and hi[2] - lo[2] > 200) or (  # thin and tall: a wall pane
+                a.place == 'stark2' and not images_of(o) and hi[2] - lo[2] > 400):  # (the bay's slanted panes are not thin in x/y)
             panes.append(o)
 
 # ---- the ceiling ----
@@ -236,7 +252,9 @@ if not a.no_ceiling:
     gold = make_material('ua_ceiling_beam', image_named('rail') or image_named('stk_floor_metal_gold'))
     lamp = make_material('ua_ceiling_light', light_image(), emit=2.0)
     x0, x1, y0, y1 = ext_lo[0], ext_hi[0], ext_lo[1], ext_hi[1]
-    z = a.ceiling
+    # v6: the lab's walls stand 9 m (its pillars 12.2 m); the hub's default ceiling (960 u over the player start) hung 24 m up
+    # over it ("walls don't meet the ceiling", a floating grid and the open sky between)
+    z = 490 if (a.place == 'stark2' and a.ceiling == 960) else a.ceiling
     ceiling.append(box('ua_ceiling', (x0, y0, z + 6), (x1, y1, z + 18), panel, 240))  # its underside 6 u over the walls
     # UA EXPANSION fix 4 (the gap between the north wall and the ceiling): the big north wall (the elevator / waterfall wall,
     # y 2075..2100 u) is only 720 u high - MUA's own camera looks down from far above and never sees over it - while the ceiling
@@ -250,6 +268,27 @@ if not a.no_ceiling:
         entity_notes.append(f'north wall bulkhead: {wall_top:.0f} u up to the ceiling ({z + 6:.0f} u)')
     elif a.place == 'stark1':
         entity_notes.append('WARNING north wall not found: its gap to the ceiling stays open')
+    if a.place == 'stark2':
+        # v6: the lab's own roof line. The machine walls end at 9 m, the window lattice at 6 m, and the ceiling is at 12.4 m: a skirt of the
+        # ceiling's dark panel closes every side, OUTSIDE the walls (nothing of the room's faces is covered), from 2 m up to the ceiling.
+        t, bot, top = 12, 80, z + 6
+        yn = O[1] + 26.3 / S                                    # the hall's north wall (room z -26.3)
+        xa, xb = O[0] - 13.9 / S, O[0] + 13.9 / S               # the window bay's sides
+        ceiling.append(box('ua_skirt_s', (x0 - t, y0 - t, bot), (x1 + t, y0, top), panel, 240))
+        ceiling.append(box('ua_skirt_w', (x0 - t, y0 - t, bot), (x0, yn + t, top), panel, 240))
+        ceiling.append(box('ua_skirt_e', (x1, y0 - t, bot), (x1 + t, yn + t, top), panel, 240))
+        ceiling.append(box('ua_skirt_nw', (x0 - t, yn, bot), (xa, yn + t, top), panel, 240))
+        ceiling.append(box('ua_skirt_ne', (xb, yn, bot), (x1 + t, yn + t, top), panel, 240))
+        rails = [bbox(o) for o in bpy.data.objects if o.type == 'MESH' and images_of(o) == ['rail'] and bbox(o)[1][1] > yn + 100]
+        if rails:
+            lat_top = max(b[1][2] for b in rails)               # the lattice's top: above it the bay is closed up to the ceiling
+            lat_s = min(b[0][1] for b in rails)
+            ceiling.append(box('ua_skirt_bay', (xa - t, lat_s - t, lat_top - 8), (xb + t, lat_s, top), panel, 240))
+            ceiling.append(box('ua_skirt_bay_w', (xa - t, yn, bot), (xa, lat_s, top), panel, 240))
+            ceiling.append(box('ua_skirt_bay_e', (xb, yn, bot), (xb + t, lat_s, top), panel, 240))
+            entity_notes.append(f'lab roof skirt: lattice top {lat_top:.0f} u, ceiling {top:.0f} u')
+        else:
+            entity_notes.append('WARNING lab window lattice not found: no bay bulkhead')
     step = 240
     gx = x0
     while gx <= x1 + 1:                           # gold beams both ways, hanging under the panels

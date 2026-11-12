@@ -89,7 +89,7 @@ inline constexpr uint32_t liteTriangles = 2400;
 // (D3D12Renderer::setModelTextures) takes exactly this many - one number, so the loader never makes more
 // than the renderer takes (at 512 px with mips about 1.4 MB a layer: 192 about 270 MB).
 // ULTIMATE ALLIANCE EXPANSION: 256 (Stark Tower brings 54 small PS2 images; loaded only when UA LOCATIONS is ON).
-inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 256;
+inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 400;
 static_assert(mostTextureLayers <= 2048, "D3D12 texture arrays hold at most 2048 layers");
 inline constexpr size_t mostImageBytes = 48u << 20;
 

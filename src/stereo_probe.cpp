@@ -76,6 +76,10 @@ std::atomic<uint64_t> eyesPlaced{};
 std::atomic<uint64_t> cameraMoves{};
 // HERO VR 0.0.77 CUTFIX2: frames the game camera was read at all (0: the sampler never ran).
 std::atomic<uint64_t> cameraSamples{};
+// HERO VR 82.1 HUD ANCHOR: the game camera's lens (view descriptor +400..+40c: left, right, bottom, top tangents) at its
+// last read, and when (tick; 0: never). The prompt layer's world anchors need the lens the game's UI was projected with.
+std::atomic<float> cameraLens[4]{};
+std::atomic<uint64_t> cameraLensMs{};
 }
 using native_view::Descriptor;
 // NEAR CLIP's near plane for the head's and the eyes' lenses in immersive VR
@@ -3682,6 +3686,9 @@ void sampleGameCamera() {
     const float lens[4]{main.values[0x400 / 4], main.values[0x404 / 4], main.values[0x408 / 4],
                         main.values[0x40c / 4]};
     cutscene077::cameraSamples.fetch_add(1, std::memory_order_relaxed);
+    for (int i = 0; i < 4; ++i)
+        cutscene077::cameraLens[i].store(lens[i], std::memory_order_relaxed);
+    cutscene077::cameraLensMs.store(GetTickCount64(), std::memory_order_relaxed);
     if (havePose && cutscene077::cameraMoved(lastPose, lastLens, pose.data(), lens))
         cutscene077::cameraMoves.fetch_add(1, std::memory_order_relaxed);
     std::memcpy(lastPose, pose.data(), sizeof(lastPose));

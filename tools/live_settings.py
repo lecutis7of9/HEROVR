@@ -662,6 +662,15 @@ SETTINGS = {
     'prompt_layer': ((0, 1), 'SpidyPromptLayer', "PROMPT LAYER {} (0 on, the default: in VR play the game's own button "
                      "prompts, waypoint and markers show as small cards where the game puts them, cut from its UI "
                      "layer, never the whole screen; 1 off) - live, no restart needed"),
+    # HERO VR 82.1 HUD ANCHOR (include/spidy/hud_anchor.hpp), CANDIDATE
+    'hud_anchor': ((0, 2), 'SpidyHudAnchor', "HUD ANCHOR {} (0 auto, the default: the game's world icons, waypoints, "
+                   "zip points and prompts stay over their real place in the world, drawn from each eye's own view, and "
+                   "the health / focus / minimap pieces at the screen's edges sit on a smooth lazily following panel; "
+                   "1 world: every piece anchored in the world; 2 head: the old head-locked cards) - live, no restart "
+                   "needed"),
+    'hud_depth': ((5, 300), 'SpidyHudDepth', "HUD DEPTH {} (metres out along the game camera's ray where a world icon is "
+                  "anchored, 5-300, the default 40: nearer for prompts on close enemies, farther for objectives) - live, "
+                  "no restart needed"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
                     "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
@@ -864,6 +873,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'boss_gate': ('on', 'off'),  # HERO VR 0.0.78 cut16
                 'ui_dump': ('on', 'off'),  # HERO VR 0.0.78 cut18
                 'prompt_layer': ('on', 'off'),  # HERO VR 0.0.78 cut21
+                'hud_anchor': ('auto', 'world', 'head'),  # HERO VR 82.1 HUD ANCHOR
                 'webline_gesture': ('on', 'off', 'anywhere'),  # HERO VR 0.0.79.1 web-mechanics test
                 'enemy_grip_split': ('off', 'on'),  # HERO VR 0.0.79.1 (t2145: opt-in)
                 'camera_hero': ('auto', 'camera', 'scanner', 'off'),  # HERO VR 79.9 CAMERA GESTURE
@@ -1160,6 +1170,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'boss_gate': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut16
            'ui_dump': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut18
            'prompt_layer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut21
+           'hud_anchor': {'auto': 0, 'world': 1, 'head': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 82.1 HUD ANCHOR
            'webline_gesture': {'on': 0, 'off': 1, 'anywhere': 2, 'air': 2, '0': 0, '1': 1, '2': 2},  # 0.0.79.1
            'enemy_grip_split': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.79.1 (t2145: opt-in)
            'camera_hero': {'auto': 0, 'camera': 1, 'scanner': 2, 'off': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 79.9 CAMERA GESTURE
@@ -1544,6 +1555,7 @@ START_ONLY = START_ONLY + ('boss_y_card',)  # HERO VR 0.0.78 cut15: kept between
 START_ONLY = START_ONLY + ('boss_gate',)  # HERO VR 0.0.78 cut16: kept between sessions
 START_ONLY = START_ONLY + ('ui_dump',)  # HERO VR 0.0.78 cut18: kept between sessions
 START_ONLY = START_ONLY + ('prompt_layer',)  # HERO VR 0.0.78 cut21: kept between sessions
+START_ONLY = START_ONLY + ('hud_anchor', 'hud_depth')  # HERO VR 82.1 HUD ANCHOR: kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

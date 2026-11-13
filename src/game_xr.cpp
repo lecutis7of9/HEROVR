@@ -77,6 +77,7 @@
 #include "spidy/cut16.hpp" // HERO VR 0.0.78 cut16 SANDMAN: boss pick, gate, Y watch
 #include "spidy/ui_dump.hpp" // HERO VR 0.0.78 cut18 UI DUMP (diagnostic)
 #include "spidy/prompt_layer.hpp" // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE)
+#include "spidy/hud_anchor.hpp" // HERO VR 82.1 HUD ANCHOR (CANDIDATE)
 #include "spidy/waypoint_mark.hpp" // HERO VR 0.0.77 WAYPOINT (drawing)
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
@@ -232,6 +233,8 @@ namespace spidy::cutscene077 {
 extern std::atomic<uint64_t> eyesPlaced;
 extern std::atomic<uint64_t> cameraMoves; // HERO VR 0.0.77 CUTFIX: render frames whose game camera moved
 extern std::atomic<uint64_t> cameraSamples; // HERO VR 0.0.77 CUTFIX2: frames the game camera was read
+extern std::atomic<float> cameraLens[4]; // HERO VR 82.1 HUD ANCHOR: the game camera's lens tangents at its last read
+extern std::atomic<uint64_t> cameraLensMs; // ... and when (0: never)
 }
 struct XrConfig {
     uint32_t magic = 0x53585243, version = 24, bytes = sizeof(XrConfig), pid{};
@@ -1512,6 +1515,31 @@ std::atomic<uint32_t> uiDumpNow{ui_dump::dumpOff}, uiDumpAsk{}; // cut21: off by
 // as small cards where the game puts them in its view; never the whole layer), 1 off. promptLayerFrame: the VR loop's
 // own, whether it is wanted this frame.
 std::atomic<uint32_t> promptLayerNow{prompt_layer::layerOn};
+// HERO VR 82.1 HUD ANCHOR (CANDIDATE, include/spidy/hud_anchor.hpp): live.txt hud_anchor - 0 auto (the default: the game's
+// world icons, waypoints, zip points and prompts are anchored in the world at their place on the game camera's ray and drawn
+// from each eye's own view; the edge pieces - health, focus, minimap - sit on a lazily following panel), 1 world (every piece
+// anchored), 2 head (cut21's head-locked cards). hud_depth - metres out along a world piece's ray (5 to 300, 40 the default).
+std::atomic<uint32_t> hudAnchorNow{hud_anchor::anchorAuto}, hudDepthNow{hud_anchor::depthDefault};
+// The game camera's pose (native: rows right, down, forward, position) at the VR loop's last gameplay frame, for the render
+// stage's world anchors (written by the frame stage, read by the render stage, a lock apart).
+struct HudCameraNow {
+    std::mutex lock;
+    Mat4 pose{};
+    uint64_t ms{};
+} hudCameraNow;
+void hudCameraStore(const Mat4& pose) {
+    std::lock_guard guard(hudCameraNow.lock);
+    hudCameraNow.pose = pose;
+    hudCameraNow.ms = GetTickCount64();
+}
+bool hudCameraLoad(Mat4& pose, uint64_t nowMs, uint64_t& ageMs) {
+    std::lock_guard guard(hudCameraNow.lock);
+    if (!hudCameraNow.ms || nowMs < hudCameraNow.ms)
+        return false;
+    ageMs = nowMs - hudCameraNow.ms;
+    pose = hudCameraNow.pose;
+    return ageMs <= hud_anchor::cameraMaxAgeMs;
+}
 // HERO VR 0.0.79.1 web-mechanics test (webline_native.hpp): live.txt webline_gesture - 0 on (the default: grip on a
 // surface, stretch, release on another surface -> the game's own Web Line input, L2 + Y; only while standing, perched
 // or on a wall, so mid-air grip swings are untouched), 1 off, 2 anywhere (airborne too).
@@ -4345,6 +4373,8 @@ DWORD runBody() {
                                            static_cast<double>(now.QuadPart - game.qpc) / frequency.QuadPart < .1;
                     const bool followsPlayer = native_view::validPose(body) && native_view::validPose(camera);
                     const bool gameplay = player.hero && bridgeRunning && committed && followsPlayer;
+                    if (committed && followsPlayer)
+                        hudCameraStore(camera); // 82.1 HUD ANCHOR: the pose the game's UI layer is projected from
                     mpInCity.store(gameplay, std::memory_order_relaxed); // 0.0.76 MP WORLD
                     uint64_t moverTable{};
                     read(game.mover, &moverTable, sizeof(moverTable));
@@ -18606,6 +18636,25 @@ DWORD runBody() {
                                 static uint64_t layerLogMs{}, layerFrames{}, layerFresh{}, layerSets{};
                                 static uint32_t layerLast{}, layerPiecesLast{};
                                 static prompt_layer::Grid layerGrid; // 14 KB: off the stack
+                                // HERO VR 82.1 HUD ANCHOR (CANDIDATE, hud_anchor.hpp; live.txt hud_anchor, hud_depth): the
+                                // pieces are tracked across the layer's reads (smoothed, classed); a world piece is anchored
+                                // at its place on the game camera's ray and drawn from each eye's own view-projection, an
+                                // edge piece (health, focus, minimap) sits on a lazily following panel. hud_anchor = head
+                                // keeps cut21's head-locked cards below.
+                                static hud_anchor::Tracker anchors;
+                                static native_hud::Follow anchorFollow = [] {
+                                    native_hud::Follow f; // holds within 6 degrees, glides back over about a quarter second
+                                    f.hold = 6.f;
+                                    f.settle = .5f;
+                                    f.glide = .25f;
+                                    return f;
+                                }();
+                                static uint64_t anchorStamp{}, anchorReadMs{}, anchorDrawMs{}, anchorWorldDrawn{}, anchorHudDrawn{};
+                                static uint32_t anchorWorldLast{}, anchorHudLast{}, anchorModeLast{99};
+                                static float anchorCamAge{-1.f};
+                                static bool anchorLensGame{};
+                                static float anchorLensHalf[2]{};
+                                static std::chrono::steady_clock::time_point anchorClock{};
                                 bool cardsSet = false;
                                 if (promptLayerFrame && !saved->flatScreen && !saved->stereoScreen && !showScreen &&
                                     !overlayFault) {
@@ -18613,24 +18662,114 @@ DWORD runBody() {
                                     native_gpu::Screen layerImage;
                                     if (native_gpu::latestPromptLayer(layerImage, layerGrid, 250) && layerImage.texture) {
                                         ++layerFresh;
-                                        prompt_layer::Region pieces[prompt_layer::maxCards];
-                                        const uint32_t n = prompt_layer::regions(layerGrid, pieces);
-                                        layerPiecesLast = n;
                                         D3D12Renderer::Cards cards;
                                         cards.source = layerImage.texture;
                                         cards.view = layerImage.view;
                                         cards.linear = layerImage.linear;
-                                        for (uint32_t i = 0; i < n && cards.count < D3D12Renderer::maxCards; ++i) {
-                                            bool both = true;
-                                            for (unsigned eye = 0; eye < 2 && both; ++eye)
-                                                both = prompt_layer::cardRect(
-                                                    pieces[i], layerImage.width, layerImage.height,
-                                                    grade.tangents[eye][0], grade.tangents[eye][1],
-                                                    grade.tangents[eye][2], grade.tangents[eye][3], targets[eye].width,
-                                                    targets[eye].height, cards.rect[cards.count][eye],
-                                                    cards.crop[cards.count][eye]);
-                                            if (both)
-                                                ++cards.count;
+                                        const uint32_t anchorMode = hudAnchorNow.load();
+                                        if (anchorMode != anchorModeLast) {
+                                            anchorModeLast = anchorMode;
+                                            anchors.clear();
+                                            anchorStamp = 0;
+                                            anchorFollow.reset();
+                                        }
+                                        if (anchorMode == hud_anchor::anchorHead) {
+                                            prompt_layer::Region pieces[prompt_layer::maxCards];
+                                            const uint32_t n = prompt_layer::regions(layerGrid, pieces);
+                                            layerPiecesLast = n;
+                                            for (uint32_t i = 0; i < n && cards.count < D3D12Renderer::maxCards; ++i) {
+                                                bool both = true;
+                                                for (unsigned eye = 0; eye < 2 && both; ++eye)
+                                                    both = prompt_layer::cardRect(
+                                                        pieces[i], layerImage.width, layerImage.height,
+                                                        grade.tangents[eye][0], grade.tangents[eye][1],
+                                                        grade.tangents[eye][2], grade.tangents[eye][3], targets[eye].width,
+                                                        targets[eye].height, cards.rect[cards.count][eye],
+                                                        cards.crop[cards.count][eye]);
+                                                if (both)
+                                                    ++cards.count;
+                                            }
+                                        } else if (validTrackedPose(rendered.headPose)) {
+                                            const uint64_t anchorNow = GetTickCount64();
+                                            if (anchorNow > anchorDrawMs + 1000) { // after a gap (a menu, a scene): start in front of the head
+                                                anchorFollow.reset();
+                                                anchors.clear();
+                                                anchorStamp = 0;
+                                                anchorReadMs = 0;
+                                            }
+                                            anchorDrawMs = anchorNow;
+                                            Mat4 gameCamera{};
+                                            uint64_t cameraAge{};
+                                            const bool haveCamera = hudCameraLoad(gameCamera, anchorNow, cameraAge);
+                                            anchorCamAge = haveCamera ? static_cast<float>(cameraAge) : -1.f;
+                                            const float gameLens[4]{cutscene077::cameraLens[0].load(std::memory_order_relaxed),
+                                                                    cutscene077::cameraLens[1].load(std::memory_order_relaxed),
+                                                                    cutscene077::cameraLens[2].load(std::memory_order_relaxed),
+                                                                    cutscene077::cameraLens[3].load(std::memory_order_relaxed)};
+                                            const uint64_t lensMs = cutscene077::cameraLensMs.load(std::memory_order_relaxed);
+                                            const auto lens = hud_anchor::chooseLens(
+                                                gameLens, lensMs && anchorNow >= lensMs && anchorNow - lensMs < 2000,
+                                                layerImage.width, layerImage.height);
+                                            anchorLensGame = lens.fromGame;
+                                            anchorLensHalf[0] = lens.halfW;
+                                            anchorLensHalf[1] = lens.halfH;
+                                            if (layerGrid.stamp != anchorStamp) { // a fresh read of the layer (every 100 ms)
+                                                anchorStamp = layerGrid.stamp;
+                                                prompt_layer::Region pieces[prompt_layer::maxCards];
+                                                const uint32_t n = prompt_layer::regions(layerGrid, pieces);
+                                                layerPiecesLast = n;
+                                                const float seconds =
+                                                    anchorReadMs ? static_cast<float>(anchorNow - anchorReadMs) * .001f : .1f;
+                                                anchorReadMs = anchorNow;
+                                                anchors.read(pieces, n, layerImage.width, layerImage.height, lens,
+                                                             haveCamera ? &gameCamera : nullptr,
+                                                             static_cast<float>(hudDepthNow.load()), anchorMode, anchorNow,
+                                                             seconds);
+                                            }
+                                            Pose head = rendered.headPose;
+                                            head.position += travel;
+                                            const auto clockNow = std::chrono::steady_clock::now();
+                                            const float frameSeconds =
+                                                anchorClock.time_since_epoch().count()
+                                                    ? std::chrono::duration<float>(clockNow - anchorClock).count()
+                                                    : 1.f / 90.f;
+                                            anchorClock = clockNow;
+                                            const Quat facing = anchorFollow.update(head.orientation, frameSeconds);
+                                            const auto guess = hud_anchor::chooseLens(nullptr, false, layerImage.width,
+                                                                                      layerImage.height);
+                                            uint32_t worldNow = 0, hudNow = 0;
+                                            for (const auto& slot : anchors.slots()) {
+                                                if (!slot.used || cards.count >= D3D12Renderer::maxCards ||
+                                                    anchorNow > slot.lastMs + hud_anchor::slotMaxAgeMs)
+                                                    continue;
+                                                Vec3 at{};
+                                                if (slot.hud) {
+                                                    float x{}, y{};
+                                                    hud_anchor::tangentAt(guess, slot.shape.u, slot.shape.v, x, y);
+                                                    at = hud_anchor::panelPoint(head.position, facing, x, y);
+                                                } else if (slot.haveWorld) {
+                                                    at = slot.world;
+                                                } else {
+                                                    continue;
+                                                }
+                                                bool both = true;
+                                                for (unsigned eye = 0; eye < 2 && both; ++eye)
+                                                    both = hud_anchor::anchoredRect(
+                                                        overlayViews[eye].viewProjection, at, slot.shape.tw, slot.shape.th,
+                                                        slot.region, layerImage.width, layerImage.height,
+                                                        grade.tangents[eye][0], grade.tangents[eye][1],
+                                                        grade.tangents[eye][2], grade.tangents[eye][3], targets[eye].width,
+                                                        targets[eye].height, cards.rect[cards.count][eye],
+                                                        cards.crop[cards.count][eye]);
+                                                if (both) {
+                                                    ++cards.count;
+                                                    (slot.hud ? hudNow : worldNow) += 1;
+                                                }
+                                            }
+                                            anchorWorldLast = worldNow;
+                                            anchorHudLast = hudNow;
+                                            anchorWorldDrawn += worldNow;
+                                            anchorHudDrawn += hudNow;
                                         }
                                         layerLast = cards.count;
                                         if (cards.count) {
@@ -18659,6 +18798,28 @@ DWORD runBody() {
                                               overlay.cardsFault().c_str());
                                     game_prompts::note(line);
                                     consoleLine(line);
+                                    {
+                                        const auto& k = anchors.counts();
+                                        const uint32_t modeNow = hudAnchorNow.load();
+                                        char anchorLine[420];
+                                        sprintf_s(anchorLine,
+                                                  "HERO VR 82.1 HUD ANCHOR (CANDIDATE): hud_anchor %s, hud_depth %u m; lens %s "
+                                                  "%.3f x %.3f (half tangents); game camera %s (%.0f ms old); reads %u, "
+                                                  "pieces %u, matched %u, new %u, dropped %u, no camera %u; slots drawn now "
+                                                  "%u world, %u HUD; drawn %llu world, %llu HUD",
+                                                  modeNow == hud_anchor::anchorHead    ? "head (cut21 cards)"
+                                                  : modeNow == hud_anchor::anchorWorld ? "world"
+                                                                                       : "auto",
+                                                  hudDepthNow.load(), anchorLensGame ? "the game camera's" : "the 72 degree guess",
+                                                  anchorLensHalf[0], anchorLensHalf[1],
+                                                  anchorCamAge >= 0 ? "read" : "NOT READ", anchorCamAge >= 0 ? anchorCamAge : 0.f,
+                                                  k.reads, k.pieces, k.matched, k.created, k.dropped, k.noCamera,
+                                                  anchorWorldLast, anchorHudLast,
+                                                  static_cast<unsigned long long>(anchorWorldDrawn),
+                                                  static_cast<unsigned long long>(anchorHudDrawn));
+                                        game_prompts::note(anchorLine);
+                                        consoleLine(anchorLine);
+                                    }
                                 }
                             }
                             const uint64_t promptNowMs = GetTickCount64();
@@ -19375,6 +19536,11 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossGate(void* v) { return se
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyUiDump(void* v) { return setLive(v, 0, 1, 5645, uiDumpNow, asU32); }
 // HERO VR 0.0.78 cut21 PROMPT LAYER (CANDIDATE): live.txt prompt_layer, 0 on, 1 off.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptLayer(void* v) { return setLive(v, 0, 1, 5646, promptLayerNow, asU32); }
+// HERO VR 82.1 HUD ANCHOR: live.txt hud_anchor (0 auto, 1 world, 2 head) and hud_depth (metres, 5 to 300).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudAnchor(void* v) { return setLive(v, 0, 2, 5782, hudAnchorNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudDepth(void* v) {
+    return setLive(v, hud_anchor::depthLow, hud_anchor::depthHigh, 5783, hudDepthNow, asU32);
+}
 // HERO VR 0.0.79.1 web-mechanics test: live.txt webline_gesture, 0 on, 1 off, 2 anywhere (webline_native::Mode).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeblineGesture(void* v) { return setLive(v, 0, 2, 5647, weblineGestureNow, asU32); }
 // HERO VR 0.0.79.1: live.txt enemy_grip_split, 0 off (the default: pre-9d58d65 combat), 1 on (strike-first split).

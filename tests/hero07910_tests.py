@@ -77,9 +77,9 @@ class WeblineMarker(unittest.TestCase):
 
     def test_tag(self):
         c = src('CMakeLists.txt')
-        self.assertIn('set(HERO_TEST_VERSION "0.0.79.10"', c)
-        self.assertIn('set(HERO_TEST_NUMBER "10"', c)
-        self.assertIn('HERO VR 79.10 TEST (commit', src('.github/workflows/dynamic-body-0791.yml'))
+        self.assertIn('set(HERO_TEST_VERSION "0.0.82.1"', c)
+        self.assertIn('set(HERO_TEST_NUMBER "1"', c)
+        self.assertIn('HERO VR 82.1 HUD TEST (commit', src('.github/workflows/dynamic-body-0791.yml'))
         self.assertIn('HERO VR 79.10 TEST (includes 79.9)', src('src/game_xr.cpp'))
         self.assertIn('0.0.79.10 TEST 10', src('docs/0791-WEB-MECHANICS-TEST.md'))
 

@@ -62,6 +62,7 @@ inline bool isLayer(uint32_t format, uint32_t w, uint32_t h, uint32_t backW, uin
 struct Grid {
     uint32_t cols{}, rows{}, width{}, height{}, lit{};
     uint64_t samples{}, alphaSamples{}; // the pixels read, those of them lit: the find's check (isLayer)
+    uint64_t stamp{};                   // 82.1: the read's tick (latestPromptLayer sets it; a new one is a fresh read)
     std::array<uint8_t, maxCols * maxRows> on{};
     bool begin(uint32_t w, uint32_t h) {
         width = height = cols = rows = lit = 0;

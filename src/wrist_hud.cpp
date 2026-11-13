@@ -3500,7 +3500,7 @@ const char* helpText(Control c) {
     case Control::weblineGesture:
         return "ON: grip-and-sweep Web Line. OFF: no Web Line gesture, grips only swing.";
     case Control::weblineMode:
-        return "Each press: GRIP (sweep) > WRISTS (hold both wrists together) > TWO HAND (tap A, other hand taps B).";
+        return "GRIP sweeps, WRISTS holds both together, TWO HAND taps A then B.";
     case Control::vrJitter:
         return "Each press: OFF > LOW > MED > FULL. OFF holds the eyes' TAA still (no far shake, rougher edges); FULL is the biggest sample walk (sharpest, far buildings may shake).";
     case Control::flyMode:

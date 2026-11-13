@@ -1722,6 +1722,27 @@ bool appendWeblineMarker(std::vector<Vertex>& out, Vec3 point, bool valid, Vec3 
     }
     return true;
 }
+bool appendWeblineProgress(std::vector<Vertex>& out, Vec3 at, float progress, bool valid, Vec3 viewer, float pixelAngle) {
+    if (!finite(at) || !finite(viewer) || !std::isfinite(pixelAngle) || pixelAngle <= 0 || !std::isfinite(progress))
+        return false;
+    const float distance = length(viewer - at);
+    if (!(distance >= .15f && distance <= 1000))
+        return false;
+    const float p = std::clamp(progress, 0.f, 1.f);
+    const Vec3 view = (viewer - at) / distance;
+    Vec3 right = cross(Vec3{0, 1, 0}, view);
+    right = length(right) > .1f ? normalized(right) : soft::perpendicular(view);
+    const Vec3 up = cross(view, right);
+    const float px = pixelAngle * distance;
+    const float radius = std::max(.055f, 26.f * px); // about 11 cm across, never under 52 px
+    const Vec3 c = at + view * std::min(.03f, distance * .1f);
+    const Vec3 dark{0.f, 0.f, 0.f}, white{1.f, 1.f, 1.f}, green{.12f, 1.f, .25f}, red{1.f, .08f, .08f};
+    const Vec3 fill = p >= 1.f ? (valid ? green : red) : white;
+    soft::softArc(out, c, right, up, radius * .70f - 2.f * px, radius + 2.5f * px, 0, 2 * pi, dark, .45f, 2.f * px, 40);
+    if (p > .01f)
+        soft::softArc(out, c, right, up, radius * .70f, radius, pi / 2 - 2 * pi * p, pi / 2, fill, .95f, px, 40); // clockwise from the top
+    return true;
+}
 bool appendWeblinePreview(std::vector<Vertex>& out, Vec3 from, Vec3 to, bool valid, Vec3 viewer, float pixelAngle) {
     if (!finite(from) || !finite(to) || !finite(viewer) || !std::isfinite(pixelAngle) || pixelAngle <= 0)
         return false;

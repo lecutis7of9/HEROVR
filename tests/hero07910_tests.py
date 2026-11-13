@@ -44,10 +44,10 @@ class WeblineMarker(unittest.TestCase):
     def test_wiring(self):
         h = src('include/spidy/wrist_hud.hpp')
         self.assertIn('weblineMarker, // 79.10 WEB LINE MARKER', h)
-        self.assertIn('Control::weblineGesture) == controls - 1', h)
-        self.assertIn('controls = 253', h)
+        self.assertIn('Control::weblineMode) == controls - 1', h)
+        self.assertIn('controls = 254', h)
         w = src('src/wrist_hud.cpp')
-        self.assertIn('C::gameWallAnims, C::weblineMarker, C::weblineGesture, C::combatCalibLook', w)
+        self.assertIn('C::gameWallAnims, C::weblineMarker, C::weblineGesture, C::weblineMode, C::combatCalibLook', w)
         self.assertIn('r.weblineMarker = true;', w)
         self.assertIn('return "WEB LINE MARKER";', w)
         g = src('src/game_xr.cpp')
@@ -77,11 +77,46 @@ class WeblineMarker(unittest.TestCase):
 
     def test_tag(self):
         c = src('CMakeLists.txt')
-        self.assertIn('set(HERO_TEST_VERSION "0.0.79.10"', c)
-        self.assertIn('set(HERO_TEST_NUMBER "10"', c)
+        self.assertIn('set(HERO_TEST_VERSION "0.0.82"', c)
+        self.assertIn('set(HERO_TEST_NUMBER "1"', c)
         self.assertIn('HERO VR 79.10 TEST (commit', src('.github/workflows/dynamic-body-0791.yml'))
         self.assertIn('HERO VR 79.10 TEST (includes 79.9)', src('src/game_xr.cpp'))
         self.assertIn('0.0.79.10 TEST 10', src('docs/0791-WEB-MECHANICS-TEST.md'))
+
+
+class WeblineModes(unittest.TestCase):  # 0.0.82 experimental test
+    def test_settings(self):
+        self.assertEqual(L.CHOICE_NAMES['webline_mode'], ('grip', 'wrists', 'twohand'))
+        self.assertEqual(L.SETTINGS['webline_mode'][0], (0, 2))
+        self.assertEqual(L.SETTINGS['webline_mode'][1], 'SpidyWeblineMode')
+        self.assertEqual(L.SETTINGS['webline_hold_ms'][0], (150, 2000))
+        self.assertEqual(L.SETTINGS['webline_hold_ms'][1], 'SpidyWeblineHoldMs')
+        self.assertIn('webline_mode', L.PERSISTED)
+        self.assertIn('webline_hold_ms', L.START_ONLY)
+        self.assertEqual(L.CONTROL_KEYS[26], 'webline_mode')
+        self.assertEqual(L.SELECTOR['webline_mode'], 10)
+        self.assertEqual(L.parse('webline_mode = wrists\nwebline_hold_ms = 600\n')[0]['webline_mode'], 'wrists')
+        self.assertEqual(L.export_value('webline_mode', 'twohand'), 2)
+        for code, word in ((0, 'grip'), (1, 'wrists'), (2, 'twohand'), (3, 'twohand')):
+            self.assertEqual(L.decode_hud_settings(10, L.MARKER | code << 8)['webline_mode'], word)
+        self.assertEqual(L.decode_hud_settings(3, L.MARKER | 1 << 26), {'webline_mode': True})
+
+    def test_wiring(self):
+        h = src('include/spidy/wrist_hud.hpp')
+        self.assertIn('Control::weblineMode) == controls - 1', h)
+        self.assertIn('controls = 254', h)
+        w = src('src/wrist_hud.cpp')
+        self.assertIn('return "WEBLINE MODE";', w)
+        self.assertIn('C::weblineGesture, C::weblineMode, C::combatCalibLook', w)
+        g = src('src/game_xr.cpp')
+        self.assertIn('WINAPI SpidyWeblineMode(void* v) { return setLive(v, 0, 2, 5692, weblineModeNow, asU32); }', g)
+        self.assertIn('SpidyWeblineHoldMs', g)
+        self.assertIn('wlMode != webline_modes::modeWrists; // 0.0.82', g)
+        self.assertIn('std::min<DWORD>(weblineModeNow.load(), 2) << 8', g)
+        self.assertIn('1u << 25 | 1u << 26', g)
+        self.assertIn('appendWeblineProgress', g)
+        self.assertIn('HERO VR 0.0.82 WEBLINE MODES TEST', g)
+        self.assertIn('webline_modes_tests', src('.github/workflows/webline-modes-082-test.yml'))
 
 
 if __name__ == '__main__':

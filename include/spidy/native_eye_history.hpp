@@ -24,6 +24,10 @@ struct WeblineMark {
     Vec3 point{};
     Vec3 from{};     // 79.7: the first anchor (the preview line's start)
     bool hasFrom{};
+    // 0.0.82 WRISTS: a progress ring filling at the wrists (`ringAt`, world), 0..1, `ring` set while the hold runs.
+    bool ring{};
+    float progress{};
+    Vec3 ringAt{};
 };
 struct NativeEyeFrame {
     uint64_t serial{};

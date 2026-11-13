@@ -96,6 +96,7 @@
 #include "spidy/enemy_grip_split.hpp"
 #include "spidy/webline_gesture.hpp" // 79.1 web-mechanics test: grip-stretch-release Web Line
 #include "spidy/webline_native.hpp"
+#include "spidy/webline_modes.hpp" // 0.0.82 WEBLINE MODES: WRISTS and TWO HAND (experimental test)
 #include "spidy/arm_sprint.hpp" // HEROVR 79.1: left-stick + natural opposite-arm running
 #include "spidy/extras385.hpp"
 #include "spidy/gestures385.hpp"
@@ -1516,6 +1517,10 @@ std::atomic<uint32_t> promptLayerNow{prompt_layer::layerOn};
 // surface, stretch, release on another surface -> the game's own Web Line input, L2 + Y; only while standing, perched
 // or on a wall, so mid-air grip swings are untouched), 1 off, 2 anywhere (airborne too).
 std::atomic<uint32_t> weblineGestureNow{spidy::webline_native::modeOn};
+// 0.0.82 WEBLINE MODES (webline_modes.hpp): live.txt webline_mode - 0 grip (0.0.81's gesture, the default), 1 wrists
+// (both wrists together for webline_hold_ms), 2 twohand (one hand's grip tap places A, the other hand's tap places B).
+std::atomic<uint32_t> weblineModeNow{spidy::webline_modes::modeGrip};
+std::atomic<uint32_t> weblineHoldMsNow{spidy::webline_modes::holdMsDefault};
 // HERO VR 0.0.79.1 (user report t2145: 9d58d65's grip split made combat sluggish): live.txt enemy_grip_split - 0 off
 // (the default: the pre-9d58d65 combat path exactly - a grip on an enemy is GRAB WEB at once, pull to yank; physical Y
 // in the air is the game's web strike), 1 on (enemy_grip_split.hpp: aimed grip = native web strike on the press frame,
@@ -2565,6 +2570,7 @@ DWORD runBody() {
             modelsAdopted = true;
         };
         consoleLine(std::string("79.5 BUILD TAG: ") + SpidyBuildTag + " (this line is in the DLL that is running; a console without it is an older build)");
+        consoleLine("HERO VR 0.0.82 WEBLINE MODES TEST (includes 0.0.81): WEBLINES on/off (webline_gesture) is the master; WEBLINE MODE (webline_mode = grip | wrists | twohand, webline_hold_ms) picks GRIP (sweep), WRISTS (both wrists together, ring) or TWO HAND (tap A, other hand taps B); all end in the game's own L2 + Y Web Line");
         consoleLine("HERO VR 79.10 TEST (includes 79.9): Prowler stash doors and other web-yank interacts use L1+R1, not Y (HOLD RIGHT STICK CLICK or a two-hand yank / both web buttons); the false GAME: Y card from CineApproachPrompt is gone. WEB LINE MARKER (VR SETTINGS > BODY AND VIEW; live.txt webline_marker, ON the default) hides the 40 px disc / red cross when off");
         consoleLine("HERO VR 79.9 TEST (includes 79.8): CAMERA GESTURE: the LEFT trigger pulled at the LEFT side of the head is Peter's camera gadget (the game's "
                     "D-pad Up held, CANDIDATE) or the second spider's Prowler scan (the game's L2 held while the game names L2; live.txt camera_hero); the RIGHT trigger at the "
@@ -2770,6 +2776,13 @@ DWORD runBody() {
         webline_gesture::Gesture weblineGestures[2]{webline_gesture::Gesture{35.f, 2.f, false},
                                                   webline_gesture::Gesture{35.f, 2.f, false}};
         webline_native::Driver weblineDriver;
+        // 0.0.82 WEBLINE MODES state.
+        webline_modes::Wrists weblineWrists;
+        webline_modes::TwoHand weblineTwoHand;
+        bool twoWasActive[2]{}, wristsWasActive{};
+        double twoDownAt[2]{};
+        Vec3 twoStart[2]{};
+        uint64_t wristsFires{}, twoHandFires{};
         webline_native::Pad weblinePad{};
         uint32_t weblineClaimed{};
         uint64_t weblineStarts{}, weblineCommits{}, weblineCancels{}, weblineLatched{};
@@ -5060,6 +5073,13 @@ DWORD runBody() {
                                     message(3, 0, next == webline_native::modeOff ? "HEROVR WEBLINES: OFF" : "HEROVR WEBLINES: ON");
                                     consoleLine(std::string("0.0.81 WEBLINES ") + (next == webline_native::modeOff ? "OFF" : "ON") + " from the hologram");
                                 }
+                                if (result.weblineMode) { // 0.0.82 WEBLINE MODE: the next press cycles GRIP > WRISTS > TWO HAND
+                                    const uint32_t next = (std::min<uint32_t>(weblineModeNow.load(), 2u) + 1u) % 3u;
+                                    weblineModeNow = next;
+                                    wristChanged |= 1u << 26; // SpidyHudSettings 3 bit 26, 10 bits 8-9
+                                    message(3, 0, (std::string("HEROVR WEBLINE MODE: ") + webline_modes::modeName(next)).c_str());
+                                    consoleLine(std::string("0.0.82 WEBLINE MODE ") + webline_modes::modeName(next) + " from the hologram");
+                                }
                                 if (result.vrJitter) { // 79.2b (t2169): EYE JITTER, live; the launcher keeps it in live.txt
                                     // 79.4 (t2188): the next level (OFF > LOW > MED > FULL > OFF; the hidden e5d2746 goes to OFF).
                                     const uint32_t next = jitter_check::nextLevel(SpidyVrJitterLevelNow());
@@ -7065,6 +7085,9 @@ DWORD runBody() {
                         // 79.1 WEBLINE GESTURE: nothing held or sent without the swing bridge's aim rays.
                         weblineGestures[0].reset();
                         weblineGestures[1].reset();
+                        weblineWrists.reset();
+                        weblineTwoHand.reset();
+                        twoWasActive[0] = twoWasActive[1] = wristsWasActive = false;
                         weblineDriver.reset();
                         weblineMarks[0] = weblineMarks[1] = {};
                         weblineWasValid[0] = weblineWasValid[1] = false;
@@ -7183,6 +7206,8 @@ DWORD runBody() {
                         // the aim is never an anchor; a hand whose web holds anything is occupied.
                         {
                             const uint32_t lineMode = weblineGestureNow.load();
+                            const uint32_t wlMode = std::min<uint32_t>(weblineModeNow.load(), 2u); // 0.0.82 WEBLINE MODE
+                            webline_modes::TwoHandInput twoIn{};
                             const bool lineAir = game_swing::airborne(swingState, now.QuadPart, frequency.QuadPart);
                             const bool lineOn = sampleAim && input.focused &&
                                 webline_native::allowed(lineMode, lineAir) &&
@@ -7205,7 +7230,7 @@ DWORD runBody() {
                                 const bool tracked = hand.valid && validTrackedPose(hand.grip) &&
                                                      validTrackedPose(hand.aim);
                                 webline_gesture::Input li{};
-                                li.enabled = lineOn && tracked;
+                                li.enabled = lineOn && tracked && wlMode != webline_modes::modeWrists; // 0.0.82: WRISTS never takes a grip
                                 li.sampled = true;
                                 li.seconds = frame.seconds; // 79.5: the release latch's clock
                                 const float squeeze = std::isfinite(hand.squeeze) ? hand.squeeze : 0.f;
@@ -7233,6 +7258,7 @@ DWORD runBody() {
                                 // t2161: every grip press that did not start a Web Line logs its first
                                 // reason, at most one line per 1.5 s (live.txt webline_gesture = off: none).
                                 if (gripRise && !lo.started && !wasHolding && lineMode != webline_native::modeOff &&
+                                    wlMode != webline_modes::modeWrists &&
                                     weblineClock - weblineRefusedAt > 1.5) {
                                     weblineRefusedAt = weblineClock;
                                     ++weblineRefusals;
@@ -7276,7 +7302,21 @@ DWORD runBody() {
                                 }
                                 if (lo.claimed)
                                     weblineClaimed |= 1u << h;
-                                lineActive |= weblineGestures[h].active();
+                                lineActive |= wlMode == webline_modes::modeGrip && weblineGestures[h].active();
+                                if (wlMode == webline_modes::modeTwoHand) { // 0.0.82 TWO HAND: a grip tap (down and up within 0.5 s) on a surface is a shot
+                                    if (lo.started) {
+                                        twoDownAt[h] = weblineClock;
+                                        twoStart[h] = lo.from;
+                                    }
+                                    const bool released = twoWasActive[h] && !weblineGestures[h].active() && !li.grip && li.enabled;
+                                    if (released && weblineClock - twoDownAt[h] <= webline_modes::twoHandTapMax) {
+                                        twoIn.shot[h] = true;
+                                        twoIn.point[h] = twoStart[h];
+                                    }
+                                    twoWasActive[h] = weblineGestures[h].active();
+                                } else {
+                                    twoWasActive[h] = false;
+                                }
                                 // 79.5 AIM MARKER: while this hand's gesture holds its grip, the marker at the second spot
                                 // is green (a valid second anchor: release now) or red (not valid: the cancel's reason
                                 // is the note on release); one short tick on the way to valid.
@@ -7285,7 +7325,7 @@ DWORD runBody() {
                                     ++SpidyWeblineMarkerData.gestures;
                                     weblineFirstPending[h] = true;
                                 }
-                                if (weblineGestures[h].active()) {
+                                if (wlMode == webline_modes::modeGrip && weblineGestures[h].active()) {
                                     // 79.7: an active gesture ALWAYS has a marker: green where the release lays the line,
                                     // red where it does not, red on the aim itself where it meets nothing (state 3).
                                     weblineMarks[h].state = lo.hasTarget ? (lo.valid ? 1 : 2) : 3;
@@ -7301,16 +7341,18 @@ DWORD runBody() {
                                         SpidyWeblineMarkerData.firstValid += lo.valid;
                                     }
                                 }
-                                if (weblineGestures[h].active() && lo.valid && !weblineWasValid[h])
+                                if (wlMode == webline_modes::modeGrip && weblineGestures[h].active() && lo.valid && !weblineWasValid[h])
                                     runtime.haptic(static_cast<int>(h), .18f);
-                                weblineWasValid[h] = weblineGestures[h].active() && lo.valid;
+                                weblineWasValid[h] = wlMode == webline_modes::modeGrip && weblineGestures[h].active() && lo.valid;
                                 if (lo.started) {
                                     ++weblineStarts;
                                     runtime.haptic(static_cast<int>(h), .3f);
-                                    game_prompts::note("79.1 WEBLINE: first anchor - hold grip, sweep, release on a second surface");
-                                    consoleLine("79.1 WEBLINE: first anchor - hold grip, sweep, release on a second surface");
+                                    if (wlMode == webline_modes::modeGrip) {
+                                        game_prompts::note("79.1 WEBLINE: first anchor - hold grip, sweep, release on a second surface");
+                                        consoleLine("79.1 WEBLINE: first anchor - hold grip, sweep, release on a second surface");
+                                    }
                                 }
-                                if (lo.commit) {
+                                if (lo.commit && wlMode == webline_modes::modeGrip) {
                                     lineCommit = true;
                                     ++weblineCommits;
                                     runtime.haptic(static_cast<int>(h), .55f);
@@ -7323,7 +7365,7 @@ DWORD runBody() {
                                     game_prompts::note(note);
                                     consoleLine(note);
                                 }
-                                if (lo.cancelled) {
+                                if (lo.cancelled && wlMode == webline_modes::modeGrip) {
                                     lineCancel = true;
                                     ++weblineCancels;
                                     runtime.haptic(static_cast<int>(h), .12f);
@@ -7336,6 +7378,131 @@ DWORD runBody() {
                                     game_prompts::note(cancelNote);
                                     consoleLine(cancelNote);
                                 }
+                            }
+                            // 0.0.82 TWO HAND: a tap by one hand places A (a locked marker), a tap by the other hand within 3 s
+                            // places B; then the game's own Web Line input (L2 + Y). The anchors only gate the request: the game
+                            // aims its own line (webline_native.hpp), A and B are not handed to it.
+                            if (wlMode == webline_modes::modeTwoHand) {
+                                twoIn.enabled = lineOn;
+                                twoIn.seconds = frame.seconds;
+                                const auto to = weblineTwoHand.update(twoIn);
+                                if (to.placed) {
+                                    runtime.haptic(to.hand, .3f);
+                                    game_prompts::note("0.0.82 TWO HAND: anchor A placed - tap the other grip on a second surface within 3 s");
+                                    consoleLine("0.0.82 TWO HAND: anchor A placed - tap the other grip on a second surface within 3 s");
+                                }
+                                if (to.anchored && to.hand >= 0) {
+                                    auto& mark = weblineMarks[static_cast<unsigned>(to.hand)];
+                                    mark = {};
+                                    mark.state = 1; // green: A is locked
+                                    mark.point = to.a;
+                                    lineActive = true; // the game's own aim stays primed (L2 held) while A waits
+                                }
+                                if (to.commit) {
+                                    lineCommit = true;
+                                    ++twoHandFires;
+                                    runtime.haptic(0, .55f);
+                                    runtime.haptic(1, .55f);
+                                    char note[240];
+                                    sprintf_s(note, "0.0.82 TWO HAND #%llu: A -> B %.1f m apart -> native Web Line (L2 + Y)",
+                                              static_cast<unsigned long long>(twoHandFires), length(to.b - to.a));
+                                    game_prompts::note(note);
+                                    consoleLine(note);
+                                }
+                                if (to.cancelled) {
+                                    lineCancel = true;
+                                    runtime.haptic(0, .12f);
+                                    runtime.haptic(1, .12f);
+                                    char note[200];
+                                    sprintf_s(note, "0.0.82 TWO HAND: cancelled - %s", webline_modes::twoHandWhyText(to.why));
+                                    game_prompts::note(note);
+                                    consoleLine(note);
+                                }
+                            } else {
+                                weblineTwoHand.reset();
+                            }
+                            // 0.0.82 WRISTS: both controllers within 12 cm, grips and triggers released, held for webline_hold_ms
+                            // (a progress ring at the wrists fills); cancelled if the wrists part. Aim: a hand's own aim sample on a
+                            // surface a web holds on (the marker's validity); the game aims the line itself.
+                            if (wlMode == webline_modes::modeWrists) {
+                                const auto& hl = frame.hands[0];
+                                const auto& hr = frame.hands[1];
+                                const bool bothTracked = hl.valid && hr.valid && validTrackedPose(hl.grip) && validTrackedPose(hr.grip);
+                                const auto lowv = [](float v) { return !std::isfinite(v) || v < .3f; };
+                                const bool freeHands = lowv(hl.squeeze) && lowv(hr.squeeze) && lowv(hl.trigger) && lowv(hr.trigger);
+                                const Vec3 wl = motion.swing.hands[0].aim.position, wr = motion.swing.hands[1].aim.position;
+                                const Vec3 mid = (wl + wr) * .5f;
+                                bool anyHit = false, valid = false;
+                                Vec3 target{};
+                                float best = 1e9f;
+                                for (unsigned h = 0; h < 2; ++h) {
+                                    const auto& s = aimed.hands[h];
+                                    if (!finite(s.point))
+                                        continue;
+                                    const float reach = length(s.point - motion.swing.hands[h].aim.position);
+                                    const bool ok = s.kind == static_cast<uint32_t>(game_swing::AimKind::anchor) && reach <= 35.f;
+                                    if (ok && (!valid || reach < best)) {
+                                        valid = true;
+                                        best = reach;
+                                        target = s.point;
+                                    } else if (!valid && !anyHit) {
+                                        target = s.point;
+                                    }
+                                    anyHit = true;
+                                }
+                                webline_modes::WristsInput wi{};
+                                wi.seconds = frame.seconds;
+                                wi.enabled = lineOn;
+                                wi.tracked = bothTracked;
+                                wi.free = freeHands;
+                                wi.left = hl.grip.position;
+                                wi.right = hr.grip.position;
+                                wi.valid = valid;
+                                wi.holdSeconds = webline_modes::holdSeconds(weblineHoldMsNow.load());
+                                const auto wo = weblineWrists.update(wi);
+                                if (wo.active && !wristsWasActive) {
+                                    runtime.haptic(0, .15f);
+                                    runtime.haptic(1, .15f);
+                                }
+                                wristsWasActive = wo.active;
+                                if (wo.active || wo.ready) {
+                                    auto& mark = weblineMarks[0];
+                                    mark = {};
+                                    mark.state = valid ? 1 : (anyHit ? 2 : 3);
+                                    mark.point = anyHit ? target : Vec3{};
+                                    mark.from = mid;
+                                    mark.hasFrom = finite(mid) && anyHit;
+                                    mark.ring = true;
+                                    mark.progress = wo.progress;
+                                    mark.ringAt = mid;
+                                    lineActive = true; // the game's own aim stays primed (L2 held) during the hold
+                                }
+                                if (wo.commit) {
+                                    lineCommit = true;
+                                    ++wristsFires;
+                                    runtime.haptic(0, .55f);
+                                    runtime.haptic(1, .55f);
+                                    char note[200];
+                                    sprintf_s(note, "0.0.82 WRISTS #%llu: wrists held together %.2f s -> native Web Line (L2 + Y)",
+                                              static_cast<unsigned long long>(wristsFires), wi.holdSeconds);
+                                    game_prompts::note(note);
+                                    consoleLine(note);
+                                }
+                                if (wo.cancelled) {
+                                    lineCancel = true;
+                                    runtime.haptic(0, .12f);
+                                    runtime.haptic(1, .12f);
+                                    const char* why = wo.why == webline_modes::WristsWhy::separated ? "the wrists came apart"
+                                                    : wo.why == webline_modes::WristsWhy::noSurface ? "no surface a web holds on in reach"
+                                                                                                     : "WEBLINES switched off or the hands were needed";
+                                    char note[200];
+                                    sprintf_s(note, "0.0.82 WRISTS: cancelled - %s", why);
+                                    game_prompts::note(note);
+                                    consoleLine(note);
+                                }
+                            } else {
+                                weblineWrists.reset();
+                                wristsWasActive = false;
                             }
                             weblinePad = weblineDriver.update(frame.seconds, lineOn || weblineDriver.busy(),
                                                               lineActive, lineCommit, lineCancel && !lineCommit);
@@ -16529,6 +16696,12 @@ DWORD runBody() {
                             unsigned hand;
                         };
                         std::vector<WeblineDraw> weblineDraw;
+                        struct WeblineRing {
+                            Vec3 at;
+                            float progress;
+                            bool valid;
+                        };
+                        std::vector<WeblineRing> weblineRings;
                         for (unsigned hand = 0; hand < 2; ++hand) {
                             auto& steady = aimMotion[hand];
                             const auto& input = rendered.swing.hands[hand];
@@ -16556,6 +16729,8 @@ DWORD runBody() {
                             // anchor, drawn below with the translucent layer whatever the RETICLES setting says (79.6's tester saw
                             // no green ring); the aim marker easing only keeps running.
                             if (const auto& wm = saved->weblineMarks[hand]; wm.state) {
+                                if (wm.ring && finite(wm.ringAt)) // 0.0.82 WRISTS: the hold's progress ring at the wrists
+                                    weblineRings.push_back({wm.ringAt + travel, wm.progress, wm.state == 1});
                                 weblineDraw.push_back({wm.state == 3 || !finite(wm.point) ? origin + direction * 4.f : wm.point,
                                                        wm.from, wm.hasFrom, wm.state == 1, wm.state == 3, hand});
                                 steady.markers(nullptr, origin, direction, marks);
@@ -16632,6 +16807,8 @@ DWORD runBody() {
                             for (const auto& mark : marks)
                                 appendAimMarker(translucent, mark, viewer, pixelAngle * markerPixels,
                                                 saved->uiStyle);
+                        for (const auto& ring : weblineRings)
+                            appendWeblineProgress(translucent, ring.at, ring.progress, ring.valid, viewer, pixelAngle * markerPixels);
                         for (const auto& line : weblineDraw) {
                             if (weblineMarkerNow.load() != 0)
                                 continue; // 79.10: live.txt webline_marker / WEB LINE MARKER off: no disc or preview
@@ -18281,6 +18458,7 @@ DWORD runBody() {
                                             hud.gameWallAnims = static_cast<uint8_t>(gameWallAnimsShown.load()); // 79.6 GAME WALL ANIMS
                                             hud.weblineMarker = weblineMarkerNow.load() == 0 ? 1 : 0; // 79.10: 1 ON, 0 OFF
                                             hud.weblineGesture = weblineGestureNow.load() == webline_native::modeOff ? 0 : 1; // 0.0.81: 1 ON, 0 OFF
+                                            hud.weblineMode = static_cast<uint8_t>(std::min<uint32_t>(weblineModeNow.load(), 2u)); // 0.0.82
                                             hud.flyMode = flyModeNow.load();
                                             hud.flyVignette = flyVignetteOn.load();
                                             hud.flyRoll = flyRollNow.load();
@@ -19377,6 +19555,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyUiDump(void* v) { return setL
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptLayer(void* v) { return setLive(v, 0, 1, 5646, promptLayerNow, asU32); }
 // HERO VR 0.0.79.1 web-mechanics test: live.txt webline_gesture, 0 on, 1 off, 2 anywhere (webline_native::Mode).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeblineGesture(void* v) { return setLive(v, 0, 2, 5647, weblineGestureNow, asU32); }
+// 0.0.82 WEBLINE MODES: live.txt webline_mode (0 grip, 1 wrists, 2 twohand) and webline_hold_ms (150-2000, WRISTS' hold).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeblineMode(void* v) { return setLive(v, 0, 2, 5692, weblineModeNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeblineHoldMs(void* v) { return setLive(v, webline_modes::holdMsMin, webline_modes::holdMsMax, 5693, weblineHoldMsNow, asU32); }
 // HERO VR 0.0.79.1: live.txt enemy_grip_split, 0 off (the default: pre-9d58d65 combat), 1 on (strike-first split).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyEnemyGripSplit(void* v) { return setLive(v, 0, 1, 5648, enemyGripSplitNow, asU32); }
 // HERO VR 79.2 PROP PROBE (read-only): live.txt prop_probe - 0 on (default), 1 off.
@@ -20236,7 +20417,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
         // The 20 settings' bits, and Update 19's song (20), music volume (27) and visualizer (28).
         // Version 0.0.62: LENS FLARES (29), kept for the next start. 0.0.7: MIRROR VIEW (21), the same.
         // 79.2b: EYE JITTER (22), kept in live.txt as vr_jitter. 79.6: GAME WALL ANIMS (23), game_wall_anims.
-        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29 | 1u << 22 | 1u << 23 | 1u << 24 | 1u << 25));
+        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29 | 1u << 22 | 1u << 23 | 1u << 24 | 1u << 25 | 1u << 26));
     case 4: // Update 21: sharpening 0-200 in bits 0-7, the reticles shown in bit 8 (Update 16: 0-6 and 7)
         return marker | std::min<DWORD>(native_gpu::eyeSharpen(), 255) | (reticlesShown.load() ? 1u : 0u) << 8;
     case 5: // Update 17: the hologram's height, size, text size, theme and text colour
@@ -20262,7 +20443,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
         return marker | std::min<DWORD>(c38(combat38::lensFlares), 1) | std::min<DWORD>(c38(combat38::mirrorView), 1) << 1 |
                std::min<DWORD>(SpidyVrJitterLevelNow(), 4) << 2 | (gameWallAnimsWanted.load() ? 1u : 0u) << 5 | // 79.6: bit 5 GAME WALL ANIMS
                (weblineMarkerNow.load() ? 1u : 0u) << 6 | // 79.10: bit 6 WEB LINE MARKER (0 on, 1 off)
-               (weblineGestureNow.load() == webline_native::modeOff ? 1u : 0u) << 7; // 0.0.81: bit 7 WEBLINES (1 off)
+               (weblineGestureNow.load() == webline_native::modeOff ? 1u : 0u) << 7 | // 0.0.81: bit 7 WEBLINES (1 off)
+               std::min<DWORD>(weblineModeNow.load(), 2) << 8; // 0.0.82: bits 8-9 WEBLINE MODE (0 grip, 1 wrists, 2 twohand)
     default:
         return 3970;
     }

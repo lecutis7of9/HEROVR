@@ -76,7 +76,7 @@ class BuildTag(unittest.TestCase):
         self.assertIn('build_tag.tag_line(', r)
         self.assertIn('build_tag=build_tag_record', r)
         c = src('CMakeLists.txt')
-        self.assertIn('set(HERO_TEST_VERSION "0.0.79.10"', c)
+        self.assertIn('set(HERO_TEST_VERSION "0.0.82"', c)
         self.assertIn('HEROVR_BUILD_FOOTER', c)
         self.assertIn('SPIDY_BUILD_FOOTER', src('src/wrist_hud.cpp'))
 

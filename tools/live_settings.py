@@ -643,6 +643,14 @@ SETTINGS = {
                         "aimed at a surface, keep holding and sweep to another surface, let go there: the game's own "
                         "Web Line input, L2 + Y - only while standing, perched or on a wall, so grip swings in the "
                         "air are untouched; 1 off; 2 anywhere, in the air too) - live, no restart needed"),
+    # 0.0.82 WEBLINE MODES (include/spidy/webline_modes.hpp): which gesture asks for the game's own Web Line. Wrist row
+    # WEBLINE MODE (VR SETTINGS > BODY AND VIEW); WEBLINES (webline_gesture on/off) stays the master switch.
+    'webline_mode': ((0, 2), 'SpidyWeblineMode', "WEBLINE MODE {} (0 grip, the default: 0.0.81's grip, sweep, release; 1 wrists: "
+                     "both wrists together, grips and triggers released, held for webline_hold_ms, with a progress ring; "
+                     "2 twohand: a grip tap on a surface places anchor A, the other hand's tap within 3 s places B) - live, "
+                     "no restart needed"),
+    'webline_hold_ms': ((150, 2000), 'SpidyWeblineHoldMs', "WEBLINE HOLD {} ms (WRISTS: how long both wrists stay together "
+                        "before the Web Line is asked for; 400 the default) - live, no restart needed"),
     'enemy_grip_split': ((0, 1), 'SpidyEnemyGripSplit', "ENEMY GRIP SPLIT {} (0 off, the default: combat as before "
                          "79.1's split - a grip on an enemy is the grab web at once, pull to yank, and Y in the air is "
                          "the game's web strike; 1 on: a grip aimed at an enemy is the game's web strike on the same "
@@ -865,6 +873,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'ui_dump': ('on', 'off'),  # HERO VR 0.0.78 cut18
                 'prompt_layer': ('on', 'off'),  # HERO VR 0.0.78 cut21
                 'webline_gesture': ('on', 'off', 'anywhere'),  # HERO VR 0.0.79.1 web-mechanics test
+                'webline_mode': ('grip', 'wrists', 'twohand'),  # 0.0.82 WEBLINE MODES
                 'enemy_grip_split': ('off', 'on'),  # HERO VR 0.0.79.1 (t2145: opt-in)
                 'camera_hero': ('auto', 'camera', 'scanner', 'off'),  # HERO VR 79.9 CAMERA GESTURE
                 'prop_probe': ('on', 'off'),  # HERO VR 79.2 PROP PROBE (read-only)
@@ -1161,6 +1170,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'ui_dump': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut18
            'prompt_layer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut21
            'webline_gesture': {'on': 0, 'off': 1, 'anywhere': 2, 'air': 2, '0': 0, '1': 1, '2': 2},  # 0.0.79.1
+           'webline_mode': {'grip': 0, 'wrists': 1, 'twohand': 2, 'two_hand': 2, '0': 0, '1': 1, '2': 2},  # 0.0.82 WEBLINE MODES
            'enemy_grip_split': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.79.1 (t2145: opt-in)
            'camera_hero': {'auto': 0, 'camera': 1, 'scanner': 2, 'off': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 79.9 CAMERA GESTURE
            'prop_probe': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 79.2 PROP PROBE (read-only)
@@ -1437,7 +1447,8 @@ PERSISTED = ('web_width', 'web_speed', 'aa', 'history', 'reach', 'monitor', 'sha
              'vr_jitter',  # 79.2b (t2169): the hologram's EYE JITTER (live), kept and applied at the next start
              'game_wall_anims',  # 79.6: the hologram's GAME WALL ANIMS (live), kept and applied at the next start
              'webline_marker',  # 79.10: the hologram's WEB LINE MARKER (live), ON the default, kept in live.txt
-             'webline_gesture')  # 0.0.81: the hologram's WEBLINES (live), ON the default, kept in live.txt
+             'webline_gesture',  # 0.0.81: the hologram's WEBLINES (live), ON the default, kept in live.txt
+             'webline_mode')  # 0.0.82: the hologram's WEBLINE MODE (live), GRIP the default, kept in live.txt
 # Update 23: live.txt-only settings (no hologram control) also applied when a session starts, so they keep.
 START_ONLY = ('web_start', 'trail')  # Update 34.2: trail kept from live.txt
 # Update 37: every new live.txt setting applies at the start too (a file written before the launch
@@ -1544,6 +1555,7 @@ START_ONLY = START_ONLY + ('boss_y_card',)  # HERO VR 0.0.78 cut15: kept between
 START_ONLY = START_ONLY + ('boss_gate',)  # HERO VR 0.0.78 cut16: kept between sessions
 START_ONLY = START_ONLY + ('ui_dump',)  # HERO VR 0.0.78 cut18: kept between sessions
 START_ONLY = START_ONLY + ('prompt_layer',)  # HERO VR 0.0.78 cut21: kept between sessions
+START_ONLY = START_ONLY + ('webline_hold_ms',)  # 0.0.82 WEBLINE MODES: WRISTS' hold, kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',
@@ -1555,14 +1567,15 @@ CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach
                 22: 'vr_jitter',  # 79.2b (t2169): VR SETTINGS > GRAPHICS > EYE JITTER, live, kept in live.txt
                 23: 'game_wall_anims',  # 79.6: VR SETTINGS > BODY AND VIEW > GAME WALL ANIMS, live, kept in live.txt
                 24: 'webline_marker',  # 79.10: VR SETTINGS > BODY AND VIEW > WEB LINE MARKER, live, kept in live.txt
-                25: 'webline_gesture'}  # 0.0.81: VR SETTINGS > BODY AND VIEW > WEBLINES, live, kept in live.txt
+                25: 'webline_gesture',  # 0.0.81: VR SETTINGS > BODY AND VIEW > WEBLINES, live, kept in live.txt
+                26: 'webline_mode'}  # 0.0.82: VR SETTINGS > BODY AND VIEW > WEBLINE MODE, live, kept in live.txt
 # Update 18: WEB COLOR sets the chosen style's shade; the launcher keeps every style's.
 WEB_COLOR_KEYS = tuple(f'web_color_{style}' for style in WEB_STYLES)
 SELECTOR = {'web_width': 0, 'web_speed': 0, 'aa': 1, 'history': 1, 'reach': 1, 'monitor': 1, 'supersample': 2,
             'sharpen': 4, 'reticles': 4, 'hud_height': 5, 'hud_scale': 5, 'hud_text': 5, 'hud_theme': 5,
             'hud_text_color': 5, 'web_style': 6, **{key: 6 for key in WEB_COLOR_KEYS},
             'music_volume': 7, 'music_visualizer': 7, 'music_track': 7, 'lens_flares': 10,
-            'mirror_view': 10, 'vr_jitter': 10, 'game_wall_anims': 10, 'webline_marker': 10, 'webline_gesture': 10}
+            'mirror_view': 10, 'vr_jitter': 10, 'game_wall_anims': 10, 'webline_marker': 10, 'webline_gesture': 10, 'webline_mode': 10}
 CHANGED_SELECTOR = 3
 MARKER = 1 << 30
 SUPERSAMPLES = (100, 200)
@@ -1591,7 +1604,8 @@ def decode_hud_settings(selector, code):
                 'vr_jitter': ('off', 'low', 'med', 'full', 'e5d2746')[min(code >> 2 & 7, 4)],  # 79.4: EYE JITTER level (bits 2-4)
                 'game_wall_anims': ('off', 'on')[code >> 5 & 1],  # 79.6: GAME WALL ANIMS (bit 5)
                 'webline_marker': ('on', 'off')[code >> 6 & 1],  # 79.10: WEB LINE MARKER (bit 6, 0 on)
-                'webline_gesture': ('on', 'off')[code >> 7 & 1]}  # 0.0.81: WEBLINES (bit 7, 1 off)
+                'webline_gesture': ('on', 'off')[code >> 7 & 1],  # 0.0.81: WEBLINES (bit 7, 1 off)
+                'webline_mode': ('grip', 'wrists', 'twohand')[min(code >> 8 & 3, 2)]}  # 0.0.82: WEBLINE MODE (bits 8-9)
     if selector == CHANGED_SELECTOR:
         changed = {CONTROL_KEYS[bit]: True for bit in CONTROL_KEYS if code >> bit & 1}
         if changed.pop('web_color', None):

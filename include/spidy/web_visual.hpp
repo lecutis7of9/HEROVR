@@ -445,6 +445,8 @@ struct AimMarker {
 // ignore the RETICLES setting and the aim markers' easing. False: nothing drawn (not finite, or closer than 0.3 m).
 bool appendWeblineMarker(std::vector<Vertex>& out, Vec3 point, bool valid, Vec3 viewer, float pixelAngle, float minPixels = 40.f);
 bool appendWeblinePreview(std::vector<Vertex>& out, Vec3 from, Vec3 to, bool valid, Vec3 viewer, float pixelAngle);
+// 0.0.82 WRISTS: a small ring at `at` (the wrists) that fills clockwise with `progress` 0..1; green once full and a surface is valid, red when full with none.
+bool appendWeblineProgress(std::vector<Vertex>& out, Vec3 at, float progress, bool valid, Vec3 viewer, float pixelAngle);
 // pixelAngle as for appendWeb. Each mark below draws its tech_marks.hpp
 // namesake instead in UiStyle::tech.
 void appendAimMarker(std::vector<Vertex>& out, const AimMarker& marker, Vec3 viewer, float pixelAngle,

@@ -52,8 +52,8 @@ class Camera(unittest.TestCase):
 
     def test_tag(self):
         c = src('CMakeLists.txt')
-        self.assertIn('set(HERO_TEST_VERSION "0.0.79.10"', c)
-        self.assertIn('set(HERO_TEST_NUMBER "10"', c)
+        self.assertIn('set(HERO_TEST_VERSION "0.0.82"', c)
+        self.assertIn('set(HERO_TEST_NUMBER "1"', c)
         self.assertIn('HERO VR 79.10 TEST (commit', src('.github/workflows/dynamic-body-0791.yml'))
         self.assertIn('HERO VR 79.9 TEST (includes 79.8)', src('src/game_xr.cpp'))
         self.assertIn('camera_press_tests', src('.github/workflows/dynamic-body-0791.yml'))

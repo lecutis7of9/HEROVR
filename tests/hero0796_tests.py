@@ -18,12 +18,12 @@ def src(path):
 class Toggle(unittest.TestCase):
     def test_row_is_in_vr_settings_body_and_view(self):
         w = src('src/wrist_hud.cpp')
-        self.assertIn('C::bodyAnimations, C::gameWallAnims, C::weblineMarker, C::weblineGesture, C::combatCalibLook', w)  # the BODY AND VIEW section
+        self.assertIn('C::bodyAnimations, C::gameWallAnims, C::weblineMarker, C::weblineGesture, C::weblineMode, C::combatCalibLook', w)  # the BODY AND VIEW section
         self.assertIn('return "GAME WALL ANIMS";', w)
         self.assertIn('r.gameWallAnims = true;', w)
         h = src('include/spidy/wrist_hud.hpp')
-        self.assertIn('controls = 253', h)
-        self.assertIn('Control::weblineGesture) == controls - 1', h)
+        self.assertIn('controls = 254', h)
+        self.assertIn('Control::weblineMode) == controls - 1', h)
 
     def test_off_is_the_default_and_persisted(self):
         self.assertIn('game_wall_anims', L.SETTINGS)
@@ -103,8 +103,8 @@ class Record(unittest.TestCase):
 class Version(unittest.TestCase):
     def test_tag_is_79_9(self):
         c = src('CMakeLists.txt')
-        self.assertIn('set(HERO_TEST_VERSION "0.0.79.10"', c)
-        self.assertIn('set(HERO_TEST_NUMBER "10"', c)
+        self.assertIn('set(HERO_TEST_VERSION "0.0.82"', c)
+        self.assertIn('set(HERO_TEST_NUMBER "1"', c)
         self.assertIn('HERO VR 79.10 TEST (commit', src('.github/workflows/dynamic-body-0791.yml'))
         self.assertIn('HERO VR 79.9 TEST (includes 79.8)', src('src/game_xr.cpp'))
         self.assertIn('wall_anims_tests', src('.github/workflows/dynamic-body-0791.yml'))

@@ -1,0 +1,208 @@
+# Private 0.0.82 WEBLINE MODES test (GRIP / WRISTS / TWO HAND); never creates or edits a public release, main, a tag or version.json.
+# Mission-specific completion is NOT a prerequisite for packaging this test artifact.
+# See docs/0791-COMBINED-TEST-AND-RELEASE-GATES.md.
+name: HERO VR 0.0.82 WEBLINE MODES test build
+on:
+  push:
+    branches:
+      - experiment/082-webline-modes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  combined-gameplay:
+    if: github.repository == 'lecutis7of9/HEROVR'
+    runs-on: windows-2022
+    timeout-minutes: 100
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out the experimental branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test Python diagnostics and Windows folder safeguards
+        run: |
+          $env:PYTHONPATH = 'tools'
+          python -B -m unittest -v test_compare_sandman_render test_windows_fault
+          if ($LASTEXITCODE) { throw 'Python diagnostics regressions failed' }
+          python -B tests/player_check_tests.py
+          if ($LASTEXITCODE) { throw 'Windows folder preflight regressions failed' }
+      - name: Compile and run webline gesture regression
+        run: |
+          $compiler = (Get-Command clang++ -ErrorAction SilentlyContinue)
+          if (-not $compiler) { $compiler = (Get-Command g++ -ErrorAction SilentlyContinue) }
+          if (-not $compiler) { throw 'No C++ compiler for webline regression' }
+          & $compiler.Source -std=c++20 -Iinclude tests/webline_gesture_tests.cpp -o webline_gesture_tests.exe
+          if ($LASTEXITCODE) { throw 'Webline regression compile failed' }
+          ./webline_gesture_tests.exe
+          if ($LASTEXITCODE) { throw 'Webline gesture regression failed' }
+          & $compiler.Source -std=c++20 -Iinclude tests/enemy_grip_split_tests.cpp -o enemy_grip_split_tests.exe
+          if ($LASTEXITCODE) { throw 'Enemy grip split regression compile failed' }
+          ./enemy_grip_split_tests.exe
+          if ($LASTEXITCODE) { throw 'Enemy grip split regression failed' }
+          & $compiler.Source -std=c++20 -Iinclude tests/wall_anims_tests.cpp -o wall_anims_tests.exe
+          if ($LASTEXITCODE) { throw 'Wall anims (79.6 WALL WATCH) regression compile failed' }
+          ./wall_anims_tests.exe
+          if ($LASTEXITCODE) { throw 'Wall anims (79.6 WALL WATCH) regression failed' }
+          & $compiler.Source -std=c++20 -Iinclude tests/jitter_slow_tests.cpp -o jitter_slow_tests.exe
+          if ($LASTEXITCODE) { throw 'Slow-walk jitter (79.7) regression compile failed' }
+          ./jitter_slow_tests.exe
+          if ($LASTEXITCODE) { throw 'Slow-walk jitter (79.7) regression failed' }
+          & $compiler.Source -std=c++20 -Iinclude tests/camera_press_tests.cpp -o camera_press_tests.exe
+          if ($LASTEXITCODE) { throw 'Camera gesture (79.9) regression compile failed' }
+          ./camera_press_tests.exe
+          if ($LASTEXITCODE) { throw 'Camera gesture (79.9) regression failed' }
+      - name: Compile and run webline modes regression (0.0.82 WRISTS / TWO HAND)
+        run: |
+          $compiler = (Get-Command clang++ -ErrorAction SilentlyContinue)
+          if (-not $compiler) { $compiler = (Get-Command g++ -ErrorAction SilentlyContinue) }
+          if (-not $compiler) { throw 'No C++ compiler for webline modes regression' }
+          & $compiler.Source -std=c++20 -Iinclude tests/webline_modes_tests.cpp -o webline_modes_tests.exe
+          if ($LASTEXITCODE) { throw 'Webline modes regression compile failed' }
+          ./webline_modes_tests.exe
+          if ($LASTEXITCODE) { throw 'Webline modes regression failed' }
+      - name: Fetch native build dependencies
+        run: |
+          ./tools/bootstrap.ps1 -Observer
+          if ($LASTEXITCODE) { throw "Bootstrap failed ($LASTEXITCODE)" }
+      - name: Compile all native modules and run C++ tests
+        env:
+          HEROVR_BUILD_FOOTER: '1' # 79.5: the wrist footer names the build (version, test number, commit); no test-notice panel
+          SPIDY_BHAPTICS_APP_ID: ${{ secrets.SPIDY_BHAPTICS_APP_ID }}
+          SPIDY_BHAPTICS_API_KEY: ${{ secrets.SPIDY_BHAPTICS_API_KEY }}
+        run: |
+          Remove-Item Env:SM2VR_LAUNCHER -ErrorAction SilentlyContinue
+          ./tools/build.ps1 -Observer -FromSource
+          if ($LASTEXITCODE) { throw "Build/tests failed ($LASTEXITCODE)" }
+      - name: Build selectable HERO VR launcher for test package
+        run: |
+          # build.ps1 does Set-Location to its own folder, which changes this
+          # step's location too: the old relative Test-Path then looked in
+          # tools/launcher/tools/launcher/out and failed after a good build.
+          $repo = $env:GITHUB_WORKSPACE
+          & (Join-Path $repo 'tools/launcher/build.ps1') -Out 'out/SM2VRLauncher.exe'
+          $built = $?
+          Set-Location -LiteralPath $repo
+          $exe = Join-Path $repo 'tools/launcher/out/SM2VRLauncher.exe'
+          if (-not $built -or -not (Test-Path -LiteralPath $exe)) { throw "HERO VR launcher compilation failed ($exe)" }
+          "Launcher: $((Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash)" >> $env:GITHUB_STEP_SUMMARY
+      - name: Stage launcher executable for package
+        run: |
+          Copy-Item -LiteralPath 'tools/launcher/out/SM2VRLauncher.exe' -Destination 'tools/launcher/SM2VRLauncher.exe' -Force
+      - name: Stage current gameplay DLL for both rendering modes
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = 'build/windows-ninja/renderer-modes'
+          $compiled = 'build/windows-ninja/spidy_stereo_probe.dll'
+          if (-not (Test-Path -LiteralPath $compiled)) { throw 'Current gameplay DLL missing' }
+          foreach ($mode in @('original', 'revamped')) {
+            $dir = Join-Path $base $mode
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            Copy-Item -LiteralPath $compiled -Destination (Join-Path $dir 'spidy_stereo_probe.dll') -Force
+            $hash = (Get-FileHash -LiteralPath (Join-Path $dir 'spidy_stereo_probe.dll') -Algorithm SHA256).Hash
+            if ($hash -ne (Get-FileHash -LiteralPath $compiled -Algorithm SHA256).Hash) { throw "$mode gameplay DLL differs from current build" }
+          }
+          "Gameplay DLL SHA256 (original = revamped = build): $((Get-FileHash -LiteralPath $compiled -Algorithm SHA256).Hash)" >> $env:GITHUB_STEP_SUMMARY
+          "Both modes: same current gameplay DLL; launcher selects Original game AA or Revamped own 70% temporal AA through live.txt and staged marker." >> $env:GITHUB_STEP_SUMMARY
+      - name: Fetch v0.0.78's Models (read-only download of the public v0.0.78 launcher ZIP)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # t2161: the test ZIP had no Models folder ("REAL MODELS ...: MISSING"). The models are not in git;
+          # v0.0.78 shipped them in HERO-VR-Launcher-0.0.78.zip under HV078/Models. Same files, pinned by hash.
+          $dl = Join-Path $env:RUNNER_TEMP 'v078'
+          New-Item -ItemType Directory -Force -Path $dl | Out-Null
+          gh release download v0.0.78 --repo $env:GITHUB_REPOSITORY --pattern 'HERO-VR-Launcher-0.0.78.zip' --dir $dl
+          if ($LASTEXITCODE) { throw 'Could not download HERO-VR-Launcher-0.0.78.zip from v0.0.78' }
+          $zip078 = Join-Path $dl 'HERO-VR-Launcher-0.0.78.zip'
+          $want = '0f8c9cca2363beb320132b54f3444bcec244bca3b74a375300014961faab8fda'
+          $got = (Get-FileHash -LiteralPath $zip078 -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($got -ne $want) { throw "HERO-VR-Launcher-0.0.78.zip SHA256 $got, expected $want" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $out = Join-Path $env:GITHUB_WORKSPACE 'build/models-078'
+          if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force }
+          $archive = [IO.Compression.ZipFile]::OpenRead($zip078)
+          $n = 0
+          try {
+            foreach ($e in $archive.Entries) {
+              if (-not $e.FullName.StartsWith('HV078/Models/') -or $e.FullName.EndsWith('/')) { continue }
+              $dest = Join-Path $out ($e.FullName.Substring('HV078/'.Length))
+              New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+              [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $dest, $true)
+              $n++
+            }
+          } finally { $archive.Dispose() }
+          if ($n -ne 123) { throw "Expected 123 files under HV078/Models, got $n" }
+          "Models from v0.0.78 launcher ZIP: $n files" >> $env:GITHUB_STEP_SUMMARY
+      - name: Package isolated test mod (never uploads to Releases)
+        run: |
+          $name = 'HERO-VR-82-WEBLINE-TEST'
+          # 79.5: BUILD-ID.txt / BUILD-MANIFEST.txt in the package (package.ps1) name this build.
+          $env:HEROVR_BUILD_TAG = "HERO VR 0.0.82 WEBLINE MODES TEST (commit $($env:GITHUB_SHA.Substring(0, 7)))"
+          ./tools/package.ps1 -Name $name -TestNotes 'docs/0820-WEBLINE-MODES-TEST.md' -ModelsFrom 'build/models-078/Models'
+          if ($LASTEXITCODE) { throw "Packaging failed ($LASTEXITCODE)" }
+          $zip = "dist/$name-win64.zip"
+          if (-not (Test-Path -LiteralPath $zip)) { throw "No mod test ZIP: $zip" }
+          # GitHub artifacts arrive as an outer download folder, then the ZIP
+          # extracts with another root folder. The Windows modules are staged
+          # under reports/<kind>-modules/<full sha256>/<dll>. Check that a
+          # realistic nested Downloads layout has ample MAX_PATH headroom.
+          $sampleRoot = 'C:\Users\LongExampleUsername\Downloads\herovr-79-1-test\HERO-VR-79.1-TEST-win64\HERO-VR-79.1-TEST'
+          $sampleDll = Join-Path $sampleRoot ('reports\render-memory-modules\' + ('a' * 64) + '\spidy_render_memory.dll')
+          if ($sampleDll.Length -ge 230) { throw "Test ZIP nesting makes DLL staging too long: $($sampleDll.Length) chars" }
+          "Sample nested staging path length: $($sampleDll.Length) chars" >> $env:GITHUB_STEP_SUMMARY
+          # t2150: VERSION in the package, and the single-instance / renderer-mode fixes in its starter script.
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
+          try {
+            $entries = @($archive.Entries | ForEach-Object { $_.FullName })
+            if (-not ($entries -contains "$name/VERSION")) { throw 'VERSION missing from the test ZIP' }
+            # t2155: Reports > Collect reports, and the bisect fallback with its switch.
+            foreach ($entry in @('BUILD-MANIFEST.txt', 'BUILD-ID.txt', 'tools/build_tag.py', 'tools/collect-reports.ps1')) {
+              if (-not ($entries -contains "$name/$entry")) { throw "$entry missing from the test ZIP" }
+            }
+            # t2161: v0.0.78's Models, all 123 files, and the two the session log reported missing.
+            $models = @($entries | Where-Object { $_.StartsWith("$name/Models/") -and -not $_.EndsWith('/') })
+            if ($models.Count -ne 123) { throw "Models in the test ZIP: $($models.Count) files, expected 123" }
+            foreach ($entry in @('Models/Punisher078/Pistol', 'Models/Batarang', 'Models/Suits')) {
+              if (-not @($entries | Where-Object { $_.StartsWith("$name/$entry/") }).Count) { throw "$entry missing from the test ZIP" }
+            }
+            "Models in the test ZIP: $($models.Count) files" >> $env:GITHUB_STEP_SUMMARY
+            $script = $archive.GetEntry("$name/tools/launch-game-vr.ps1")
+            $reader = New-Object IO.StreamReader($script.Open()); $text = $reader.ReadToEnd(); $reader.Close()
+            foreach ($needed in @('Local\HEROVR-launch-game-vr', 'HEROVR_RENDERER_MODE', 'no 70% enable marker', 'USE-BASE-DLL.txt', 'BUILD-MANIFEST.txt', 'BUILD CHECK FAILED')) {
+              if (-not $text.Contains($needed)) { throw "launch-game-vr.ps1 in the ZIP lacks: $needed" }
+            }
+          } finally { $archive.Dispose() }
+          python -B tools/check_bundled_python.py $zip --run
+          if ($LASTEXITCODE) { throw 'Bundled Python check failed' }
+          "$((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant())  $name-win64.zip" |
+            Set-Content "$zip.sha256" -NoNewline -Encoding ascii
+          "Preview package: $zip" >> $env:GITHUB_STEP_SUMMARY
+      - name: Attach test ZIP to this run (not a public release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: herovr-82-webline-modes-test
+          path: |
+            dist/HERO-VR-82-WEBLINE-TEST-win64.zip
+            dist/HERO-VR-82-WEBLINE-TEST-win64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+      - name: Attach gameplay DLL symbols (map + pdb; resolve the crash breadcrumb's module+offset stack)
+        uses: actions/upload-artifact@v4
+        with:
+          name: herovr-82-gameplay-dll-symbols
+          path: |
+            build/windows-ninja/**/spidy_stereo_probe.map
+            build/windows-ninja/**/spidy_stereo_probe.pdb
+            build/windows-ninja/spidy_stereo_probe.dll
+          if-no-files-found: warn
+          retention-days: 14

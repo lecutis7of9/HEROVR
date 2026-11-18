@@ -6037,8 +6037,13 @@ DWORD runBody() {
                     // 0.0.74 test 1 SEATED DRIVING: the seat's lift while he drives; out of the van, standing again.
                     rig.seatOffset(van.state != van072::driving ? Vec3{} : hideoutVisit.active() ? Vec3{0, hideoutChairLift, 0} : vanSeatLift); // 0.0.74 test 2b: the chair's
                     vanCarry.turn = 0;
+                    // HERO VR 0.0.82 DIVE FIX: a fast fall with no wall or crawl under him (game_swing::freefall: the
+                    // game's dive off a high building) is no surface either. The dive pitches Spider-Man head down and
+                    // that tilted up read as a wall: "no flips there", so a long fall stopped the left stick's flips.
+                    const bool diveUp = !swingState.owned && game_swing::freefall(swingState) &&
+                                        static_cast<int64_t>(swingState.qpc) > now.QuadPart - frequency.QuadPart / 10;
                     motion = rig.update(controller, feet, {camera[8], camera[9], camera[10]}, gameplay,
-                                        swingState.owned ? Vec3{0, 1, 0} : heroUp,
+                                        swingState.owned || diveUp ? Vec3{0, 1, 0} : heroUp,
                                         game_swing::airborne(swingState, now.QuadPart, frequency.QuadPart), hold,
                                         {camera[4], camera[5], camera[6]});
                     if (motion.headDrop > .02f)

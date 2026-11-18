@@ -392,18 +392,14 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
     // On a wall the game's actor rocks up to 14 degrees about the wall's
     // normal and snaps back, several times a second (in the game, October 8);
     // a stand-off along its up bobbed the head with it.
+    const Vec3 normal = normalized(surfaceUp);
+    const bool onSurface = finite(normal) && length(normal) > .5f &&
+                           normal.y < (onSurface_ ? surfaceLeaveCos : surfaceEnterCos);
+    const Vec3 away = normal.y < -surfaceEnterCos ? Vec3{0, -1, 0} : normalized(Vec3{normal.x, 0, normal.z});
     // The wall or ceiling that holds the player: no flips there, and A is a
     // jump off it.
     const Vec3 held = normalized(surface.normal);
     const bool holds = finite(held) && length(held) > .5f && finite(surface.anchor);
-    // HERO VR 0.0.82 DIVE FIX: in the air with nothing holding him, the actor's up is no surface. The game's dive off
-    // a high building pitches Spider-Man head down, and that tilt read as a wall: "no flips there", so a long fall
-    // stopped the left stick's flips once the dive began (and stood the head off a wall that was not there).
-    const bool freeInAir = airborne && !holds;
-    const Vec3 normal = normalized(surfaceUp);
-    const bool onSurface = !freeInAir && finite(normal) && length(normal) > .5f &&
-                           normal.y < (onSurface_ ? surfaceLeaveCos : surfaceEnterCos);
-    const Vec3 away = normal.y < -surfaceEnterCos ? Vec3{0, -1, 0} : normalized(Vec3{normal.x, 0, normal.z});
     // A flip tilts the tracking space about the head where it began.
     FlipMotion::Sample flip;
     flip.jump = f.jump && !flyOwns_; // 0.0.76 FLIGHT: A is the flight's while it flies

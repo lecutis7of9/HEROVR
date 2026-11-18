@@ -153,7 +153,7 @@ class Release082(unittest.TestCase):  # 0.0.82: WEBLINES off by default, DIVE FI
         self.assertIn('solver.setAssist(s.assist ? s.assistDegrees : 0.f);', b)
         self.assertIn('webPress);', b)
         self.assertIn('shot(h.aim, from, world, true)', src('src/swing.cpp'))
-        self.assertIn('const bool freeInAir = airborne && !holds;', src('src/game_tracking.cpp'))
+        self.assertIn('swingState.owned || diveUp ? Vec3{0, 1, 0} : heroUp', g)
 
 
 if __name__ == '__main__':

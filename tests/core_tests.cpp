@@ -9195,7 +9195,7 @@ int main() {
         SwingConfig noAir=c;noAir.airAnchors=false;
         SwingConfig bare;bare.airAnchors=false;
         check(!Swing(bare).shot(nearMiss,from,w,true).web,"a miss with no air webs and no assist held");
-        check(Swing(noAir).shot(nearMiss,from,w,true).web,"a near miss with no air webs did not snap");
+        check(Swing(noAir).shot(nearMiss,from,w,true).web.has_value(),"a near miss with no air webs did not snap");
     });
     test("0.0.82 SWING ANCHOR RANGE: a building past 100 m holds at 140 m; open-air anchors stay at 100 m", [] {
         struct Far : Building { Far(){low={120,0,-20};high={130,60,20};} } w;

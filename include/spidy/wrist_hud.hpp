@@ -584,7 +584,7 @@ enum class Control : uint8_t {
     gameWallAnims, // 79.6 GAME WALL ANIMS (VR SETTINGS > BODY AND VIEW): the game's own wall crawl / run, live.txt game_wall_anims
     weblineMarker, // 79.10 WEB LINE MARKER (VR SETTINGS > BODY AND VIEW): the 40 px Web Line disc / cross, live.txt webline_marker, ON the default
     weblineGesture, // 0.0.81 WEBLINES (VR SETTINGS > BODY AND VIEW): the grip Web Line gesture, live.txt webline_gesture, ON the default; OFF = no gesture, no L2+Y
-    weblineMode, // 0.0.82 WEBLINE MODE (VR SETTINGS > BODY AND VIEW): GRIP / WRISTS / TWO HAND, live.txt webline_mode, GRIP the default
+    weblineMode, // 0.0.82 WEBLINE MODE (VR SETTINGS > BODY AND VIEW): GRIP / TWO HAND (0.0.82 public: WRISTS retired), live.txt webline_mode, GRIP the default
 };
 constexpr int controls = 254; // 79.2b: + EYE JITTER; // 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 PICTURE 72: - IMAGE, IMAGE STYLE, STREAMER MODE / SMOOTH / EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (0.0.72's picture); 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING (the uint8_t Control is full); 0.0.73: + COMING SOON; // 0.0.73 MPSUIT: + PLAYER 2 BODY; // 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; // 0.0.73 AA: + SHARPEN MATCH; // 0.0.73 test 6: + MP SOLO TEST (mp-solo-test merged); // 0.0.73 test 5: + HERO HANDS (IRON MAN), GRAPPLE AIM (DAREDEVIL), CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH (WOLVERINE); // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; // 0.0.73: + IMAGE; // 0.0.73 test 3: + VAN PEDALS; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
 // Version 0.0.72: + 40 combat rows, + 2 sections; build 6: + THOR HAMMER MODEL, THOR FLIGHT
@@ -1043,7 +1043,7 @@ struct View {
     uint8_t gameWallAnims{};   // 79.6 GAME WALL ANIMS: 0 OFF, 1 ON, 2 ON waiting (on the swing's wall), 3 ON recovering (HEROVR's wall for a while)
     uint8_t weblineMarker = 1; // 79.10 WEB LINE MARKER: 0 OFF, 1 ON (the default)
     uint8_t weblineGesture = 1; // 0.0.81 WEBLINES: 0 OFF, 1 ON (the default)
-    uint8_t weblineMode{};      // 0.0.82 WEBLINE MODE: 0 GRIP (the default), 1 WRISTS, 2 TWO HAND
+    uint8_t weblineMode{};      // 0.0.82 WEBLINE MODE: 0 GRIP (the default), 2 TWO HAND (1, the retired WRISTS, shows GRIP)
     uint32_t flyMode{};        // extras385::fly::Speed
     uint32_t flyRoll = 1;      // extras385::fly::RollMode (1 COMFORT, the default)
     bool flyAutoLevel = true;

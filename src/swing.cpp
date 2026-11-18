@@ -1,4 +1,6 @@
 #include "spidy/swing.hpp"
+#include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 namespace spidy {
@@ -240,6 +242,14 @@ void Swing::setGravity(float gravity) {
 }
 void Swing::allowAirAnchors(bool allowed) {
     config_.airAnchors = allowed;
+}
+void Swing::setAnchorRange(float metres) {
+    if (!std::isfinite(metres))
+        return;
+    config_.maxRange = std::clamp(metres, std::max(20.f, config_.minRope), 250.f);
+}
+void Swing::setAssist(float degrees) {
+    config_.assistDegrees = std::isfinite(degrees) ? std::clamp(degrees, 0.f, 30.f) : 0.f;
 }
 void Swing::allowWalls(bool allowed) {
     config_.walls = allowed;
@@ -818,26 +828,71 @@ void Swing::skimGround(float dt, const WorldQueries& world) {
         body_.velocity.z *= along;
     }
 }
-WebShot Swing::shot(Pose aim, Vec3 from, const WorldQueries& world) const {
+WebShot Swing::shot(Pose aim, Vec3 from, const WorldQueries& world, bool assist) const {
     WebShot out;
     const Vec3 forward = aim.orientation.rotate({0, 0, -1});
     if (!finite(aim.position) || !finite(from) || !finite(forward) || length(forward) < .9f || length(forward) > 1.1f)
         return out;
     const Vec3 direction = normalized(forward);
-    out.hit = solid(aim.position, direction, config_.maxRange, world, &out.passed);
-    const bool airAnchor = !out.hit && config_.airAnchors;
-    if (!out.hit && !airAnchor)
-        return out;
-    const RayHit anchor = airAnchor ? RayHit{aim.position + direction * config_.maxRange, {}, 0, true} : *out.hit;
-    // Confirm the body has a clear line to the same anchor. Hands cannot
+    // The web a hit (or the air point) along `way` makes, if the body has a clear line to it. Hands cannot
     // shoot through a wall while the body remains on its other side.
-    if (anchor.fixed && (airAnchor || world.exists(anchor.surface)) && finite(anchor.point)) {
+    const auto holds = [&](const RayHit& anchor, bool airAnchor) -> std::optional<Web> {
+        if (!(anchor.fixed && (airAnchor || world.exists(anchor.surface)) && finite(anchor.point)))
+            return std::nullopt;
         const Vec3 delta = anchor.point - from;
         const float dist = length(delta);
+        if (!(dist >= config_.minRope) || length(anchor.point - aim.position) > config_.maxRange + .01f)
+            return std::nullopt;
         const auto obstacle = solid(from, normalized(delta), std::max(0.0f, dist - .08f), world);
-        if (length(anchor.point - aim.position) <= config_.maxRange + .01f && dist >= config_.minRope &&
-            !(obstacle && blocks(*obstacle, from, anchor.point)))
-            out.web = Web{true, anchor.point, anchor.surface, dist, 0, airAnchor};
+        if (obstacle && blocks(*obstacle, from, anchor.point))
+            return std::nullopt;
+        return Web{true, anchor.point, anchor.surface, dist, 0, airAnchor};
+    };
+    out.hit = solid(aim.position, direction, config_.maxRange, world, &out.passed);
+    const bool airAnchor = !out.hit && config_.airAnchors;
+    if (out.hit || airAnchor) {
+        const float air = std::min(config_.airRange, config_.maxRange);
+        const RayHit anchor = airAnchor ? RayHit{aim.position + direction * air, {}, 0, true} : *out.hit;
+        out.web = holds(anchor, airAnchor);
+    }
+    // A surface that holds, straight down the aim: as always.
+    if (out.web && !out.web->airAnchor)
+        return out;
+    // 0.0.82 SWING ASSIST: a miss, an air anchor or a blocked line looks round the aim, the inner ring first,
+    // and takes the first surface that holds - the one nearest the aim.
+    if (!assist || !(config_.assistDegrees > .5f))
+        return out;
+    constexpr int rings = 2, spokes = 8;
+    const Vec3 helper = std::fabs(direction.y) < .95f ? Vec3{0, 1, 0} : Vec3{1, 0, 0};
+    const Vec3 side = normalized(cross(direction, helper)), up = cross(side, direction);
+    const float most = config_.assistDegrees * 3.14159265f / 180.f;
+    for (int r = 1; r <= rings; ++r) {
+        const float angle = most * static_cast<float>(r) / rings;
+        std::optional<Web> best;
+        std::optional<RayHit> bestHit;
+        float bestDistance = 1e30f;
+        for (int k = 0; k < spokes; ++k) {
+            const float around = 2 * 3.14159265f * (static_cast<float>(k) + (r % 2 ? 0.f : .5f)) / spokes;
+            const Vec3 way = normalized(direction * std::cos(angle) +
+                                        (side * std::cos(around) + up * std::sin(around)) * std::sin(angle));
+            const auto hit = solid(aim.position, way, config_.maxRange, world);
+            if (!hit)
+                continue;
+            const float distance = length(hit->point - aim.position);
+            if (distance >= bestDistance)
+                continue;
+            if (auto web = holds(*hit, false)) {
+                best = web;
+                bestHit = hit;
+                bestDistance = distance;
+            }
+        }
+        if (best) {
+            out.web = best;
+            out.hit = bestHit;
+            out.assisted = true;
+            return out;
+        }
     }
     return out;
 }
@@ -937,7 +992,8 @@ void Swing::inputs(float dt, const Input& in, const WorldQueries& world) {
             // From the body, stood off a surface the game holds it on.
             const Vec3 from = length(support_) > .5f ? body_.position + support_ * config_.wallClearance
                                                      : body_.position;
-            if (const auto fired = shot(h.aim, from, world); fired.web) {
+            if (const auto fired = shot(h.aim, from, world, true); fired.web) {
+                assists_ += fired.assisted; // 0.0.82 SWING ASSIST
                 w = *fired.web;
                 w.strand = ++strands_;
                 // To the hand that holds it.

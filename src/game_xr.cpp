@@ -1516,11 +1516,19 @@ std::atomic<uint32_t> promptLayerNow{prompt_layer::layerOn};
 // HERO VR 0.0.79.1 web-mechanics test (webline_native.hpp): live.txt webline_gesture - 0 on (the default: grip on a
 // surface, stretch, release on another surface -> the game's own Web Line input, L2 + Y; only while standing, perched
 // or on a wall, so mid-air grip swings are untouched), 1 off, 2 anywhere (airborne too).
-std::atomic<uint32_t> weblineGestureNow{spidy::webline_native::modeOn};
+// 0.0.82 public (owner: "keep weblines off by default"): OFF is the default now; the hologram turns them on.
+std::atomic<uint32_t> weblineGestureNow{spidy::webline_native::modeOff};
 // 0.0.82 WEBLINE MODES (webline_modes.hpp): live.txt webline_mode - 0 grip (0.0.81's gesture, the default), 1 wrists
 // (both wrists together for webline_hold_ms), 2 twohand (one hand's grip tap places A, the other hand's tap places B).
 std::atomic<uint32_t> weblineModeNow{spidy::webline_modes::modeGrip};
 std::atomic<uint32_t> weblineHoldMsNow{spidy::webline_modes::holdMsDefault};
+// HERO VR 0.0.82 SWING ASSIST (game_swing::Settings v9): live.txt swing_anchor_range (metres a web press looks for a
+// surface, 140 the default, 100 before 0.0.82; air anchors stay at 100 m), swing_assist (0 on, the default; 1 off) and
+// swing_assist_deg (the near-miss cone, 10 the default): a press whose own ray finds nothing that holds snaps to a
+// surface within that many degrees of the aim.
+std::atomic<uint32_t> swingAnchorRangeNow{140};
+std::atomic<uint32_t> swingAssistNow{0};
+std::atomic<uint32_t> swingAssistDegNow{10};
 // HERO VR 0.0.79.1 (user report t2145: 9d58d65's grip split made combat sluggish): live.txt enemy_grip_split - 0 off
 // (the default: the pre-9d58d65 combat path exactly - a grip on an enemy is GRAB WEB at once, pull to yank; physical Y
 // in the air is the game's web strike), 1 on (enemy_grip_split.hpp: aimed grip = native web strike on the press frame,
@@ -2570,7 +2578,7 @@ DWORD runBody() {
             modelsAdopted = true;
         };
         consoleLine(std::string("79.5 BUILD TAG: ") + SpidyBuildTag + " (this line is in the DLL that is running; a console without it is an older build)");
-        consoleLine("HERO VR 0.0.82 WEBLINE MODES TEST (includes 0.0.81): WEBLINES on/off (webline_gesture) is the master; WEBLINE MODE (webline_mode = grip | wrists | twohand, webline_hold_ms) picks GRIP (sweep), WRISTS (both wrists together, ring) or TWO HAND (tap A, other hand taps B); all end in the game's own L2 + Y Web Line");
+        consoleLine("HERO VR 0.0.82: WEBLINES are OFF by default (VR SETTINGS > BODY AND VIEW > WEBLINES turns them on; live.txt webline_gesture); WEBLINE MODE cycles GRIP / TWO HAND (webline_mode = grip | twohand; an old wrists plays as grip). DIVE FIX: a web press ends the game's air move hand-over at once, flips count the game's dive as air. SWING ASSIST: swing_anchor_range, swing_assist (on/off), swing_assist_deg");
         consoleLine("HERO VR 79.10 TEST (includes 79.9): Prowler stash doors and other web-yank interacts use L1+R1, not Y (HOLD RIGHT STICK CLICK or a two-hand yank / both web buttons); the false GAME: Y card from CineApproachPrompt is gone. WEB LINE MARKER (VR SETTINGS > BODY AND VIEW; live.txt webline_marker, ON the default) hides the 40 px disc / red cross when off");
         consoleLine("HERO VR 79.9 TEST (includes 79.8): CAMERA GESTURE: the LEFT trigger pulled at the LEFT side of the head is Peter's camera gadget (the game's "
                     "D-pad Up held, CANDIDATE) or the second spider's Prowler scan (the game's L2 held while the game names L2; live.txt camera_hero); the RIGHT trigger at the "
@@ -3948,6 +3956,9 @@ DWORD runBody() {
                 s.walls = 0;
             s.arcade = values.arcadeWebs;
             s.handClimb = values.handClimb;
+            s.anchorRange = static_cast<float>(swingAnchorRangeNow.load()); // 0.0.82 SWING ASSIST
+            s.assist = swingAssistNow.load() == 0 ? 1u : 0u;
+            s.assistDegrees = static_cast<float>(swingAssistDegNow.load());
             sentSwingSettings = s;
             swingSettingsSent = true;
             // A hand-over owns the walls while it lasts; the player's own
@@ -5073,8 +5084,8 @@ DWORD runBody() {
                                     message(3, 0, next == webline_native::modeOff ? "HEROVR WEBLINES: OFF" : "HEROVR WEBLINES: ON");
                                     consoleLine(std::string("0.0.81 WEBLINES ") + (next == webline_native::modeOff ? "OFF" : "ON") + " from the hologram");
                                 }
-                                if (result.weblineMode) { // 0.0.82 WEBLINE MODE: the next press cycles GRIP > WRISTS > TWO HAND
-                                    const uint32_t next = (std::min<uint32_t>(weblineModeNow.load(), 2u) + 1u) % 3u;
+                                if (result.weblineMode) { // 0.0.82 WEBLINE MODE: the next press cycles GRIP > TWO HAND (WRISTS retired)
+                                    const uint32_t next = webline_modes::nextMode(weblineModeNow.load());
                                     weblineModeNow = next;
                                     wristChanged |= 1u << 26; // SpidyHudSettings 3 bit 26, 10 bits 8-9
                                     message(3, 0, (std::string("HEROVR WEBLINE MODE: ") + webline_modes::modeName(next)).c_str());
@@ -6630,7 +6641,12 @@ DWORD runBody() {
                     }
                     // While it is out its hands land no blow (Settings::noBlows),
                     // nor while the game names its X (NamedPress, above).
-                    if (phone.live() != phoneBlows || namedFists != fistsBlows)
+                    if (phone.live() != phoneBlows || namedFists != fistsBlows ||
+                        // 0.0.82 SWING ASSIST: live.txt's swing_anchor_range / swing_assist / swing_assist_deg changed
+                        (swingSettingsSent &&
+                         (sentSwingSettings.anchorRange != static_cast<float>(swingAnchorRangeNow.load()) ||
+                          sentSwingSettings.assist != (swingAssistNow.load() == 0 ? 1u : 0u) ||
+                          sentSwingSettings.assistDegrees != static_cast<float>(swingAssistDegNow.load()))))
                         sendSwingSettings();
                     if (calibrationInput && calibration.phase() == CalibrationPhase::idle) {
                         bool held = (frame.buttons & buttonB) || frame.jump;
@@ -7206,7 +7222,7 @@ DWORD runBody() {
                         // the aim is never an anchor; a hand whose web holds anything is occupied.
                         {
                             const uint32_t lineMode = weblineGestureNow.load();
-                            const uint32_t wlMode = std::min<uint32_t>(weblineModeNow.load(), 2u); // 0.0.82 WEBLINE MODE
+                            const uint32_t wlMode = webline_modes::effectiveMode(weblineModeNow.load()); // 0.0.82 WEBLINE MODE (GRIP / TWO HAND)
                             webline_modes::TwoHandInput twoIn{};
                             const bool lineAir = game_swing::airborne(swingState, now.QuadPart, frequency.QuadPart);
                             const bool lineOn = sampleAim && input.focused &&
@@ -18458,7 +18474,7 @@ DWORD runBody() {
                                             hud.gameWallAnims = static_cast<uint8_t>(gameWallAnimsShown.load()); // 79.6 GAME WALL ANIMS
                                             hud.weblineMarker = weblineMarkerNow.load() == 0 ? 1 : 0; // 79.10: 1 ON, 0 OFF
                                             hud.weblineGesture = weblineGestureNow.load() == webline_native::modeOff ? 0 : 1; // 0.0.81: 1 ON, 0 OFF
-                                            hud.weblineMode = static_cast<uint8_t>(std::min<uint32_t>(weblineModeNow.load(), 2u)); // 0.0.82
+                                            hud.weblineMode = static_cast<uint8_t>(webline_modes::effectiveMode(weblineModeNow.load())); // 0.0.82
                                             hud.flyMode = flyModeNow.load();
                                             hud.flyVignette = flyVignetteOn.load();
                                             hud.flyRoll = flyRollNow.load();
@@ -19558,6 +19574,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeblineGesture(void* v) { ret
 // 0.0.82 WEBLINE MODES: live.txt webline_mode (0 grip, 1 wrists, 2 twohand) and webline_hold_ms (150-2000, WRISTS' hold).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeblineMode(void* v) { return setLive(v, 0, 2, 5692, weblineModeNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeblineHoldMs(void* v) { return setLive(v, webline_modes::holdMsMin, webline_modes::holdMsMax, 5693, weblineHoldMsNow, asU32); }
+// HERO VR 0.0.82 SWING ASSIST: live.txt swing_anchor_range (20-250 m), swing_assist (0 on, 1 off), swing_assist_deg (0-30).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySwingAnchorRange(void* v) { return setLive(v, 20, 250, 5694, swingAnchorRangeNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySwingAssist(void* v) { return setLive(v, 0, 1, 5695, swingAssistNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySwingAssistDeg(void* v) { return setLive(v, 0, 30, 5696, swingAssistDegNow, asU32); }
 // HERO VR 0.0.79.1: live.txt enemy_grip_split, 0 off (the default: pre-9d58d65 combat), 1 on (strike-first split).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyEnemyGripSplit(void* v) { return setLive(v, 0, 1, 5648, enemyGripSplitNow, asU32); }
 // HERO VR 79.2 PROP PROBE (read-only): live.txt prop_probe - 0 on (default), 1 off.
@@ -20444,7 +20464,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
                std::min<DWORD>(SpidyVrJitterLevelNow(), 4) << 2 | (gameWallAnimsWanted.load() ? 1u : 0u) << 5 | // 79.6: bit 5 GAME WALL ANIMS
                (weblineMarkerNow.load() ? 1u : 0u) << 6 | // 79.10: bit 6 WEB LINE MARKER (0 on, 1 off)
                (weblineGestureNow.load() == webline_native::modeOff ? 1u : 0u) << 7 | // 0.0.81: bit 7 WEBLINES (1 off)
-               std::min<DWORD>(weblineModeNow.load(), 2) << 8; // 0.0.82: bits 8-9 WEBLINE MODE (0 grip, 1 wrists, 2 twohand)
+               webline_modes::effectiveMode(weblineModeNow.load()) << 8; // 0.0.82: bits 8-9 WEBLINE MODE (0 grip, 1 wrists, 2 twohand)
     default:
         return 3970;
     }

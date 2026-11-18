@@ -13,6 +13,11 @@ namespace spidy::webline_modes {
 // live.txt webline_mode (SpidyWeblineMode): 0 grip (0.0.81's gesture), 1 wrists, 2 twohand.
 enum Mode : uint32_t { modeGrip = 0, modeWrists = 1, modeTwoHand = 2 };
 inline const char* modeName(uint32_t m) { return m == modeWrists ? "WRISTS" : m == modeTwoHand ? "TWO HAND" : "GRIP"; }
+// 0.0.82 public (owner): WRISTS is retired from the cycle. The mode the player gets: TWO HAND, else GRIP (an older
+// live.txt webline_mode = wrists / 1 plays as GRIP; the Wrists machine below stays, unused).
+inline uint32_t effectiveMode(uint32_t m) { return m == modeTwoHand ? modeTwoHand : modeGrip; }
+// The hologram's WEBLINE MODE press: GRIP > TWO HAND > GRIP.
+inline uint32_t nextMode(uint32_t m) { return effectiveMode(m) == modeTwoHand ? modeGrip : modeTwoHand; }
 
 // ---- WRISTS: both wrists together for a short hold ----
 constexpr float wristsRange = .12f;      // start: the two controllers within 12 cm

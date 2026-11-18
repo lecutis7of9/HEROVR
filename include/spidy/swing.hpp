@@ -40,6 +40,13 @@ struct SwingConfig {
     // if longer) are the anchor's own facade, ledges and sills, not a wall.
     float obstructionTime = .15f, anchorClearance = 1.5f;
     bool airAnchors = true; // A clear ray attaches at maximum reach, including open sky.
+    // HERO VR 0.0.82 SWING ASSIST (live.txt swing_anchor_range, swing_assist, swing_assist_deg): maxRange is how far a
+    // shot looks for a surface; an air anchor still goes at airRange (the 100 m rope it always was), so a longer reach
+    // does not lengthen open-air swings. assistDegrees: a press whose own ray finds no surface that holds (a miss, an
+    // air anchor or a blocked line) looks round its aim within this cone (assistRings x assistSpokes rays) and snaps
+    // to the surface nearest the aim that does hold; 0 off. Only a real press assists (Swing::shot's `assist`), never
+    // the aim preview, so the markers cost no extra rays.
+    float airRange = 100, assistDegrees = 0;
     // Walls: a body in the air that comes into a wall stays on it (WallHold).
     // The game held such a body still for a second and then stuck it to the
     // wall in its crawl, which only a jump left (October 9 headset reports).
@@ -259,6 +266,8 @@ struct WebShot {
     std::optional<RayHit> hit;
     // Thin or loose things the ray went through before `hit` (SwingConfig::arcade).
     int passed{};
+    // 0.0.82 SWING ASSIST: the web snapped to a surface off the aim (SwingConfig::assistDegrees).
+    bool assisted{};
 };
 // The wall the body is on (SwingConfig's walls).
 struct WallHold {
@@ -321,6 +330,10 @@ class Swing {
     // (the VR settings); off, it misses. Webs already attached
     // keep their anchors.
     void allowAirAnchors(bool allowed);
+    // 0.0.82 SWING ASSIST: how far a shot looks for a surface (metres, clamped 20-250; air anchors stay at airRange)
+    // and the near-miss cone (degrees, 0 off, up to 30).
+    void setAnchorRange(float metres);
+    void setAssist(float degrees);
     // Whether a body in the air stays on the walls it comes into from now on
     // (SwingConfig's walls); off, it leaves the one it is on.
     void allowWalls(bool allowed);
@@ -447,13 +460,18 @@ class Swing {
     void offerWall(const RayHit& wall);
     // A web shot now along `aim` (world space, -Z forward) with the body at
     // `from`, without shooting it: the same test a grip press makes.
-    WebShot shot(Pose aim, Vec3 from, const WorldQueries&) const;
+    // assist: a real press may snap to a surface near its aim (SwingConfig::assistDegrees); the preview passes false.
+    WebShot shot(Pose aim, Vec3 from, const WorldQueries&, bool assist = false) const;
     bool pointLaunchReady() const {
         return body_.grounded && sinceLanding_ <= config_.pointLaunchWindow &&
                sinceZip_ <= config_.zipLandingWindow;
     }
     const Body& body() const {
         return body_;
+    }
+    // 0.0.82 SWING ASSIST: presses that snapped to a surface off their aim so far.
+    std::uint32_t assists() const {
+        return assists_;
     }
     const std::array<Web, 2>& webs() const {
         return webs_;
@@ -538,6 +556,7 @@ class Swing {
     // step of `dt` (SwingConfig::groundClearance).
     void skimGround(float dt, const WorldQueries&);
     SwingConfig config_;
+    std::uint32_t assists_{};
     Body body_{};
     std::array<Web, 2> webs_{};
     std::array<HandState, 2> hands_{};

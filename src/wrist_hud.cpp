@@ -2596,7 +2596,7 @@ std::string buttonValue(const View& view, Control c) {
            : c == Control::gameWallAnims ? std::string(view.gameWallAnims == 0 ? "OFF" : view.gameWallAnims == 2 ? "ON (WAITING)" : view.gameWallAnims == 3 ? "ON (RECOVER)" : "ON")
            : c == Control::weblineMarker ? std::string(view.weblineMarker ? "ON" : "OFF")
            : c == Control::weblineGesture ? std::string(view.weblineGesture ? "ON" : "OFF")
-           : c == Control::weblineMode ? std::string(view.weblineMode == 1 ? "WRISTS" : view.weblineMode == 2 ? "TWO HAND" : "GRIP")
+           : c == Control::weblineMode ? std::string(view.weblineMode == 2 ? "TWO HAND" : "GRIP")
            : c == Control::flyMode      ? std::string(extras385::fly::speedName(view.flyMode))
            : c == Control::flyVignette  ? std::string(view.flyVignette ? "ON" : "OFF")
            : c == Control::flyRoll      ? std::string(extras385::fly::rollName(view.flyRoll))
@@ -3498,9 +3498,9 @@ const char* helpText(Control c) {
     case Control::weblineMarker:
         return "ON: a disc / red cross marks the Web Line's second spot. OFF: no marker.";
     case Control::weblineGesture:
-        return "ON: grip-and-sweep Web Line. OFF: no Web Line gesture, grips only swing.";
+        return "ON: Web Line by WEBLINE MODE. OFF, the default: grips only swing.";
     case Control::weblineMode:
-        return "GRIP sweeps, WRISTS holds both together, TWO HAND taps A then B.";
+        return "GRIP holds and sweeps; TWO HAND taps one hand, then the other.";
     case Control::vrJitter:
         return "Each press: OFF > LOW > MED > FULL. OFF holds the eyes' TAA still (no far shake, rougher edges); FULL is the biggest sample walk (sharpest, far buildings may shake).";
     case Control::flyMode:

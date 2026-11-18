@@ -3243,6 +3243,9 @@ def session(a, startup, session_off=()):
         migrated_798 = live_settings.migrate_798_render(ROOT/'live.txt')  # 79.8: vr_aa ours / vr_jitter on, once
         if migrated_798:
             print(migrated_798, flush=True)
+        migrated_082 = live_settings.migrate_082_weblines(ROOT/'live.txt')  # 0.0.82: WEBLINES off by default, once
+        if migrated_082:
+            print(migrated_082, flush=True)
         # 0.0.7 MIRROR PERSIST FIX: what is made when VR starts (MIRROR VIEW TEST) is set before the start.
         for name, value in live_settings.vr_start_settings(ROOT/'live.txt').items():
             _, export, text = live_settings.SETTINGS[name]

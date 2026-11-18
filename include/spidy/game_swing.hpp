@@ -4,6 +4,7 @@
 #include "swing.hpp"
 #include "swing_takeoff.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -252,8 +253,10 @@ static_assert(sizeof(Config) == 64 && sizeof(Hand) == 52 && sizeof(Command) == 4
 // style as it is.
 // Version 8 appends handClimb without changing the upstream phone or arcade
 // fields. Older official settings keep their original layout and meaning.
+// Version 9 (HERO VR 0.0.82 SWING ASSIST) appends anchorRange (how far a shot looks for a surface, m; air anchors stay
+// at 100 m), assist (1 on: a near miss snaps to a surface within assistDegrees of the aim) and assistDegrees.
 struct Settings {
-    uint32_t magic = 0x53575354, version = 8, bytes = sizeof(Settings), grab = 1;
+    uint32_t magic = 0x53575354, version = 9, bytes = sizeof(Settings), grab = 1;
     float maxSpeed = 32;
     uint32_t airWebs = 1;
     float gravity = 6;
@@ -262,10 +265,15 @@ struct Settings {
     uint32_t noBlows{};
     uint32_t arcade{};
     uint32_t handClimb{};
+    float anchorRange = 140;
+    uint32_t assist = 1;
+    float assistDegrees = 10;
 };
 constexpr uint32_t settingsBytesV3 = 28, settingsBytesV4 = 32, settingsBytesV5 = 36, settingsBytesV6 = 40,
-                   settingsBytesV7 = 44;
-static_assert(sizeof(Settings) == 48 && offsetof(Settings, walls) == settingsBytesV3 &&
+                   settingsBytesV7 = 44, settingsBytesV8 = 48;
+constexpr float anchorRangeLeast = 20, anchorRangeMost = 250, assistDegreesMost = 30;
+static_assert(sizeof(Settings) == 60 && offsetof(Settings, anchorRange) == settingsBytesV8 &&
+              offsetof(Settings, walls) == settingsBytesV3 &&
               offsetof(Settings, physical) == settingsBytesV4 &&
               offsetof(Settings, noBlows) == settingsBytesV5 &&
               offsetof(Settings, arcade) == settingsBytesV6 &&
@@ -353,10 +361,14 @@ inline bool validSettings(const Settings& s) {
          (s.version == 5 && s.bytes == settingsBytesV5) ||
          (s.version == 6 && s.bytes == settingsBytesV6) ||
          (s.version == 7 && s.bytes == settingsBytesV7) ||
-         (s.version == 8 && s.bytes == sizeof(Settings))) &&
+         (s.version == 8 && s.bytes == settingsBytesV8) ||
+         (s.version == 9 && s.bytes == sizeof(Settings))) &&
         s.grab <= 1 && std::isfinite(s.maxSpeed) && s.maxSpeed > 0 && s.maxSpeed <= motionSpeedLimit &&
         s.airWebs <= 1 && std::isfinite(s.gravity) && s.gravity >= 0 && s.gravity <= maxGravity &&
-        s.walls <= 4 && s.physical <= 1 && s.noBlows <= 3 && s.arcade <= 1 && s.handClimb <= 1;
+        s.walls <= 4 && s.physical <= 1 && s.noBlows <= 3 && s.arcade <= 1 && s.handClimb <= 1 &&
+        (s.version < 9 || (std::isfinite(s.anchorRange) && s.anchorRange >= anchorRangeLeast &&
+                           s.anchorRange <= anchorRangeMost && s.assist <= 1 && std::isfinite(s.assistDegrees) &&
+                           s.assistDegrees >= 0 && s.assistDegrees <= assistDegreesMost));
 }
 static_assert(sizeof(WebState) == 28 && sizeof(Data) == 272 && offsetof(Data, wall) == 240);
 // The player is in the air: Spidy's own flight, or the game's jump or fall,
@@ -364,9 +376,18 @@ static_assert(sizeof(WebState) == 28 && sizeof(Data) == 272 && offsetof(Data, wa
 // 0x10: the steps the game's air state runs). A perch, a wall crawl and a
 // wall run are neither, and a sample whose step is over 100 ms older than
 // `nowQpc` says nothing (a perch or ledge the game animates without steps).
+// HERO VR 0.0.82 DIVE FIX: or falling faster than freefallSpeed with no wall or crawl under him (Data::wall none) - the
+// game's own dive off a high building runs in a state of its own whose mover steps need not carry the air flag, and
+// until 0.0.82 that read as "not in the air", so the left stick's flips stopped once a long fall became the dive.
+constexpr float freefallSpeed = 6.f; // m/s down
+inline bool freefall(const Data& d) {
+    return !d.grounded && d.wall == static_cast<uint32_t>(Surface::none) && std::isfinite(d.velocity.y) &&
+           d.velocity.y < -freefallSpeed;
+}
 inline bool airborne(const Data& d, int64_t nowQpc, int64_t qpcFrequency) {
     const bool recent = d.qpc && static_cast<int64_t>(d.qpc) > nowQpc - qpcFrequency / 10;
-    return recent && (d.status == 1 || d.status == 2) && (d.owned || (!d.grounded && (d.collisionFlags & 0x10u)));
+    return recent && (d.status == 1 || d.status == 2) &&
+           (d.owned || (!d.grounded && (d.collisionFlags & 0x10u)) || freefall(d));
 }
 // What a grip press would do now with each hand (SpidyAimSample), for the
 // headset's aim markers: worked out in the world-query callback with the rays
@@ -513,13 +534,18 @@ class AirYield {
     // glide (CANDIDATE: opened with Y held in the air) lasts longer than 3 s, and until 38.5 the
     // swing took the hero back from it then. A trigger past yieldMs (webbing again) ends it.
     static constexpr uint64_t askMs = 400, yieldMs = 3000, glideMs = 60000, quietSteps = 2;
+    // HERO VR 0.0.82 DIVE FIX: a NEW web press (the swing's own shoot input, the grip, going down) at least
+    // pressMinMs into a hand-over ends it at once. Until 0.0.82 only a held TRIGGER (the reel) past yieldMs did, so
+    // after the game took a move in the air - the dive its prompt names (L3), a Y web zip - every grip press was
+    // ignored for 3 s, and with no trigger for up to a minute while the game's dive kept its air handler quiet.
+    static constexpr uint64_t pressMinMs = 150;
     // nowMs: a clock in milliseconds. asked: the player asks now. owned: the
     // swing has the hero. airborne: he is in the air. grasp: the game's wall
     // grasp (mover flag 0x80). steps, airEvents: the player's mover steps and
     // the game's air handler's calls so far. swingWanted: a trigger held (a web
     // asked for). True while the swing must not drive.
     bool update(uint64_t nowMs, bool asked, bool owned, bool airborne, bool grasp, uint64_t steps,
-                uint64_t airEvents, bool swingWanted = false) {
+                uint64_t airEvents, bool swingWanted = false, bool webPress = false) {
         began_ = false;
         if (!seen_ || airEvents != air_ || steps < airStep_) {
             air_ = airEvents;
@@ -533,7 +559,12 @@ class AirYield {
         if (yielded_) {
             const bool still = airborne && quiet && nowMs >= since_;
             const uint64_t held = nowMs >= since_ ? nowMs - since_ : 0;
-            yielded_ = still && (held < yieldMs || (held < glideMs && !swingWanted));
+            const bool pressedOut = webPress && held >= pressMinMs; // 0.0.82 DIVE FIX
+            yielded_ = still && !pressedOut && (held < yieldMs || (held < glideMs && !swingWanted));
+            if (!yielded_ && pressedOut) {
+                ++pressedOut_;
+                askedMs_ = 0; // the ask is spent: the same quiet air must not hand him straight back
+            }
             if (yielded_ && held >= yieldMs && !outlivedCounted_) {
                 outlivedCounted_ = true;
                 ++outlived_;
@@ -570,6 +601,10 @@ class AirYield {
     uint32_t takenBack() const {
         return takenBack_;
     }
+    // 0.0.82 DIVE FIX: hand-overs a web press ended.
+    uint32_t pressedOut() const {
+        return pressedOut_;
+    }
     uint32_t capped() const {
         return capped_;
     }
@@ -585,7 +620,7 @@ class AirYield {
 
   private:
     uint64_t air_{}, airStep_{}, askedMs_{}, since_{};
-    uint32_t yields_{}, outlived_{}, takenBack_{}, capped_{}, lastMs_{}, longestMs_{};
+    uint32_t yields_{}, outlived_{}, takenBack_{}, capped_{}, lastMs_{}, longestMs_{}, pressedOut_{};
     bool seen_{}, yielded_{}, began_{}, outlivedCounted_{};
 };
 inline Input input(const Command& c) {

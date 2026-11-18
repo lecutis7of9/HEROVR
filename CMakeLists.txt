@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
-project(Spidy VERSION 0.0.81 LANGUAGES C CXX)
+project(Spidy VERSION 0.0.82 LANGUAGES C CXX)
 # Every target on Windows: windows.h must never define min/max macros (they break std::min/std::max, MSVC C2589).
 if(WIN32)
   add_compile_definitions(NOMINMAX)
 endif()
 # The public version (semver, docs/VERSIONING.md): the launcher, the zip, the tag and VERSION all follow
-# this line; PORT-VERSION keeps the internal build ("Update 39.12"). Version 0.0.81 (tag v0.0.81, hotfix of 0.0.80: WEBLINES holo toggle) ships the new gameplay on both Classic (Original) and Performance, with Classic as the 0.0.78-style default.
+# this line; PORT-VERSION keeps the internal build ("Update 39.12"). Version 0.0.82 (tag v0.0.82: DIVE FIX, SWING ASSIST, WEBLINES off by default with GRIP / TWO HAND) ships the new gameplay on both Classic (Original) and Performance, with Classic as the 0.0.78-style default.
 add_compile_definitions(SPIDY_PUBLIC_VERSION="${PROJECT_VERSION}")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -182,6 +182,13 @@ enable_testing()
 add_executable(spidy_realistic_flip_tests tests/realistic_flip_tests.cpp)
 target_include_directories(spidy_realistic_flip_tests PRIVATE include)
 add_test(NAME realistic_flips COMMAND spidy_realistic_flip_tests)
+# HERO VR 0.0.82: DIVE FIX, SWING ASSIST / ANCHOR RANGE, WEBLINE MODE without WRISTS; and 0.0.82's webline modes.
+add_executable(spidy_dive_fix_082_tests tests/dive_fix_082_tests.cpp src/swing.cpp)
+target_include_directories(spidy_dive_fix_082_tests PRIVATE include)
+add_test(NAME dive_fix_082 COMMAND spidy_dive_fix_082_tests)
+add_executable(spidy_webline_modes_tests tests/webline_modes_tests.cpp)
+target_include_directories(spidy_webline_modes_tests PRIVATE include)
+add_test(NAME webline_modes COMMAND spidy_webline_modes_tests)
 # HERO VR 0.0.76 FLIGHT: the reworked flight's pure parts (include/spidy/fly076.hpp).
 add_executable(spidy_fly076_tests tests/fly076_tests.cpp)
 target_include_directories(spidy_fly076_tests PRIVATE include)

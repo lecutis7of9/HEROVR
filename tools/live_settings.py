@@ -639,18 +639,27 @@ SETTINGS = {
                 "%APPDATA%\\Spidy\\ui-dump, to find where its button prompts are, each save can hitch the game up "
                 "to 2 s; 1 off, the default since cut21) - live, no restart needed"),
     # HERO VR 0.0.79.1 web-mechanics test (include/spidy/webline_native.hpp)
-    'webline_gesture': ((0, 2), 'SpidyWeblineGesture', "WEBLINE GESTURE {} (0 on, the default: grip with a hand "
+    'webline_gesture': ((0, 2), 'SpidyWeblineGesture', "WEBLINE GESTURE {} (0.0.82: 1 off is the default; 0 on: grip with a hand "
                         "aimed at a surface, keep holding and sweep to another surface, let go there: the game's own "
                         "Web Line input, L2 + Y - only while standing, perched or on a wall, so grip swings in the "
-                        "air are untouched; 1 off; 2 anywhere, in the air too) - live, no restart needed"),
+                        "air are untouched; 1 off, the default since 0.0.82; 2 anywhere, in the air too) - live, no restart needed"),
     # 0.0.82 WEBLINE MODES (include/spidy/webline_modes.hpp): which gesture asks for the game's own Web Line. Wrist row
     # WEBLINE MODE (VR SETTINGS > BODY AND VIEW); WEBLINES (webline_gesture on/off) stays the master switch.
-    'webline_mode': ((0, 2), 'SpidyWeblineMode', "WEBLINE MODE {} (0 grip, the default: 0.0.81's grip, sweep, release; 1 wrists: "
-                     "both wrists together, grips and triggers released, held for webline_hold_ms, with a progress ring; "
+    'webline_mode': ((0, 2), 'SpidyWeblineMode', "WEBLINE MODE {} (0 grip, the default: 0.0.81's grip, sweep, release; 1 wrists: retired in "
+                     "0.0.82, plays as grip; "
                      "2 twohand: a grip tap on a surface places anchor A, the other hand's tap within 3 s places B) - live, "
                      "no restart needed"),
     'webline_hold_ms': ((150, 2000), 'SpidyWeblineHoldMs', "WEBLINE HOLD {} ms (WRISTS: how long both wrists stay together "
                         "before the Web Line is asked for; 400 the default) - live, no restart needed"),
+    # HERO VR 0.0.82 SWING ASSIST (include/spidy/swing.hpp SwingConfig::maxRange / assistDegrees, game_swing::Settings v9)
+    'swing_anchor_range': ((20, 250), 'SpidySwingAnchorRange', "SWING ANCHOR RANGE {} m (how far a web press looks for a "
+                           "surface to hold on; 140 the default, 100 before 0.0.82; open-air anchors stay at 100 m) - live, "
+                           "no restart needed"),
+    'swing_assist': ((0, 1), 'SpidySwingAssist', "SWING ASSIST {} (0 on, the default: a web press that would miss, or "
+                     "hold in open air, snaps to a surface within swing_assist_deg of your aim; 1 off: webs go only "
+                     "straight down the aim, as before 0.0.82) - live, no restart needed"),
+    'swing_assist_deg': ((0, 30), 'SpidySwingAssistDeg', "SWING ASSIST CONE {} degrees (how far off your aim a near miss "
+                         "still snaps to a surface; 10 the default, 0 none) - live, no restart needed"),
     'enemy_grip_split': ((0, 1), 'SpidyEnemyGripSplit', "ENEMY GRIP SPLIT {} (0 off, the default: combat as before "
                          "79.1's split - a grip on an enemy is the grab web at once, pull to yank, and Y in the air is "
                          "the game's web strike; 1 on: a grip aimed at an enemy is the game's web strike on the same "
@@ -874,6 +883,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'prompt_layer': ('on', 'off'),  # HERO VR 0.0.78 cut21
                 'webline_gesture': ('on', 'off', 'anywhere'),  # HERO VR 0.0.79.1 web-mechanics test
                 'webline_mode': ('grip', 'wrists', 'twohand'),  # 0.0.82 WEBLINE MODES
+                'swing_assist': ('on', 'off'),  # HERO VR 0.0.82 SWING ASSIST
                 'enemy_grip_split': ('off', 'on'),  # HERO VR 0.0.79.1 (t2145: opt-in)
                 'camera_hero': ('auto', 'camera', 'scanner', 'off'),  # HERO VR 79.9 CAMERA GESTURE
                 'prop_probe': ('on', 'off'),  # HERO VR 79.2 PROP PROBE (read-only)
@@ -1171,6 +1181,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'prompt_layer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.78 cut21
            'webline_gesture': {'on': 0, 'off': 1, 'anywhere': 2, 'air': 2, '0': 0, '1': 1, '2': 2},  # 0.0.79.1
            'webline_mode': {'grip': 0, 'wrists': 1, 'twohand': 2, 'two_hand': 2, '0': 0, '1': 1, '2': 2},  # 0.0.82 WEBLINE MODES
+           'swing_assist': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.82 SWING ASSIST
            'enemy_grip_split': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.79.1 (t2145: opt-in)
            'camera_hero': {'auto': 0, 'camera': 1, 'scanner': 2, 'off': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 79.9 CAMERA GESTURE
            'prop_probe': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 79.2 PROP PROBE (read-only)
@@ -1513,6 +1524,7 @@ START_ONLY = START_ONLY + ('vr_aa', 'vr_textures', 'vr_render', 'vr_ss')  # 0.0.
 START_ONLY = START_ONLY + ('car_collision',)  # 0.0.74 test 10 CAR COLLISION: an OFF kept between sessions
 START_ONLY = START_ONLY + ('dd_quick_grapple',)  # 0.0.74 test 10 DD QUICK GRAPPLE: an OFF kept between sessions
 START_ONLY = START_ONLY + ('suit_probe',)  # 0.0.76 SUIT PROBE: an ON kept between sessions (read-only)
+START_ONLY = START_ONLY + ('swing_anchor_range', 'swing_assist', 'swing_assist_deg')  # 0.0.82 SWING ASSIST: kept between sessions
 START_ONLY = START_ONLY + ('game_webs',)  # 0.0.76 GAME WEBS ONLY: an OFF kept between sessions
 START_ONLY = START_ONLY + ('trigger_guard',)  # 0.0.76 TRIGGER GUARD: an OFF kept between sessions
 START_ONLY = START_ONLY + ('fly_hold', 'fly_steer', 'fly_flips', 'fly_look_up')  # 0.0.74 test 10 FLY FEEL: kept between sessions
@@ -2276,6 +2288,53 @@ def migrate_798_render(path):
 
 
 HEADER += MIGRATED_798_RENDER + '\n'
+
+
+# 0.0.82 (owner: "keep weblines off by default"): WEBLINES is OFF by default. The hologram wrote every BODY AND VIEW
+# toggle back at once (decode_hud_settings selector 10), so a 0.0.79-0.0.81 live.txt can hold webline_gesture = on that
+# the player never chose: it is set to off once. WRISTS is retired: webline_mode = wrists becomes grip. A value chosen
+# after the marker stays (turn WEBLINES on in the hologram and it is kept).
+WEBLINE_DEFAULT_082 = 'off'
+MIGRATED_082_WEBLINES = ('# 0.0.82: WEBLINES are off by default (VR SETTINGS > BODY AND VIEW > WEBLINES turns them on, GRIP or '
+                         'TWO HAND); an older webline_gesture = on was set to off once (migrated; a value chosen after this line stays)')
+
+
+def migrate_082_weblines(path):
+    """0.0.82, once: an existing live.txt without the MIGRATED_082_WEBLINES marker whose webline_gesture is on gets off,
+    and whose webline_mode is wrists gets grip; the marker is added either way. No live.txt: nothing (off is the
+    default; HEADER carries the marker). The line to show, or None. Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_082_WEBLINES in text:
+        return None
+    try:
+        values = parse(text)[0]
+        updates, said = {}, []
+        if str(values.get('webline_gesture', '')).strip().lower() in ('on', '0'):
+            updates['webline_gesture'] = WEBLINE_DEFAULT_082
+            said.append(f"webline_gesture {values.get('webline_gesture')} set once to {WEBLINE_DEFAULT_082}")
+        if str(values.get('webline_mode', '')).strip().lower() in ('wrists', '1'):
+            updates['webline_mode'] = 'grip'
+            said.append(f"webline_mode {values.get('webline_mode')} set once to grip (WRISTS is retired)")
+        if updates:
+            text = write_back(text, updates)
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_082_WEBLINES + '\n')
+    except (OSError, ValueError):
+        return None
+    if not said:
+        return None
+    return ('live.txt: ' + ', '.join(said) + ', the 0.0.82 defaults (turn WEBLINES on in the hologram, VR SETTINGS > '
+            'BODY AND VIEW, and it stays).')
+
+
+HEADER += MIGRATED_082_WEBLINES + '\n'
 
 
 # 0.0.73 lights (the owner after test 4: "street lights still flicker and headlights still ghosting"; his

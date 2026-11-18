@@ -777,9 +777,22 @@ void visit(const native_rays::QueryContext& world) {
     // has its own - until it is done.
     // Update 38.5: a trigger held past AirYield::yieldMs hands the hero back to the swing; none, and a
     // long move of the game's (its Web Wings glide, CANDIDATE) keeps him (up to glideMs).
+    // HERO VR 0.0.82 DIVE FIX: a new web press (the grip that shoots, going down) ends the hand-over at once
+    // (AirYield::pressMinMs); the solver took the shot this step already, so the swing drives from it next.
+    bool webPress = false;
+    {
+        static bool gripWas[2]{};
+        for (unsigned i = 0; i < 2; ++i) {
+            const bool down = live && c.hands[i].tracked && std::isfinite(c.hands[i].grip) &&
+                              c.hands[i].grip > (gripWas[i] ? .35f : .65f);
+            webPress |= down && !gripWas[i];
+            gripWas[i] = down;
+        }
+    }
     const bool yielding = airYield.update(tick, live && (c.asks & 1u), owned, !body.grounded,
                                           (motion.moverFlags & 0x80u) != 0, motion.steps, motion.airEvents,
-                                          live && (c.hands[0].trigger > .5f || c.hands[1].trigger > .5f));
+                                          live && (c.hands[0].trigger > .5f || c.hands[1].trigger > .5f),
+                                          webPress);
     if (airYield.began()) {
         solver.releaseAll();
         solver.leaveWall();
@@ -1359,7 +1372,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidySwingSettings(void* input) {
     if (!copy(header, input, sizeof(header)) ||
         (header[2] != settingsBytesV3 && header[2] != settingsBytesV4 &&
          header[2] != settingsBytesV5 && header[2] != settingsBytesV6 &&
-         header[2] != settingsBytesV7 && header[2] != sizeof(s)) ||
+         header[2] != settingsBytesV7 && header[2] != settingsBytesV8 && header[2] != sizeof(s)) ||
         !copy(&s, input, header[2]) || !validSettings(s))
         return 2001;
     AcquireSRWLockExclusive(&lifecycle);
@@ -1396,6 +1409,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidySwingSettings(void* input) {
             solver.allowArcade(s.arcade != 0);
         if (s.version >= 8)
             solver.allowHandClimb(s.handClimb != 0);
+        if (s.version >= 9) { // HERO VR 0.0.82 SWING ASSIST
+            solver.setAnchorRange(s.anchorRange);
+            solver.setAssist(s.assist ? s.assistDegrees : 0.f);
+        }
         // A swing started without the grab (-NoWebGrab) offers it from now on.
         // SM2TODO: the grab needs native_bodies (not ported): not offered.
         if (s.grab && !spidy::sm2::notPorted && !game_grab::offering() && driveMotion && sampleDriven) {

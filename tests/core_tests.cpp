@@ -4274,7 +4274,8 @@ int main() {
     test("merged settings keep phone suppression, arcade webs and hand climbing independent", [] {
         using namespace game_swing;
         Settings s;
-        check(s.version == 8 && s.bytes == 48, "updated settings did not append the climbing field");
+        check(s.version == 9 && s.bytes == 60 && offsetof(Settings, handClimb) == 44 && offsetof(Settings, anchorRange) == 48,
+              "0.0.82 settings did not append the swing assist fields after the climbing field");
         check(offsetof(Settings, noBlows) == 36 && offsetof(Settings, arcade) == 40 &&
               offsetof(Settings, handClimb) == 44, "upstream phone or arcade fields moved");
         s.noBlows = 3;
@@ -9137,6 +9138,81 @@ int main() {
         for(int i=0;i<5;++i){++s2;t2+=5;check(!other.update(t2,true,true,true,true,s2,a2),"the grasp let go");}
         for(int i=0;i<5;++i){++s2;t2+=5;check(!other.update(t2,true,false,true,false,s2,a2),"nobody's hero let go");}
         for(int i=0;i<5;++i){++s2;t2+=5;check(!other.update(t2,true,true,false,false,s2,a2),"the ground let go");}
+    });
+    test("0.0.82 DIVE FIX: a new web press ends the game's air move hand-over (its dive) at once", [] {
+        using game_swing::AirYield;
+        uint64_t steps=100,air=200,now=1000;
+        AirYield y;
+        const auto step=[&](bool asked,bool airRuns,bool press=false){
+            ++steps;now+=5;if(airRuns)air+=2;
+            return y.update(now,asked,true,true,false,steps,air,false,press);
+        };
+        for(int i=0;i<5;++i)step(true,true);
+        step(true,false);
+        check(step(false,false)&&y.began(),"the game's move did not take the hero");
+        // A press the instant the move began (the same press that asked for it) changes nothing.
+        check(step(false,false,true),"a press within pressMinMs ended the game's move");
+        now+=AirYield::pressMinMs;
+        // Then a grip press in the dive: the swing has him again, well before yieldMs.
+        check(!step(false,false,true)&&y.pressedOut()==1,"a web press in the game's dive was ignored");
+        check(!step(false,false),"the swing did not keep the hero after the press");
+    });
+    test("0.0.82 DIVE FIX: a fast fall with no wall under him is the air, though the mover's air flag is missing", [] {
+        game_swing::Data d;
+        d.status=1;d.qpc=1000;d.grounded=0;d.collisionFlags=0;d.velocity={0,-12,0};
+        check(game_swing::freefall(d)&&game_swing::airborne(d,1001,1000),"the game's dive did not read as the air");
+        d.velocity={0,-2,0};
+        check(!game_swing::freefall(d)&&!game_swing::airborne(d,1001,1000),"a slow drop without the air flag read as the air");
+        d.velocity={0,-12,0};d.wall=static_cast<uint32_t>(game_swing::Surface::game);
+        check(!game_swing::airborne(d,1001,1000),"the game's crawl down a wall read as the air");
+        d.wall=0;d.grounded=1;
+        check(!game_swing::airborne(d,1001,1000),"standing read as the air");
+        d.grounded=0;d.qpc=1;
+        check(!game_swing::airborne(d,1001,1000),"an old sample read as the air");
+    });
+    test("0.0.82 SWING ASSIST: a near miss snaps to the building beside the aim; a far one, or with assist off, does not", [] {
+        Building w; // x 5..15, y 0..30, z -20..20
+        const Vec3 from{0,10,0};
+        SwingConfig c;
+        c.assistDegrees=10;
+        const Swing swing(c);
+        const Pose nearMiss=aimedAt(from,from+Vec3{1,0,-6}).hands[0].aim; // passes the building's corner by ~4.6 deg
+        const auto plain=swing.shot(nearMiss,from,w);
+        check(plain.web&&plain.web->airAnchor&&!plain.assisted,"the preview's shot (no assist) was not the air anchor");
+        near(length(plain.web->anchor-nearMiss.position),100.f,.01f);
+        const auto snapped=swing.shot(nearMiss,from,w,true);
+        check(snapped.web&&!snapped.web->airAnchor&&snapped.web->surface==7&&snapped.assisted,"a near miss did not snap to the building");
+        const Pose farMiss=aimedAt(from,from+Vec3{0,0,-1}).hands[0].aim; // ~14 deg off the corner
+        const auto far=swing.shot(farMiss,from,w,true);
+        check(far.web&&far.web->airAnchor&&!far.assisted,"a miss outside the cone snapped");
+        Swing off(SwingConfig{});
+        const auto none=off.shot(nearMiss,from,w,true);
+        check(none.web&&none.web->airAnchor&&!none.assisted,"assist 0 snapped");
+        const Pose straight=aimedAt(from,{5,10,0}).hands[0].aim;
+        const auto direct=swing.shot(straight,from,w,true);
+        check(direct.web&&direct.web->surface==7&&!direct.assisted,"a direct hit was counted as assisted");
+        // Without air webs a near miss used to miss outright; now it holds on the building.
+        SwingConfig noAir=c;noAir.airAnchors=false;
+        SwingConfig bare;bare.airAnchors=false;
+        check(!Swing(bare).shot(nearMiss,from,w,true).web,"a miss with no air webs and no assist held");
+        check(Swing(noAir).shot(nearMiss,from,w,true).web,"a near miss with no air webs did not snap");
+    });
+    test("0.0.82 SWING ANCHOR RANGE: a building past 100 m holds at 140 m; open-air anchors stay at 100 m", [] {
+        struct Far : Building { Far(){low={120,0,-20};high={130,60,20};} } w;
+        const Vec3 from{0,10,0};
+        const Pose at=aimedAt(from,{120,10,0}).hands[0].aim;
+        Swing swing{SwingConfig{}};
+        const auto before=swing.shot(at,from,w);
+        check(before.web&&before.web->airAnchor,"the 100 m reach already found a building at 120 m");
+        swing.setAnchorRange(140);
+        const auto after=swing.shot(at,from,w);
+        check(after.web&&!after.web->airAnchor&&after.web->surface==7,"a 140 m reach did not find the building at 120 m");
+        const Pose away=aimedAt(from,{-10,10,0}).hands[0].aim;
+        const auto sky=swing.shot(away,from,w);
+        check(sky.web&&sky.web->airAnchor,"open sky did not hold in the air");
+        near(length(sky.web->anchor-away.position),100.f,.01f);
+        swing.setAnchorRange(1000);
+        check(swing.config().maxRange==250.f,"the range was not clamped to 250 m");
     });
     test("a stutter keeps the last focused input; a longer loss of it does not", [] {
         game_swing::InputHold hold;

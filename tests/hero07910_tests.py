@@ -112,11 +112,48 @@ class WeblineModes(unittest.TestCase):  # 0.0.82 experimental test
         self.assertIn('WINAPI SpidyWeblineMode(void* v) { return setLive(v, 0, 2, 5692, weblineModeNow, asU32); }', g)
         self.assertIn('SpidyWeblineHoldMs', g)
         self.assertIn('wlMode != webline_modes::modeWrists; // 0.0.82', g)
-        self.assertIn('std::min<DWORD>(weblineModeNow.load(), 2) << 8', g)
+        self.assertIn('webline_modes::effectiveMode(weblineModeNow.load()) << 8', g)  # 0.0.82 public: WRISTS retired
+        self.assertIn('webline_modes::nextMode(weblineModeNow.load())', g)
+        self.assertIn('std::atomic<uint32_t> weblineGestureNow{spidy::webline_native::modeOff};', g)  # OFF by default
         self.assertIn('1u << 25 | 1u << 26', g)
         self.assertIn('appendWeblineProgress', g)
-        self.assertIn('HERO VR 0.0.82 WEBLINE MODES TEST', g)
+        self.assertIn('HERO VR 0.0.82: WEBLINES are OFF by default', g)
+        self.assertNotIn('view.weblineMode == 1 ? "WRISTS"', w)
         self.assertIn('webline_modes_tests', src('.github/workflows/webline-modes-082-test.yml'))
+
+
+
+class Release082(unittest.TestCase):  # 0.0.82: WEBLINES off by default, DIVE FIX, SWING ASSIST
+    def test_weblines_off_once(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = pathlib.Path(d) / 'live.txt'
+            path.write_text('webline_gesture = on\nwebline_mode = wrists\n', encoding='utf-8')
+            self.assertIn('webline_gesture on set once to off', L.migrate_082_weblines(path))
+            values = L.parse(path.read_text(encoding='utf-8'))[0]
+            self.assertEqual((values['webline_gesture'], values['webline_mode']), ('off', 'grip'))
+            self.assertIsNone(L.migrate_082_weblines(path))  # once
+            path.write_text(path.read_text(encoding='utf-8').replace('webline_gesture = off', 'webline_gesture = on'), encoding='utf-8')
+            self.assertIsNone(L.migrate_082_weblines(path))  # a value chosen after the marker stays
+            self.assertEqual(L.parse(path.read_text(encoding='utf-8'))[0]['webline_gesture'], 'on')
+        self.assertIn(L.MIGRATED_082_WEBLINES, L.HEADER)
+        self.assertIn('migrate_082_weblines', src('tools/run_game_vr.py'))
+
+    def test_swing_assist_settings(self):
+        self.assertEqual(L.SETTINGS['swing_anchor_range'][:2], ((20, 250), 'SpidySwingAnchorRange'))
+        self.assertEqual(L.SETTINGS['swing_assist'][:2], ((0, 1), 'SpidySwingAssist'))
+        self.assertEqual(L.SETTINGS['swing_assist_deg'][:2], ((0, 30), 'SpidySwingAssistDeg'))
+        self.assertEqual(L.export_value('swing_assist', 'off'), 1)
+        for key in ('swing_anchor_range', 'swing_assist', 'swing_assist_deg'):
+            self.assertIn(key, L.START_ONLY)
+        g = src('src/game_xr.cpp')
+        self.assertIn('WINAPI SpidySwingAnchorRange(void* v) { return setLive(v, 20, 250, 5694, swingAnchorRangeNow, asU32); }', g)
+        self.assertIn('s.assist = swingAssistNow.load() == 0 ? 1u : 0u;', g)
+        b = src('src/game_swing.cpp')
+        self.assertIn('solver.setAssist(s.assist ? s.assistDegrees : 0.f);', b)
+        self.assertIn('webPress);', b)
+        self.assertIn('shot(h.aim, from, world, true)', src('src/swing.cpp'))
+        self.assertIn('const bool freeInAir = airborne && !holds;', src('src/game_tracking.cpp'))
 
 
 if __name__ == '__main__':

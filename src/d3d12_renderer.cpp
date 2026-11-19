@@ -1,4 +1,5 @@
 #include "spidy/d3d12_renderer.hpp"
+#include "spidy/frame_overlap.hpp"
 #include "spidy/mesh_model.hpp"
 #include <algorithm>
 #include <bit>
@@ -48,11 +49,48 @@ void triangle(std::vector<Vertex>& v, Vec3 a, Vec3 b, Vec3 c, Vec3 color) {
     v.push_back({c, color});
 }
 } // namespace
+// One in-flight overlay submission. The members renderViews writes are pointed at a slot
+// for that call and put back afterwards, so blit, capture and texture uploads keep the
+// original allocator. A slot's command list, depth, upload buffer and descriptor heaps are
+// not reused until the fence signaled for that slot has retired. ComPtrs kept here hold the
+// textures that list still reads (the inset, the prompt cards, the scene depth, the grade copy).
+struct D3D12Renderer::OverlapRing {
+    struct Slot {
+        ComPtr<ID3D12CommandAllocator> allocator;
+        ComPtr<ID3D12GraphicsCommandList> list;
+        ComPtr<ID3D12DescriptorHeap> rtv, dsv, modelHeap, insetHeap, cardHeap, gradeHeap;
+        ComPtr<ID3D12Resource> depth, vertices, gradeCopy;
+        D3D12_RESOURCE_STATES gradeCopyState = D3D12_RESOURCE_STATE_COPY_DEST;
+        DXGI_FORMAT gradeViewFormat = DXGI_FORMAT_UNKNOWN;
+        Inset insetHeld;
+        Cards cardsHeld;
+        SceneDepth sceneHeld;
+        std::size_t capacity = 0;
+        unsigned width = 0, height = 0;
+        std::uint64_t fence = 0;
+    };
+    struct Saved {
+        ComPtr<ID3D12CommandAllocator> allocator;
+        ComPtr<ID3D12GraphicsCommandList> list;
+        ComPtr<ID3D12DescriptorHeap> rtv, dsv, modelHeap, insetHeap, cardHeap, gradeHeap;
+        ComPtr<ID3D12Resource> depth, vertices, gradeCopy;
+        D3D12_RESOURCE_STATES gradeCopyState = D3D12_RESOURCE_STATE_COPY_DEST;
+        DXGI_FORMAT gradeViewFormat = DXGI_FORMAT_UNKNOWN;
+        std::size_t capacity = 0;
+        unsigned width = 0, height = 0;
+    };
+    std::array<Slot, frame_overlap::slots> slots{};
+    Saved saved{};
+    uint32_t index = 0;
+    bool bound = false;
+};
 D3D12Renderer::~D3D12Renderer() {
     try {
         waitIdle();
     } catch (...) {
     }
+    delete overlapRing_;
+    overlapRing_ = nullptr;
     if (fenceEvent_)
         CloseHandle(fenceEvent_);
 }
@@ -113,6 +151,149 @@ void D3D12Renderer::waitForSubmission() {
         if (WaitForSingleObject(fenceEvent_, 10000) != WAIT_OBJECT_0)
             throw std::runtime_error("GPU fence timed out");
     }
+}
+void D3D12Renderer::beginOverlap() {
+    if (!device_ || !fence_ || !fenceEvent_)
+        throw std::runtime_error("FRAME OVERLAP before the overlay has a device");
+    if (!overlapRing_)
+        overlapRing_ = new OverlapRing;
+    auto* ring = overlapRing_;
+    if (ring->bound)
+        throw std::runtime_error("FRAME OVERLAP is already recording a frame");
+    const auto completed = fence_->GetCompletedValue();
+    if (completed == UINT64_MAX)
+        throw std::runtime_error("Overlay graphics device removed");
+    uint64_t fences[frame_overlap::slots];
+    for (uint32_t i = 0; i < frame_overlap::slots; ++i)
+        fences[i] = ring->slots[i].fence;
+    const auto choice = frame_overlap::pick(fences, frame_overlap::slots, completed);
+    if (choice.waitFor) {
+        hr(fence_->SetEventOnCompletion(choice.waitFor, fenceEvent_), "Arm overlap fence");
+        if (WaitForSingleObject(fenceEvent_, 10000) != WAIT_OBJECT_0)
+            throw std::runtime_error("GPU fence timed out");
+    }
+    auto& slot = ring->slots[choice.index];
+    // This slot's list has retired: nothing it sampled needs to be kept.
+    slot.insetHeld = {};
+    slot.cardsHeld = {};
+    slot.sceneHeld = {};
+    if (!slot.allocator) {
+        hr(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&slot.allocator)),
+           "Create overlap allocator");
+        hr(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, slot.allocator.Get(), nullptr,
+                                      IID_PPV_ARGS(&slot.list)),
+           "Create overlap list");
+        hr(slot.list->Close(), "Close overlap list");
+    }
+    const auto heap = [&](ComPtr<ID3D12DescriptorHeap>& out, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT count,
+                          D3D12_DESCRIPTOR_HEAP_FLAGS flags) {
+        if (out)
+            return;
+        D3D12_DESCRIPTOR_HEAP_DESC desc{};
+        desc.Type = type;
+        desc.NumDescriptors = count;
+        desc.Flags = flags;
+        hr(device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&out)), "Create overlap descriptor heap");
+    };
+    heap(slot.rtv, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2, D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
+    heap(slot.dsv, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
+    heap(slot.modelHeap, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, modelHeapDescriptors,
+         D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
+    heap(slot.insetHeap, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
+    heap(slot.cardHeap, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
+    heap(slot.gradeHeap, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
+    if (model_) {
+        const auto desc = model_->GetDesc();
+        D3D12_SHADER_RESOURCE_VIEW_DESC sv{};
+        sv.Format = desc.Format;
+        sv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+        sv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        sv.Texture2DArray.MipLevels = desc.MipLevels;
+        sv.Texture2DArray.ArraySize = desc.DepthOrArraySize;
+        device_->CreateShaderResourceView(model_.Get(), &sv, slot.modelHeap->GetCPUDescriptorHandleForHeapStart());
+    }
+    auto& saved = ring->saved;
+    saved.allocator = allocator_;
+    saved.list = list_;
+    saved.rtv = rtv_;
+    saved.dsv = dsv_;
+    saved.modelHeap = modelHeap_;
+    saved.insetHeap = insetHeap_;
+    saved.cardHeap = cardHeap_;
+    saved.gradeHeap = gradeHeap_;
+    saved.depth = depth_;
+    saved.vertices = vertices_;
+    saved.gradeCopy = gradeCopy_;
+    saved.gradeCopyState = gradeCopyState_;
+    saved.gradeViewFormat = gradeViewFormat_;
+    saved.capacity = capacity_;
+    saved.width = width_;
+    saved.height = height_;
+    allocator_ = slot.allocator;
+    list_ = slot.list;
+    rtv_ = slot.rtv;
+    dsv_ = slot.dsv;
+    modelHeap_ = slot.modelHeap;
+    insetHeap_ = slot.insetHeap;
+    cardHeap_ = slot.cardHeap;
+    gradeHeap_ = slot.gradeHeap;
+    depth_ = slot.depth;
+    vertices_ = slot.vertices;
+    gradeCopy_ = slot.gradeCopy;
+    gradeCopyState_ = slot.gradeCopyState;
+    gradeViewFormat_ = slot.gradeViewFormat;
+    capacity_ = slot.capacity;
+    width_ = slot.width;
+    height_ = slot.height;
+    ring->index = choice.index;
+    ring->bound = true;
+}
+void D3D12Renderer::endOverlap(bool submitted) {
+    auto* ring = overlapRing_;
+    if (!ring || !ring->bound)
+        return;
+    auto& slot = ring->slots[ring->index];
+    auto& saved = ring->saved;
+    slot.allocator = allocator_;
+    slot.list = list_;
+    slot.rtv = rtv_;
+    slot.dsv = dsv_;
+    slot.modelHeap = modelHeap_;
+    slot.insetHeap = insetHeap_;
+    slot.cardHeap = cardHeap_;
+    slot.gradeHeap = gradeHeap_;
+    slot.depth = depth_;
+    slot.vertices = vertices_;
+    slot.gradeCopy = gradeCopy_;
+    slot.gradeCopyState = gradeCopyState_;
+    slot.gradeViewFormat = gradeViewFormat_;
+    slot.capacity = capacity_;
+    slot.width = width_;
+    slot.height = height_;
+    // The list still on the GPU reads these. The next frame may replace the members.
+    slot.insetHeld = insetDrawn_;
+    slot.cardsHeld = cardsDrawnSet_;
+    slot.sceneHeld = sceneKept_;
+    if (submitted)
+        slot.fence = fenceValue_;
+    allocator_ = saved.allocator;
+    list_ = saved.list;
+    rtv_ = saved.rtv;
+    dsv_ = saved.dsv;
+    modelHeap_ = saved.modelHeap;
+    insetHeap_ = saved.insetHeap;
+    cardHeap_ = saved.cardHeap;
+    gradeHeap_ = saved.gradeHeap;
+    depth_ = saved.depth;
+    vertices_ = saved.vertices;
+    gradeCopy_ = saved.gradeCopy;
+    gradeCopyState_ = saved.gradeCopyState;
+    gradeViewFormat_ = saved.gradeViewFormat;
+    capacity_ = saved.capacity;
+    width_ = saved.width;
+    height_ = saved.height;
+    saved = {};
+    ring->bound = false;
 }
 std::vector<unsigned char> D3D12Renderer::readback(ID3D12Resource* target) {
     waitIdle();
@@ -1076,9 +1257,19 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
         if (!view.texture || !width || !height || view.width != width || view.height != height ||
             view.format != format)
             throw std::runtime_error("Overlay view dimensions or formats differ");
-    waitForSubmission();
+    // Off: one allocator, so the VR thread waits here until the previous submission
+    // retires, and only then can xrEndFrame be reached. On: record into a slot whose
+    // fence has retired (or the oldest, if all three are still on the GPU).
+    const bool overlap = frameOverlap_.load(std::memory_order_relaxed);
+    if (overlap)
+        beginOverlap();
+    else
+        waitForSubmission();
+    bool closed = false;
+    try {
     pipeline(format);
-    // HERO VR 0.0.77 PROMPT WINDOW: the GPU is done with the last inset; this frame's (if any) taken.
+    // HERO VR 0.0.77 PROMPT WINDOW: this frame's inset (if any). Off, the wait above means the GPU
+    // is done with the previous one. On, the slot that drew it keeps that texture until its fence retires.
     insetDrawn_ = std::move(inset_);
     inset_ = {};
     if (!insetFault_.empty() || views.size() != 2 || !preserveColor)
@@ -1212,7 +1403,6 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
     hr(list_->Reset(allocator_.Get(), pipeline_.Get()), "Reset list");
     // Update 24.1: a failure while recording leaves the list closed, so the
     // game-screen blit and the snapshots can still use it (VR continues).
-    try {
         D3D12_RENDER_TARGET_VIEW_DESC rv{};
         rv.Format = format;
         rv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
@@ -1342,16 +1532,23 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
                                      static_cast<UINT>(vertices.size() + art.size()), 0);
             }
         }
-    } catch (...) {
-        list_->Close();
-        throw;
-    }
     hr(list_->Close(), "Close render list");
+    closed = true;
     ID3D12CommandList* lists[] = {list_.Get()};
     queue_->ExecuteCommandLists(1, lists);
     hr(queue_->Signal(fence_.Get(), ++fenceValue_), "Signal overlay completion");
+    // Record the slot's fence before any wait, so a timeout cannot reuse its allocator.
+    if (overlap)
+        endOverlap(true);
     if (waitForCompletion)
         waitForSubmission();
+    } catch (...) {
+        if (!closed && list_)
+            list_->Close();
+        if (overlap)
+            endOverlap(false);
+        throw;
+    }
 }
 namespace {
 bool srgb(DXGI_FORMAT format) {

@@ -41,6 +41,8 @@ namespace Sm2VrLauncher
         public static readonly List<Opt> All = new List<Opt>
         {
             // Picture
+            new Opt { Section = "PICTURE", Param = "frame_overlap", Kind = OptKind.Live, Title = "FRAME OVERLAP (TEST)", Default = "0",
+                      Sub = "Test build. On: record the next headset frame while the graphics card finishes the last one. Off: normal timing. The picture does not change." },
             new Opt { Section = "PICTURE", Param = "RenderScale", Kind = OptKind.Int, Title = "RENDER SCALE", Min = 50, Max = 200, Step = 5, Default = "100", Suffix = "%", AlwaysPass = true,
                       Sub = "Eye resolution vs. the headset's recommendation. Lower is faster; above 100 costs frame rate." },
             Opt.Num("PICTURE", "Supersample", "SUPERSAMPLE", "Render the eyes larger and filter down (replaces FXAA). Costs like render scale.", 100, 200, 5, 100, "%"),

@@ -2,6 +2,7 @@
 #include "math.hpp"
 #include "vertex.hpp"
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -68,6 +69,11 @@ class D3D12Renderer {
                      bool waitForCompletion = true, std::span<const Vertex> translucent = {},
                      const Grade* grade = nullptr, std::span<const Vertex> art = {},
                      std::span<const Vertex> textured = {});
+    // FRAME OVERLAP (frame_overlap.hpp), off by default. Off waits for the previous
+    // overlay submission before reusing the one allocator. On keeps three submissions
+    // in flight, each with its own allocator, depth, upload and descriptors, so the
+    // next frame can be recorded while the GPU finishes the last. The draws are the same.
+    void setFrameOverlap(bool on) noexcept { frameOverlap_.store(on, std::memory_order_relaxed); }
     // Update 36: the art texture (the calibration panel's pictures), each
     // level half the last, RGBA8 rows from the top, display-encoded (sRGB).
     // Uploaded once, waiting for the GPU. False, with artFault() saying why,
@@ -211,6 +217,12 @@ class D3D12Renderer {
     void pipeline(DXGI_FORMAT format);
     void resources();
     void waitForSubmission();
+    // FRAME OVERLAP: point the members renderViews writes at one retired slot, and put them back.
+    struct OverlapRing;
+    OverlapRing* overlapRing_ = nullptr;
+    std::atomic<bool> frameOverlap_{};
+    void beginOverlap();
+    void endOverlap(bool submitted);
     // blit's root signature and pipeline for a target format, and its draw
     // into list_ (open, after any copy the draw reads).
     void prepareBlit(DXGI_FORMAT targetFormat);
